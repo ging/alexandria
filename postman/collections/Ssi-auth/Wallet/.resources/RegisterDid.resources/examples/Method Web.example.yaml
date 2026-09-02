@@ -1,0 +1,30 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/ssi-auth/wallet/did"
+  method: POST
+  body:
+    type: json
+    content: |-
+      {
+          "builder": {
+              "method": "web",
+              "domain": "alexandria.upm.es",
+              "path": "issuer"
+          },
+          "keys_id": "hola",
+          "alias": "hola",
+          "service": [
+              {
+                  "id": "did:web:alexandria.upm.es",
+                  "type": "CredentialIssuer",
+                  "serviceEndpoint": "http://blabla.es"
+              }
+          ]
+      }
+response:
+  statusCode: 200
+  statusText: OK
+  body:
+    type: text
+    content: ""
+order: 2000

@@ -1,0 +1,29 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/ssi-auth/wallet/did"
+  method: POST
+  body:
+    type: json
+    content: |-
+      {
+          "builder": {
+              "method": "jwk",
+              "pem": "-----BEGIN PRIVATE KEY-----\nMIICdwIBADANBgkqhkiG9w0BAQEFAASCAmEwggJdAgEAAoGBAJPlc2twVNSXE9k/\n+yz7dr1Nt7a9CvbQMaNtp8qG3bOYF73Awsrwc/dKZwo+9HFXsEwLTUBpAoyXG5qC\nPN3hwAwvkdsH3P6V1NzL5rIj/kJiXifeRwSb9PBbZKD+Ni7T8/jTHWV2OJytprAt\nrtBzxokl5ZNNDLBF95ozRdf1Q9mZAgMBAAECgYBSQ+Ets/AbyGVsBKDMZpuntOEp\nroG4xBm4VDhu+RG84i7ih6RSiemXdjVWh6okmaggxHCWEVMvrKXYDfWZXgcaZAsy\nFntwUBMEy4eCI3N5t27LKFV6tcFXoota05cJdQTAUUP/a6UIclYCmQU+1GK671IM\nfsx3SS+c1qeelkK24QJBAOmbgMRgFpWRg5jwCamET/X2b9iiPAmKQv3W7bQhep/U\nWRsbiIOh+G8EyaELa7tuMqEF3YuGHJX3kvtbmxsJXd0CQQCiEq491MC0za/BUo66\nHg5EvPuDzmt8hSDfhRhZ7LlmYBwPVmVMyGqxOSGzOKNAX/u3lXRwt62Pnq5zluKn\n2oTtAkEAqrjpTxqGBsK0cNWjyg4XPcLfFGvkAnjX4pjrWQRKkHnosOXbS4/YdpIC\nJL6q+exb9c/KjAfz5ilrcmUNIqIixQJBAIPtVt5H55GFeNKSBFJmEtFLUCULix0y\nNP8dlSPl+UjnZQ/rEMx+u7KFQfRkXycQupLG2qDCM0qcLX8zzE48J0UCQHZuzvEH\nXMi7N19fmzf8aXus19HuYOGFpL8MwiX4A3UytXp9W9PhtgelHs2PS079oeL4QWdH\n+roeMrw0OS8sZnU=\n-----END PRIVATE KEY-----"
+          },
+          "keys_id": "hola",
+          "alias": "hola",
+          "service": [
+              {
+                  "id": "did:web:alexandria.upm.es",
+                  "type": "CredentialIssuer",
+                  "serviceEndpoint": "http://blabla.es"
+              }
+          ]
+      }
+response:
+  statusCode: 200
+  statusText: OK
+  body:
+    type: text
+    content: ""
+order: 1000

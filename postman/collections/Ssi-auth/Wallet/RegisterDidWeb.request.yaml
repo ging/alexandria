@@ -1,0 +1,26 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/ssi-auth/wallet/did"
+method: POST
+body:
+  type: json
+  content: |-
+    {
+        "builder": {
+            "method": "web",
+            "domain": "alexandria.upm.es",
+            "path": "issuer"
+        },
+        "keys": ["ninio"],
+        "alias": "hola",
+        "service": [
+            {
+                "id": "CredentialIssuer",
+                "type": "CredentialIssuer",
+                "serviceEndpoint": "http://blabla.es"
+            }
+        ]
+    }
+auth:
+  type: noauth
+settings: {}
+order: 9000

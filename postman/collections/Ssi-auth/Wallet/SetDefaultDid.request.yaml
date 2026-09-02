@@ -1,0 +1,10 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/ssi-auth/wallet/did/8207b6d1-c077-494e-aab8-8047446a5ee8/default"
+method: POST
+body:
+  type: json
+  content: ""
+auth:
+  type: noauth
+settings: {}
+order: 14000

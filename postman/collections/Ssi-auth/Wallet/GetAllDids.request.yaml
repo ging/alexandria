@@ -1,0 +1,5 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/ssi-auth/wallet/did/all"
+method: GET
+settings: {}
+order: 11000

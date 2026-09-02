@@ -1,0 +1,5 @@
+$kind: http-request
+url: "{{baseUrl}}/healthz"
+method: GET
+settings: {}
+order: 1000

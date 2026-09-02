@@ -1,0 +1,5 @@
+$kind: http-request
+url: "{{baseUrl}}/readyz"
+method: GET
+settings: {}
+order: 2000
