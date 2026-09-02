@@ -1,21 +1,11 @@
 name: dev
-color: null
 values:
-  - key: host
-    value: ""
-    enabled: true
-  - key: port
-    value: ""
-    enabled: true
   - key: baseUrl
-    value: ""
-    enabled: true
+    value: ''
   - key: access_token
-    enabled: true
     secret: true
   - key: client-id
-    value: ""
-    enabled: true
+    value: ''
   - key: client-secret
-    enabled: true
     secret: true
+color: 0

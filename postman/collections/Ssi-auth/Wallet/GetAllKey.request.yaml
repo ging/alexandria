@@ -20,6 +20,8 @@ body:
         ]
     }
 auth:
-  type: noauth
+  type: inherit
+  credentials:
+    id: 0812cb1e-4ea1-4bd8-b892-0d22d8d0b103
 settings: {}
 order: 5000
