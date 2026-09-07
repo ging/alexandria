@@ -1,0 +1,59 @@
+---
+title: Wallet Adapters
+description: Comparing and configuring Fafnir and Eclipse EDC IdentityHub wallet adapters.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Wallet Adapters
+
+Alexandria includes first-class support for multiple wallet backends implementing the `wallet.Wallet` port.
+
+---
+
+## Supported Backends
+
+### 1. Fafnir (`internal/ssi-auth/fafnir`)
+**Fafnir** is the lightweight default wallet used in local development:
+- Embedded in `docker-compose.dev.yaml` on port `7003`.
+- Provides rapid startup, minimal resource overhead, and comprehensive test harness support.
+- Ideal for development, CI unit/integration runs, and standalone deployments.
+
+### 2. Eclipse EDC IdentityHub (`internal/ssi-auth/identityhub`)
+**Eclipse EDC IdentityHub** provides enterprise-grade dataspace interoperability conforming to the Eclipse Dataspace Components (EDC) standard:
+- Implements the IdentityHub REST API specification for participant credentials and DIDs.
+- Designed for production dataspace deployments interoperating with Tractus-X, Catena-X, or IDS dataspaces.
+- Can be launched locally via `task identityhub:up`.
+
+---
+
+## Switching Adapters
+
+Switching backends is entirely configuration-driven via `wallet_config.wallet`:
+
+### Using Fafnir:
+```yaml
+wallet_config:
+  wallet: Fafnir
+  api:
+    http:
+      protocol: "http"
+      url: "127.0.0.1"
+      port: "7003"
+```
+
+### Using IdentityHub:
+```yaml
+wallet_config:
+  wallet: IdentityHub
+  api:
+    http:
+      protocol: "http"
+      url: "127.0.0.1"
+      port: "8181"
+```
+
+Alternatively, override via environment variable:
+```bash
+ALEXANDRIA_WALLET_CONFIG_WALLET=IdentityHub ALEXANDRIA_WALLET_CONFIG_API_HTTP_PORT=8181 task dev
+```

@@ -1,0 +1,62 @@
+---
+title: Architecture Overview
+description: Hexagonal architecture, in-process modular monolith, and core design principles in Alexandria.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Architecture Overview
+
+Alexandria is engineered around **Hexagonal Architecture** (Ports and Adapters) structured as an **in-process modular monolith** (as established in [ADR 0001](../adr/0001-bounded-contexts-as-in-process-modules)).
+
+---
+
+## Architectural Principles
+
+1. **In-Process Bounded Contexts:** Rather than prematurely splitting the system into distributed microservices with network latency and distributed failure modes, contexts are implemented as decoupled Go packages under `internal/`.
+2. **Strict Seams & Ports:** Domain logic never directly imports external HTTP clients, database drivers, or wallet-specific SDKs. All external interactions are mediated through driven (outbound) ports.
+3. **Pluggable Adapters:** Third-party integrations (such as wallets and identity providers) are isolated behind adapters. Switching from one provider to another requires changing configuration rather than touching domain logic.
+4. **Resilient Startup & Decoupled Lifecycles:** The node boots cleanly even if external dependencies (wallets, IAM) are temporarily unreachable. Modules report health and readiness independently.
+
+---
+
+## High-Level Diagram
+
+```
+       +-------------------------------------------------------+
+       |               Caddy Reverse Proxy (TLS)               |
+       |             Port 8443 (alexandria.nip.io)             |
+       +---------------------------+---------------------------+
+                                   |
+                                   v
+       +-------------------------------------------------------+
+       |                  Alexandria Process                   |
+       |                                                       |
+       |  +---------------------+     +---------------------+  |
+       |  |     auth-proxy      |     |      ssi-auth       |  |
+       |  | (Zitadel OIDC, PKCE |     | (DID Resolution,    |  |
+       |  |  Session Cookies)   |     |  Credential Ops)    |  |
+       |  +----------+----------+     +----------+----------+  |
+       |             |                           |             |
+       |             v                           v             |
+       |  +---------------------+     +---------------------+  |
+       |  | Driver: Gin HTTP    |     | Driven: wallet.Port |  |
+       +--+----------+----------+-----+----------+----------+--+
+                     |                           |
+                     v                           v
+       +----------------------+    +---------------------------+
+       |   Zitadel OIDC IAM   |    |    Pluggable Wallets      |
+       |      Port 1600       |    |  (Fafnir / IdentityHub)   |
+       +----------------------+    +---------------------------+
+```
+
+---
+
+## The Composition Root (`cmd/alexandria`)
+
+The entrypoint in `cmd/alexandria` is the sole location aware of all modules. It:
+- Discovers and parses `config.yaml`.
+- Initializes shared telemetry, database pools, and logging.
+- Instantiates module dependencies (`Deps`).
+- Wires inbound Gin routers and outbound ports.
+- Coordinates graceful termination via Unix signals (`SIGINT`, `SIGTERM`).
