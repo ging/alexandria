@@ -1,0 +1,409 @@
+// Package identityhub provides an HTTP client for Eclipse EDC IdentityHub runtime APIs.
+// It executes HTTP calls against Identity API and handles serialization and status mapping.
+package identityhub
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/caparicio-esd/alexandria/internal/common"
+	"resty.dev/v3"
+)
+
+const defaultTimeout = 10 * time.Second
+
+// Client handles HTTP interactions with IdentityHub endpoints.
+type Client struct {
+	http   *resty.Client
+	apiKey string
+	logger *slog.Logger
+}
+
+// NewClient constructs a Client targeting the IdentityHub Identity API base URL.
+func NewClient(baseURL string, apiKey string, logger *slog.Logger) (*Client, error) {
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		return nil, fmt.Errorf("identityhub: parsing base url %q: %w", baseURL, err)
+	}
+
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return nil, fmt.Errorf("identityhub: base url %q must be absolute", baseURL)
+	}
+
+	if logger == nil {
+		logger = slog.Default()
+	}
+
+	client := resty.New().
+		SetBaseURL(strings.TrimSuffix(baseURL, "/")).
+		SetTimeout(defaultTimeout).
+		SetHeader("Accept", "application/json").
+		SetHeader("Content-Type", "application/json")
+
+	if apiKey != "" {
+		client.SetHeader("x-api-key", apiKey)
+	}
+
+	return &Client{
+		http:   client,
+		apiKey: apiKey,
+		logger: logger,
+	}, nil
+}
+
+// Close terminates any idle network connections.
+func (c *Client) Close() error {
+	return c.http.Close()
+}
+
+// GetParticipant fetches participant metadata.
+func (c *Client) GetParticipant(ctx context.Context, pid string) (*ParticipantContextDto, error) {
+	path := fmt.Sprintf("/participants/%s", url.PathEscape(pid))
+	var out ParticipantContextDto
+
+	res, err := c.http.R().SetContext(ctx).SetResult(&out).Get(path)
+	if err != nil {
+		return nil, fmt.Errorf("identityhub: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.IsStatusFailure() {
+		return nil, statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	return &out, nil
+}
+
+// CreateParticipant provisions a new participant context.
+func (c *Client) CreateParticipant(ctx context.Context, req *CreateParticipantDto) error {
+	const path = "/participants"
+
+	res, err := c.http.R().SetContext(ctx).SetBody(req).Post(path)
+	if err != nil {
+		return fmt.Errorf("identityhub: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.IsStatusFailure() {
+		return statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	return nil
+}
+
+// SetParticipantState activates or deactivates a participant context.
+func (c *Client) SetParticipantState(ctx context.Context, pid string, active bool) error {
+	path := fmt.Sprintf("/participants/%s/state?isActive=%t", url.PathEscape(pid), active)
+
+	res, err := c.http.R().SetContext(ctx).Post(path)
+	if err != nil {
+		return fmt.Errorf("identityhub: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.IsStatusFailure() {
+		return statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	return nil
+}
+
+// RegenerateParticipantToken rotates the participant API token.
+func (c *Client) RegenerateParticipantToken(ctx context.Context, pid string) (string, error) {
+	path := fmt.Sprintf("/participants/%s/token", url.PathEscape(pid))
+
+	res, err := c.http.R().SetContext(ctx).Post(path)
+	if err != nil {
+		return "", fmt.Errorf("identityhub: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.IsStatusFailure() {
+		return "", statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	body := strings.TrimSpace(res.String())
+	var out TokenResponseDto
+	if err := json.Unmarshal([]byte(body), &out); err == nil && out.Token != "" {
+		return out.Token, nil
+	}
+
+	token := strings.Trim(body, `"`)
+	return token, nil
+}
+
+// ListKeys lists all keypairs for a participant.
+func (c *Client) ListKeys(ctx context.Context, pid string) ([]KeyPairDto, error) {
+	path := fmt.Sprintf("/participants/%s/keypairs", url.PathEscape(pid))
+	var out []KeyPairDto
+
+	res, err := c.http.R().SetContext(ctx).SetResult(&out).Get(path)
+	if err != nil {
+		return nil, fmt.Errorf("identityhub: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.IsStatusFailure() {
+		return nil, statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	return out, nil
+}
+
+// AddKey registers a key descriptor with the participant.
+func (c *Client) AddKey(ctx context.Context, pid string, desc *KeyDescriptorDto) error {
+	path := fmt.Sprintf("/participants/%s/keypairs", url.PathEscape(pid))
+
+	res, err := c.http.R().SetContext(ctx).SetBody(desc).Put(path)
+	if err != nil {
+		return fmt.Errorf("identityhub: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.IsStatusFailure() {
+		return statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	return nil
+}
+
+// RotateKey triggers a key rotation with an active overlap duration.
+func (c *Client) RotateKey(ctx context.Context, pid string, keyID string, duration time.Duration) error {
+	path := fmt.Sprintf("/participants/%s/keypairs/%s/rotate?duration=%s",
+		url.PathEscape(pid), url.PathEscape(keyID), duration.String())
+
+	res, err := c.http.R().SetContext(ctx).Post(path)
+	if err != nil {
+		return fmt.Errorf("identityhub: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.IsStatusFailure() {
+		return statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	return nil
+}
+
+// RevokeKey immediately revokes a keypair.
+func (c *Client) RevokeKey(ctx context.Context, pid string, keyID string) error {
+	path := fmt.Sprintf("/participants/%s/keypairs/%s/revoke",
+		url.PathEscape(pid), url.PathEscape(keyID))
+
+	res, err := c.http.R().SetContext(ctx).Post(path)
+	if err != nil {
+		return fmt.Errorf("identityhub: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.IsStatusFailure() {
+		return statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	return nil
+}
+
+// PublishDid publishes a DID document to the resolver.
+func (c *Client) PublishDid(ctx context.Context, pid string, did string) error {
+	path := fmt.Sprintf("/participants/%s/dids/publish", url.PathEscape(pid))
+	req := DidDocumentPublishDto{Did: did}
+
+	res, err := c.http.R().SetContext(ctx).SetBody(req).Post(path)
+	if err != nil {
+		return fmt.Errorf("identityhub: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.IsStatusFailure() {
+		return statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	return nil
+}
+
+// UnpublishDid removes a published DID document.
+func (c *Client) UnpublishDid(ctx context.Context, pid string, did string) error {
+	path := fmt.Sprintf("/participants/%s/dids/unpublish", url.PathEscape(pid))
+	req := DidDocumentPublishDto{Did: did}
+
+	res, err := c.http.R().SetContext(ctx).SetBody(req).Post(path)
+	if err != nil {
+		return fmt.Errorf("identityhub: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.IsStatusFailure() {
+		return statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	return nil
+}
+
+// GetDidState queries the publication state for a DID.
+func (c *Client) GetDidState(ctx context.Context, pid string, did string) (*DidStateDto, error) {
+	path := fmt.Sprintf("/participants/%s/dids/state?did=%s", url.PathEscape(pid), url.QueryEscape(did))
+	var out DidStateDto
+
+	res, err := c.http.R().SetContext(ctx).SetResult(&out).Get(path)
+	if err != nil {
+		return nil, fmt.Errorf("identityhub: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.IsStatusFailure() {
+		return nil, statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	return &out, nil
+}
+
+// AddServiceEndpoint binds a service endpoint to a participant's DID.
+func (c *Client) AddServiceEndpoint(ctx context.Context, pid string, endpoint *ServiceEndpointDto) error {
+	path := fmt.Sprintf("/participants/%s/dids/endpoints", url.PathEscape(pid))
+
+	res, err := c.http.R().SetContext(ctx).SetBody(endpoint).Post(path)
+	if err != nil {
+		return fmt.Errorf("identityhub: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.IsStatusFailure() {
+		return statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	return nil
+}
+
+// RemoveServiceEndpoint deletes a service endpoint from a participant's DID.
+func (c *Client) RemoveServiceEndpoint(ctx context.Context, pid string, endpointID string) error {
+	path := fmt.Sprintf("/participants/%s/dids/endpoints/%s", url.PathEscape(pid), url.PathEscape(endpointID))
+
+	res, err := c.http.R().SetContext(ctx).Delete(path)
+	if err != nil {
+		return fmt.Errorf("identityhub: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.IsStatusFailure() {
+		return statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	return nil
+}
+
+// ListCredentials lists stored verifiable credentials, optionally filtering by type.
+func (c *Client) ListCredentials(ctx context.Context, pid string, vcType string) ([]VerifiableCredentialResourceDto, error) {
+	path := fmt.Sprintf("/participants/%s/credentials", url.PathEscape(pid))
+	if vcType != "" {
+		path = fmt.Sprintf("%s?type=%s", path, url.QueryEscape(vcType))
+	}
+
+	var out []VerifiableCredentialResourceDto
+	res, err := c.http.R().SetContext(ctx).SetResult(&out).Get(path)
+	if err != nil {
+		return nil, fmt.Errorf("identityhub: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.IsStatusFailure() {
+		return nil, statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	return out, nil
+}
+
+// DeleteCredential deletes a stored credential by its identifier.
+func (c *Client) DeleteCredential(ctx context.Context, pid string, credID string) error {
+	path := fmt.Sprintf("/participants/%s/credentials/%s", url.PathEscape(pid), url.PathEscape(credID))
+
+	res, err := c.http.R().SetContext(ctx).Delete(path)
+	if err != nil {
+		return fmt.Errorf("identityhub: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.IsStatusFailure() {
+		return statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	return nil
+}
+
+// StoreCredential saves a verifiable credential directly into the participant's storage.
+func (c *Client) StoreCredential(ctx context.Context, pid string, cred *StoreCredentialDto) error {
+	path := fmt.Sprintf("/participants/%s/credentials", url.PathEscape(pid))
+
+	res, err := c.http.R().SetContext(ctx).SetBody(cred).Post(path)
+	if err != nil {
+		return fmt.Errorf("identityhub: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.IsStatusFailure() {
+		return statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	return nil
+}
+
+// RequestDcpCredential initiates an asynchronous DCP credential request.
+func (c *Client) RequestDcpCredential(ctx context.Context, pid string, req *DcpCredentialRequestDto) (string, error) {
+	path := fmt.Sprintf("/participants/%s/credentials/request", url.PathEscape(pid))
+	var out struct {
+		RequestID string `json:"requestId"`
+	}
+
+	res, err := c.http.R().SetContext(ctx).SetBody(req).SetResult(&out).Post(path)
+	if err != nil {
+		return "", fmt.Errorf("identityhub: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.IsStatusFailure() {
+		return "", statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	return out.RequestID, nil
+}
+
+// GetDcpRequestStatus checks the progress of an asynchronous DCP credential request.
+func (c *Client) GetDcpRequestStatus(ctx context.Context, pid string, reqID string) (*DcpRequestStatusDto, error) {
+	path := fmt.Sprintf("/participants/%s/credentials/request/%s", url.PathEscape(pid), url.PathEscape(reqID))
+	var out DcpRequestStatusDto
+
+	res, err := c.http.R().SetContext(ctx).SetResult(&out).Get(path)
+	if err != nil {
+		return nil, fmt.Errorf("identityhub: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.IsStatusFailure() {
+		return nil, statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	return &out, nil
+}
+
+// statusError translates non-2xx HTTP status codes into domain error sentinels.
+func statusError(status int, path string, body []byte) error {
+	var sentinel error
+	switch status {
+	case http.StatusNotFound:
+		sentinel = common.ErrNotFound
+	case http.StatusConflict:
+		sentinel = common.ErrConflict
+	case http.StatusBadRequest, http.StatusUnprocessableEntity:
+		sentinel = common.ErrInvalidInput
+	default:
+		sentinel = errors.New("unexpected status")
+	}
+
+	return fmt.Errorf("identityhub: %s returned %d: %s: %w", path, status, body, sentinel)
+}

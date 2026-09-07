@@ -1,4 +1,4 @@
-// client acts as the driven HTTP adapter communicating with the OpenID Provider.
+// Package oidc acts as the driven HTTP adapter communicating with the OpenID Provider.
 // It implements OAuth2 authorization code exchanges and discovery metadata fetching.
 package oidc
 

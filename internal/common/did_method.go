@@ -1,5 +1,6 @@
 // did_method defines supported DID method types and parsing helpers.
 // It validates method identifiers against supported dataspace configurations.
+
 package common
 
 import (

@@ -1,4 +1,4 @@
-// principal models the authenticated caller context within the application.
+// Package identity models the authenticated caller context within the application.
 // It transports user claims, roles, and scopes across request processing pipelines.
 package identity
 

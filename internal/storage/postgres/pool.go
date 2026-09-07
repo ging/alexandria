@@ -1,4 +1,4 @@
-// pool manages PostgreSQL database connection lifecycles and pool configurations.
+// Package postgres manages PostgreSQL database connection lifecycles and pool configurations.
 // It initializes pgx pools with health checks and graceful shutdown support.
 package postgres
 

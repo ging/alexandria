@@ -1,5 +1,6 @@
 // server provides the auxiliary HTTP server exposing metrics and health checks.
 // It isolates monitoring endpoints from public application business traffic.
+
 package observability
 
 import (

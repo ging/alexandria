@@ -1,4 +1,4 @@
-// Adapter is the driven HTTP adapter communicating with the remote Fafnir wallet.
+// Package fafnir provides the driven HTTP adapter communicating with the remote Fafnir wallet.
 // It satisfies the wallet.Wallet domain port across identity and VC operations.
 package fafnir
 
@@ -478,36 +478,7 @@ func (a *Adapter) SetDefaultKey(ctx context.Context, didID string, keyID string)
 	return nil
 }
 
-func (a *Adapter) _WalletInfoToBeReplaced(ctx context.Context) (wallet.WalletInfo, error) {
-	path := fmt.Sprintf("/info")
-	var out walletInfoRes
-
-	// call
-	started := time.Now()
-	res, err := a.http.R().
-		SetContext(ctx).
-		SetResult(&out).
-		Get(path)
-	if err != nil {
-		a.logger.DebugContext(ctx, "wallet call failed",
-			"method", http.MethodGet, "path", path,
-			"duration_ms", time.Since(started).Milliseconds(), "err", err)
-
-		return wallet.WalletInfo{}, fmt.Errorf("fafnir: calling %s: %w", path, err)
-	}
-	defer func() { _ = res.Body.Close() }()
-
-	a.logger.DebugContext(ctx, "wallet call",
-		"method", http.MethodGet, "path", path,
-		"status", res.StatusCode(), "duration_ms", time.Since(started).Milliseconds())
-
-	// validate
-	if res.IsStatusFailure() {
-		return wallet.WalletInfo{}, statusError(res.StatusCode(), path, res.Bytes())
-	}
-	return out.ToDomain()
-}
-
+// WalletInfo returns metadata about the Fafnir wallet instance.
 func (a *Adapter) WalletInfo(c context.Context) (wallet.WalletInfo, error) {
 	dids, err := a.GetAllDids(c)
 	if err != nil {
@@ -610,7 +581,7 @@ func (a *Adapter) ProcessOid4vci(ctx context.Context, uri string) error {
 	started := time.Now()
 	res, err := a.http.R().
 		SetContext(ctx).
-		SetBody(oidcUriReq{URI: uri}).
+		SetBody(oidcURIReq{URI: uri}).
 		Post(path)
 	if err != nil {
 		a.logger.DebugContext(ctx, "wallet call failed",
@@ -643,7 +614,7 @@ func (a *Adapter) ProcessOid4vp(ctx context.Context, uri string) error {
 	started := time.Now()
 	res, err := a.http.R().
 		SetContext(ctx).
-		SetBody(oidcUriReq{URI: uri}).
+		SetBody(oidcURIReq{URI: uri}).
 		Post(path)
 	if err != nil {
 		a.logger.DebugContext(ctx, "wallet call failed",

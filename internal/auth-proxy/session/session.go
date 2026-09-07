@@ -1,4 +1,4 @@
-// session manages encrypted and authenticated HTTP session cookies for callers.
+// Package session manages encrypted and authenticated HTTP session cookies for callers.
 // It seals identity tokens securely so credentials never leak to the browser.
 package session
 

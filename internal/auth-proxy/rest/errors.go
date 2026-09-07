@@ -1,5 +1,6 @@
 // errors maps auth-proxy domain error conditions to standard HTTP responses.
 // It ensures authorization and session failures return accurate status codes.
+
 package rest
 
 import (

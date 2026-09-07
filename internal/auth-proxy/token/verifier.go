@@ -1,4 +1,4 @@
-// verifier validates bearer access tokens against remote JWKS and local caches.
+// Package token validates bearer access tokens against remote JWKS and local caches.
 // It extracts authenticated claims and verifies cryptographic signatures.
 package token
 

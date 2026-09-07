@@ -77,8 +77,7 @@ connector that caches it stops asking, which is usually the cheaper trade.
 | Docker | Runs Postgres, Zitadel and the TLS terminator |
 | [Task](https://taskfile.dev) | Every command below |
 | `openssl` | Generates the local certificate authority. Ships with macOS and every Linux |
-| `jq`, `curl` | Used by `scripts/zitadel-bootstrap.sh` to drive Zitadel's API |
-| — | The Fafnir wallet is brought up by `docker-compose.dev.yaml`; the node comes up without one and reports itself not ready |
+| — | Fafnir is brought up by `docker-compose.dev.yaml`; Eclipse EDC IdentityHub is supported via `task identityhub:up` or external container. The node comes up without one and reports itself not ready |
 
 Task is not optional any more, unlike earlier versions of this file: it loads
 `.env` and points `docker compose` at `docker-compose.dev.yaml`, so the commands
@@ -723,7 +722,8 @@ internal/auth-proxy/       The authentication bounded context, and the guard:
   rest/                      driving adapter, /auth and the guard middleware
 internal/ssi-auth/         The identity bounded context:
   wallet/                    domain, entities and ports — imports no framework
-  fafnir/                    driven adapter, the external wallet over HTTP
+  fafnir/                    driven adapter, Fafnir wallet over HTTP
+  identityhub/               driven adapter, Eclipse EDC IdentityHub over HTTP
   rest/                      driving adapter, the HTTP API and its middleware
 migrations/                Database migrations.
 scripts/                   Provisioning: the Zitadel bootstrap and the local CA.
@@ -751,6 +751,51 @@ and `config` serve the process rather than any one context.
 Tools are declared in the `tool` block of `go.mod` and run with `go tool <name>`,
 so there is nothing to install globally and versions stay pinned in the
 repository.
+
+## Testing
+
+Unit tests are fast, run in memory, and do not need external infrastructure:
+
+```bash
+task test                     # Run unit tests with race detector and coverage
+task cover                    # Open the HTML coverage profile in your browser
+```
+
+Integration tests exercise live HTTP communication against containerized wallet providers (Fafnir and Eclipse EDC IdentityHub). They use the `integration` build tag to stay out of fast developer cycles:
+
+```bash
+# Bring up the wallet backend to test against:
+task wallet:up                # Fafnir wallet (via docker-compose.dev.yaml)
+task identityhub:up           # Eclipse EDC IdentityHub container
+
+# Run integration suites:
+task test:integration         # Run all integration tests
+task test:integration:fafnir  # Run Fafnir integration tests only
+task test:integration:identityhub # Run IdentityHub integration tests only
+task test:all                 # Full pipeline: unit tests + integration tests
+```
+
+Tests probe the target service and skip gracefully (`t.Skip`) if a container is not reachable.
+
+## Wallet Providers
+
+Alexandria decouples domain logic from wallet implementations through the unified `wallet.Wallet` port ([ADR 0007](docs/adr/0007-unified-wallet-port-and-identityhub-adapter.md)):
+
+* **Fafnir** (`provider: "fafnir"`): Sovereign wallet with a monolithic REST API, storing keys in filesystem or HashiCorp Vault.
+* **IdentityHub** (`provider: "identityhub"`): Eclipse EDC IdentityHub runtime with JAX-RS multi-context APIs (Identity API `:8182`, Management/Health `:8181`), participant isolation, and key rotation.
+
+Switching between them is declarative in `config/config.yaml`:
+
+```yaml
+wallet_config:
+  provider: "identityhub"  # "fafnir" or "identityhub"
+  identityhub:
+    identity_url: "http://127.0.0.1:8182/api/identity/v1"
+    management_url: "http://127.0.0.1:8181/api"
+    api_key: ""            # optional super-user API key
+```
+
+Endpoints not supported by the configured provider return HTTP `501 Not Implemented`.
 
 ## Docker
 

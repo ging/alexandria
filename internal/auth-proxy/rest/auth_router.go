@@ -1,4 +1,4 @@
-// auth_router is the driving HTTP adapter exposing authentication endpoints.
+// Package rest is the driving HTTP adapter exposing authentication endpoints.
 // It orchestrates login redirects, callbacks, token endpoints, and session logouts.
 package rest
 
