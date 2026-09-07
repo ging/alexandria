@@ -18,10 +18,10 @@ export default function HomePage() {
   const features = [
     {
       icon: BookOpen,
-      category: 'IDSA Vocabulary Hub',
+      category: 'Vocabulary Hub',
       title: 'Single Source of Semantic Truth',
       description:
-        'Author, version, document, and publish domain ontologies, RDF vocabularies, and dataset profiles extending the core IDS Information Model.',
+        'Author, version, document, and publish domain ontologies, RDF vocabularies, and dataset profiles to unify meaning across dataspace participants.',
       link: '/docs/getting-started',
     },
     {
@@ -34,11 +34,11 @@ export default function HomePage() {
     },
     {
       icon: FileCheck,
-      category: 'Compliance & Validation',
+      category: 'Conformance & Testing',
       title: 'Remote Conformance Tests',
       description:
         'Automated semantic verification using SHACL constraint shapes. Validates that connector payloads, catalogs, and dataset offerings strictly conform to dataspace rules.',
-      link: '/docs/development',
+      link: '/docs/development/conformance',
     },
     {
       icon: Wallet,
@@ -74,18 +74,18 @@ export default function HomePage() {
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 mb-8 rounded-full border border-fd-border bg-fd-card/80 backdrop-blur-md text-xs font-medium text-fd-foreground shadow-xs">
             <Sparkles className="size-3.5 text-[#e6007e]" />
-            <span>IDSA Reference Architecture · International Data Spaces</span>
+            <span>Semantic Interoperability & Dataspace Ontologies</span>
           </div>
 
           {/* Headline */}
           <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight mb-6 leading-[1.15]">
-            The IDS Vocabulary Hub for{' '}
+            The Vocabulary Hub for{' '}
             <span className="text-alexandria-gradient">Sovereign Dataspaces</span>
           </h1>
 
           {/* Subtitle */}
           <p className="max-w-3xl mx-auto text-base sm:text-lg text-fd-muted-foreground leading-relaxed mb-10">
-            Maintain and publish domain ontologies, dereference semantic terms in real-time for dataspace connectors, and run automated remote conformance tests with verifiable trust.
+            Publish and maintain domain ontologies, dereference semantic terms in real-time for dataspace connectors, and run automated remote conformance tests with verifiable trust.
           </p>
 
           {/* CTAs */}
@@ -99,7 +99,7 @@ export default function HomePage() {
             </Link>
 
             <Link
-              href="/docs/development"
+              href="/docs/development/conformance"
               className="inline-flex items-center gap-2 rounded-xl border border-fd-border bg-fd-card px-6 py-3 text-sm font-semibold transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground shadow-xs"
             >
               <FileCheck className="size-4 text-[#ff3366]" />
@@ -123,7 +123,7 @@ export default function HomePage() {
             <div className="relative overflow-hidden rounded-2xl border border-fd-border bg-fd-card shadow-2xl p-2 sm:p-3">
               <Image
                 src={bannerImg}
-                alt="Alexandria IDSA Vocabulary Hub Ecosystem"
+                alt="Alexandria Vocabulary Hub Ecosystem"
                 priority
                 className="w-full h-auto rounded-xl object-cover"
               />
@@ -194,14 +194,14 @@ export default function HomePage() {
             <span className="text-[11px] font-mono text-fd-muted-foreground">bash</span>
           </div>
           <div className="p-5 font-mono text-xs sm:text-sm bg-black/90 text-neutral-200 overflow-x-auto leading-relaxed">
-            <div className="text-neutral-400"># Start the full IDSA stack with TLS, IAM, and wallet link:</div>
+            <div className="text-neutral-400"># Start the full stack with TLS, IAM, and wallet link:</div>
             <div className="text-[#ff3e73] mt-1 font-semibold">$ task dev:auto</div>
             <div className="text-neutral-400 mt-3">✔ Caddy Reverse Proxy:      https://alexandria.127.0.0.1.nip.io:8443</div>
             <div className="text-neutral-400">✔ Zitadel IAM Provider:     https://auth.127.0.0.1.nip.io:8443</div>
             <div className="text-neutral-400">✔ Vocabulary Engine:        Active (RDF / OWL / SHACL registry)</div>
             <div className="text-neutral-400">✔ Remote Conformance Suite: Ready for connector validation</div>
             <div className="text-neutral-400">✔ Identity & Wallet Link:   DID resolvable at /.well-known/did.json</div>
-            <div className="text-emerald-400 mt-2">✨ Alexandria IDSA Vocabulary Hub running with live reload</div>
+            <div className="text-emerald-400 mt-2">✨ Alexandria Vocabulary Hub running with live reload</div>
           </div>
         </div>
       </section>
@@ -211,7 +211,7 @@ export default function HomePage() {
         <div className="relative rounded-2xl overflow-hidden p-8 sm:p-12 text-center border border-fd-border bg-fd-card">
           <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-alexandria-gradient rounded-full blur-3xl opacity-10 pointer-events-none" />
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight mb-4">
-            Powering Semantic Interoperability in IDSA Dataspaces
+            Powering Semantic Interoperability in Sovereign Dataspaces
           </h2>
           <p className="max-w-2xl mx-auto text-sm sm:text-base text-fd-muted-foreground mb-8">
             Learn how Alexandria manages vocabulary lifecycles, dereferences term IRIs in real time, and executes remote SHACL conformance tests to certify dataspace data models.
@@ -225,7 +225,7 @@ export default function HomePage() {
               <ArrowRight className="size-4" />
             </Link>
             <Link
-              href="/docs/development"
+              href="/docs/development/conformance"
               className="inline-flex items-center gap-2 rounded-xl border border-fd-border bg-fd-card px-6 py-2.5 text-sm font-semibold hover:bg-fd-accent hover:text-fd-accent-foreground transition-colors shadow-xs"
             >
               <span>Remote Conformance & Testing</span>

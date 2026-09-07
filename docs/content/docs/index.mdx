@@ -1,6 +1,6 @@
 ---
 title: Introduction
-description: Official documentation for the Alexandria IDSA Vocabulary Hub.
+description: Official documentation for the Alexandria Vocabulary Hub.
 ---
 
 import { Card, Cards } from 'fumadocs-ui/components/card';
@@ -8,17 +8,17 @@ import { Callout } from 'fumadocs-ui/components/callout';
 
 # Alexandria Documentation
 
-Welcome to the **Alexandria** documentation portal. Alexandria is an **International Data Spaces (IDSA)** Vocabulary Hub engineered to deliver semantic interoperability, runtime term dereferencing, and remote conformance testing for sovereign dataspaces.
+Welcome to the **Alexandria** documentation portal. Alexandria is a **Vocabulary Hub** engineered to deliver semantic interoperability, runtime term dereferencing, and remote conformance testing for sovereign dataspaces.
 
 <Callout type="info">
-Alexandria implements the IDSA Vocabulary Hub specification. Its foundation couples an in-process Go modular monolith with decentralized identity (DID / SSI), pluggable wallet ports, and Zitadel OIDC authentication.
+Alexandria implements the Vocabulary Hub pattern for dataspaces. Its architecture couples an in-process Go modular monolith with decentralized identity (DID / SSI), pluggable wallet ports, and Zitadel OIDC authentication.
 </Callout>
 
 ---
 
 ## Core Missions of the Vocabulary Hub
 
-1. **Vocabulary Lifecycle Management:** Author, version, and publish domain ontologies, RDF vocabularies, and dataset profiles extending the IDS Information Model.
+1. **Vocabulary Lifecycle Management:** Author, version, and publish domain ontologies, RDF vocabularies, and dataset profiles extending shared dataspace models.
 2. **Runtime Semantic Dereferencing:** Real-time IRI resolution for dataspace Connectors parsing Self-Descriptions and data agreements.
 3. **Remote Conformance Testing:** Automated validation of connector payloads, dataset schemas, and SHACL constraint shapes to certify dataspace compliance.
 4. **Trust & SSI Anchor:** Cryptographically secured with DIDs and delegated wallet key custody for verifiable vocabulary attestation.
@@ -31,7 +31,7 @@ Alexandria implements the IDSA Vocabulary Hub specification. Its foundation coup
   <Card
     title="Getting Started"
     href="./getting-started"
-    description="Role of the Vocabulary Hub in IDSA, prerequisites, local setup with Taskfile, and configuration."
+    description="Overview of the Vocabulary Hub, prerequisites, local setup with Taskfile, and configuration."
   />
   <Card
     title="Architecture & Wallets"
@@ -41,7 +41,7 @@ Alexandria implements the IDSA Vocabulary Hub specification. Its foundation coup
   <Card
     title="API & Development"
     href="./development"
-    description="REST API reference, node-terminated OIDC with PKCE, testing suites, and CI/CD pipelines."
+    description="REST API reference, remote conformance testing, node-terminated OIDC, and CI/CD pipelines."
   />
   <Card
     title="Architecture Decisions (ADRs)"

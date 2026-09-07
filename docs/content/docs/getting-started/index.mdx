@@ -1,29 +1,29 @@
 ---
 title: Getting Started
-description: Overview of the Alexandria Vocabulary Hub in the IDSA ecosystem and core capabilities.
+description: Overview of the Alexandria Vocabulary Hub and core capabilities.
 ---
 
 import { Card, Cards } from 'fumadocs-ui/components/card';
 import { Callout } from 'fumadocs-ui/components/callout';
 
-# Alexandria: The IDS Vocabulary Hub
+# Alexandria: The Vocabulary Hub
 
-**Alexandria** is an **International Data Spaces (IDSA)** Vocabulary Hub: the essential semantic intermediary defined in the IDS Reference Architecture Model (IDS-RAM) that enables true semantic interoperability across dataspace participants.
+**Alexandria** is a **Vocabulary Hub**: the essential semantic intermediary in modern dataspaces that enables true semantic interoperability and automated conformance verification across participants.
 
 ---
 
-## The Role of a Vocabulary Hub in IDSA
+## The Role of a Vocabulary Hub in Modern Dataspaces
 
-In an IDS dataspace, data sovereign exchange between autonomous Connectors requires a shared understanding of data structures, service offerings, and usage policies. While the core **IDS Information Model** defines foundational concepts, domain-specific vocabularies are essential to describe specialized industrial data (mobility, manufacturing, healthcare, energy).
+In a dataspace, sovereign data exchange between autonomous Connectors requires a shared understanding of data structures, service offerings, and usage policies. While baseline information models define foundational data exchange concepts, domain-specific vocabularies are essential to describe specialized industrial data (mobility, manufacturing, healthcare, energy).
 
 Alexandria serves three foundational functions in the dataspace:
 
 ### 1. Vocabulary Lifecycle & Publishing
 - **Single Source of Truth:** A central repository where domain experts author, document, version, and publish domain ontologies, RDF vocabularies, and dataset profiles.
-- **Extending the Information Model:** Bridges standard IDS namespaces (`ids`, `idsc`) with domain-specific Linked Data schemas without requiring advance bilateral agreements.
+- **Extending Baseline Models:** Bridges standard dataspace namespaces with domain-specific Linked Data schemas without requiring advance bilateral agreements.
 
 ### 2. Runtime Semantic Dereferencing
-- **Dynamic Term Lookups:** When an IDS Connector encounters an unfamiliar attribute IRI in a participant's Self-Description or contract offer, it dereferences that IRI against Alexandria.
+- **Dynamic Term Lookups:** When a Connector encounters an unfamiliar attribute IRI in a participant's Self-Description or contract offer, it dereferences that IRI against Alexandria.
 - **Machine-Readable Response:** Alexandria immediately responds with the term's RDF definition, class hierarchy, multilingual labels, and semantic relations.
 - **Namespace Caching:** Connectors can query whole namespaces to cache entire vocabularies locally, reducing runtime latency.
 
