@@ -1,0 +1,95 @@
+---
+title: Quickstart
+description: Step-by-step guide to bring up the local Alexandria environment.
+---
+
+import { Steps } from 'fumadocs-ui/components/steps';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Quickstart Guide
+
+Follow these steps to bootstrap the complete local stack from a fresh checkout.
+
+---
+
+## First-Time Setup
+
+<Steps>
+
+### 1. Trust the Local Certificate Authority
+
+Alexandria generates an ephemeral root Certificate Authority (CA) in `/.certs/` so local HTTPS works cleanly with browser and Go trust stores. This requires `sudo` only once:
+
+```bash
+task tls:trust
+```
+
+### 2. Start Supporting Infrastructure
+
+Bring up the database and the TLS terminator:
+
+```bash
+task db:up   # Starts PostgreSQL 17 on port 1500
+task tls:up  # Starts Caddy reverse proxy on port 8443
+```
+
+### 3. Bootstrap Authentication (Zitadel)
+
+Provision Zitadel, create the default organization, register the Alexandria relying-party application, and write client secrets into `.env`:
+
+```bash
+task auth:bootstrap
+```
+
+<Callout type="info">
+`auth:bootstrap` is idempotent. It creates the administrative user `admin@alexandria.auth.127.0.0.1.nip.io` with password `Password1!`.
+</Callout>
+
+### 4. Run the Alexandria Node
+
+Start the Alexandria node with hot-reload enabled via `air`:
+
+```bash
+task dev
+```
+
+</Steps>
+
+---
+
+## The One-Command Daily Workflow
+
+After completing the first-time setup, you do not need to run individual commands. `task dev:auto` stops any stale node processes holding the port, verifies and brings up all containers, and starts the development server:
+
+```bash
+task dev:auto
+```
+
+---
+
+## Verifying the Stack
+
+Once running, verify each endpoint:
+
+### 1. Web Portal & Authentication Login
+Open your browser and navigate to:
+```
+https://alexandria.127.0.0.1.nip.io:8443/api/v1/auth/login
+```
+Log in using:
+- **Username:** `admin@alexandria.auth.127.0.0.1.nip.io`
+- **Password:** `Password1!`
+
+After authentication, you are redirected back to the root application with a secure session cookie.
+
+### 2. DID Document Resolution
+Alexandria exposes its Decentralized Identifier document at:
+```bash
+curl -k https://alexandria.127.0.0.1.nip.io:8443/.well-known/did.json
+```
+
+### 3. Health & Readiness
+Check node health directly:
+```bash
+curl -k https://alexandria.127.0.0.1.nip.io:8443/healthz
+```

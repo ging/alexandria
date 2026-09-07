@@ -1,0 +1,100 @@
+---
+title: Configuration
+description: Overview of Alexandria configuration file, environment variable overrides, and secret handling.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Configuration Model
+
+Alexandria adopts the **One configuration document** pattern (documented in [ADR 0002](../adr/0002-one-configuration-document)). Rather than maintaining separate configuration files for each environment, the node uses a single baseline document and overrides values via environment variables.
+
+---
+
+## Discovery & Loading
+
+The node searches for its configuration document in the following locations in order of precedence:
+
+1. Flag `--config <path>`
+2. Current working directory: `./config.yaml`
+3. Repository config directory: `./config/config.yaml`
+4. Global system path: `/etc/alexandria/config.yaml`
+
+The committed baseline configuration in `config/config.yaml` contains safe defaults for local development and contains **zero secrets**.
+
+---
+
+## Configuration Sections
+
+The document is organized into distinct logical sections:
+
+```yaml
+common_config:
+  hosts:
+    http:
+      protocol: "https"
+      url: "alexandria.127.0.0.1.nip.io"
+      port: "8443"
+      internal_port: "1234"
+  db:
+    db_type: Postgres
+    url: "127.0.0.1"
+    port: "1500"
+    user: "alexandria"
+    name: "alexandria"
+
+wallet_config:
+  wallet: Fafnir # or IdentityHub
+  api:
+    http:
+      protocol: "http"
+      url: "127.0.0.1"
+      port: "7003"
+  startup_link_timeout: "10s"
+
+auth_config:
+  enabled: true
+  issuer: "https://auth.127.0.0.1.nip.io:8443"
+  redirect_url: "https://alexandria.127.0.0.1.nip.io:8443/api/v1/auth/callback"
+  app_url: "https://alexandria.127.0.0.1.nip.io:8443/"
+  introspect: "fallback" # never | fallback | always
+  session:
+    name: "alexandria_session"
+    secure: true
+    ttl: "12h"
+
+observability:
+  log_level: "info" # debug | info | warn | error
+  log_format: "auto"
+  metrics: true
+  port: "2112"
+```
+
+---
+
+## Environment Variable Overrides
+
+Using **Viper**, any YAML setting can be overridden without modifying files on disk. The environment variable name is formed by:
+`ALEXANDRIA_` + `<UPPERCASE_SECTION>_<UPPERCASE_KEY>`.
+
+Examples:
+
+```bash
+# Point to an external wallet running on port 7001
+ALEXANDRIA_WALLET_CONFIG_API_HTTP_PORT=7001 task dev
+
+# Change log level to debug
+ALEXANDRIA_OBSERVABILITY_LOG_LEVEL=debug task dev
+
+# Disable authentication during headless test runs
+ALEXANDRIA_AUTH_CONFIG_ENABLED=false task dev
+```
+
+---
+
+## Secret Separation (`.env`)
+
+Secrets (such as `client_secret`, session signing keys, and production database passwords) are never committed to git:
+
+- In local development, `task auth:bootstrap` writes them dynamically into `.env`.
+- In Docker and Kubernetes, secrets are injected as environment variables from secret stores (e.g., HashiCorp Vault or Kubernetes Secrets).

@@ -1,0 +1,46 @@
+---
+title: Getting Started
+description: Overview of the Alexandria Vocabulary Hub and core capabilities.
+---
+
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Alexandria Vocabulary Hub
+
+**Alexandria** is an International Data Spaces (IDS) Vocabulary Hub: the core infrastructure service a dataspace uses to host, maintain, publish, and dereference the ontologies and vocabularies that participants use to describe data, services, and contract offerings.
+
+<Callout type="info">
+**Current State:** The node implements the identity, credential, and authorization layer. Alexandria holds a decentralized identifier (DID), serves its resolvable DID Document, delegates cryptographic signing to an external wallet, and closes its API behind an OIDC-compatible identity provider (Zitadel).
+</Callout>
+
+---
+
+## What a Vocabulary Hub Solves
+
+Interoperability in a dataspace relies on participants sharing consistent semantics. While the core IDS Information Model provides baseline data structures, every industrial domain requires specific schemas and terminology. Alexandria provides:
+
+1. **Vocabulary Lifecycle Management:** Domain experts create, refine, and publish RDF terms and ontologies, or import external vocabularies for connectors to leverage.
+2. **Runtime Semantic Lookups:** Connectors encountering unknown attribute IRIs in Self-Descriptions can dereference them at the hub at runtime to retrieve definitions, labels, and semantic relationships without requiring advance manual coordination.
+
+---
+
+## Core Components
+
+Alexandria is organized as an in-process modular monolith built with hexagonal architecture:
+
+- **Node Core (Go):** Assembles bounded contexts (`ssi-auth`, `auth-proxy`), exposes REST APIs using Gin, and manages internal state and persistence.
+- **Identity & Wallet Port:** Decouples DID and verifiable credential logic from underlying wallet implementations (supports both **Fafnir** and **Eclipse EDC IdentityHub**).
+- **Authentication Proxy:** Enforces session cookies and bearer tokens using **Zitadel**, terminating OIDC at the node.
+- **TLS Terminator (Caddy):** Terminates HTTPS and mTLS in front of all services across both development and production environments using wildcard domain resolution via `nip.io`.
+- **Database (PostgreSQL 17):** Relational storage for node configurations, sessions, and vocabulary metadata.
+
+---
+
+## Next Steps
+
+<Cards>
+  <Card title="Prerequisites" href="./getting-started/prerequisites" description="Required tools, runtimes, and local port allocations." />
+  <Card title="Quickstart" href="./getting-started/quickstart" description="Step-by-step setup to launch Alexandria locally with Taskfile." />
+  <Card title="Configuration" href="./getting-started/configuration" description="Learn about config.yaml, environment overrides, and secrets." />
+</Cards>
