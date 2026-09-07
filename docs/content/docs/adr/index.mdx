@@ -1,0 +1,33 @@
+---
+title: Architecture Decisions
+description: Architecture Decision Records (ADRs) for the Alexandria project.
+---
+
+# Architecture Decision Records (ADRs)
+
+Architecture Decision Records capture decisions that were architecturally significant, expensive to make, and would be expensive to reverse. Rather than being changelogs or design documents, each record documents:
+1. **Context:** Why the decision was needed.
+2. **Decision:** What was decided and how it is structured.
+3. **Consequences:** Trade-offs, benefits, and operational implications.
+4. **What would change this:** Conditions that would invalidate or require revising the decision.
+
+---
+
+## Records
+
+| ID | Decision | Status | Date |
+|:---|:---|:---:|:---:|
+| **[0001](./adr/0001-bounded-contexts-as-in-process-modules)** | [Bounded contexts are in-process modules, not services](./adr/0001-bounded-contexts-as-in-process-modules) | `Accepted` | 2026-08-29 |
+| **[0002](./adr/0002-one-configuration-document)** | [One configuration document, overridden from the environment](./adr/0002-one-configuration-document) | `Accepted` | 2026-08-29 |
+| **[0003](./adr/0003-key-material-lives-in-an-external-wallet)** | [Key material lives in an external wallet](./adr/0003-key-material-lives-in-an-external-wallet) | `Accepted` | 2026-08-31 |
+| **[0004](./adr/0004-authentication-terminated-at-the-node)** | [Authentication is terminated at the node, not at the client](./adr/0004-authentication-terminated-at-the-node) | `Accepted` | 2026-09-01 |
+| **[0005](./adr/0005-tls-terminated-by-a-proxy-in-development-too)** | [TLS is terminated by a proxy, in development too](./adr/0005-tls-terminated-by-a-proxy-in-development-too) | `Accepted` | 2026-09-02 |
+| **[0006](./adr/0006-one-image-three-deployment-shapes)** | [One image, three deployment shapes](./adr/0006-one-image-three-deployment-shapes) | `Accepted` | 2026-09-02 |
+| **[0007](./adr/0007-unified-wallet-port-and-identityhub-adapter)** | [Unified wallet port and pluggable IdentityHub adapter](./adr/0007-unified-wallet-port-and-identityhub-adapter) | `Accepted` | 2026-09-07 |
+
+---
+
+## Managing ADRs
+
+- ADRs are immutable once **Accepted**. They are never edited to describe a different state later; instead, they are superseded by a new ADR.
+- New proposals should copy the ADR template, receive the next sequential number, and initially carry `Status: Proposed`.

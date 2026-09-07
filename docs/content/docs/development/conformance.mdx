@@ -1,0 +1,90 @@
+---
+title: Remote Conformance Testing
+description: Semantic verification of dataspace payloads, schemas, and connector profiles against published vocabularies.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Steps } from 'fumadocs-ui/components/steps';
+
+# Remote Conformance Testing
+
+In a sovereign dataspace ecosystem, reliable data exchange depends on strict adherence to shared semantic contracts. Alexandria provides **Remote Conformance Testing** as a core service, enabling participants, data providers, and connectors to validate data assets, dataset profiles, and Self-Descriptions against published vocabularies before publishing or transacting.
+
+---
+
+## Why Remote Conformance Matters
+
+When heterogeneous participants join a dataspace (e.g., in mobility, manufacturing, or energy domains), agreement on high-level ontology names is insufficient. The actual payload graphs must comply with:
+- Required and forbidden properties.
+- Value range constraints and datatypes.
+- Multiplicity and cardinality rules.
+- Linked Data relations and IRI prefixes.
+
+Alexandria operates as an authoritative validation service where participants can remotely submit semantic artifacts to certify compliance.
+
+---
+
+## Validation Engine: SHACL Constraint Shapes
+
+Alexandria leverages **SHACL (Shapes Constraint Language)**—the W3C standard for validating RDF graphs—to execute conformance checks:
+
+1. **Shape Association:** Each vocabulary published in Alexandria can register corresponding SHACL shape definitions (e.g. `VehicleProfileShape`, `ContractOfferShape`).
+2. **Graph Validation:** When a payload is submitted for remote testing, Alexandria executes the target SHACL shapes against the payload data graph.
+3. **Conformance Report:** The test returns a standardized SHACL validation report:
+   - `sh:conforms true`: Payload is 100% compliant.
+   - `sh:conforms false`: Detailed violation reports identifying specific focus nodes, failed constraint components, paths, and actionable severity levels (`sh:Violation`, `sh:Warning`, `sh:Info`).
+
+---
+
+## Remote Conformance Flow
+
+<Steps>
+
+### 1. Retrieve Target Vocabulary & Shapes
+
+Connectors query Alexandria for the latest published vocabulary version and associated SHACL validation shapes:
+
+```bash
+curl -k https://alexandria.127.0.0.1.nip.io:8443/api/v1/vocabularies/mobility/shapes
+```
+
+### 2. Execute Remote Conformance Check
+
+Participants submit their payload or dataset profile via REST API to perform remote validation:
+
+```bash
+curl -k -X POST https://alexandria.127.0.0.1.nip.io:8443/api/v1/conformance/validate \
+  -H "Content-Type: application/ld+json" \
+  -H "Cookie: alexandria_session=..." \
+  -d '{
+    "vocabulary_iri": "https://w3id.org/alexandria/mobility#",
+    "payload": {
+      "@context": "https://w3id.org/alexandria/mobility/context.jsonld",
+      "@type": "AssetEntry",
+      "assetId": "urn:uuid:1234",
+      "dataProfile": "https://w3id.org/alexandria/profiles/v1"
+    }
+  }'
+```
+
+### 3. Parse Conformance Verdict
+
+Alexandria responds with the machine-readable validation result:
+
+```json
+{
+  "conforms": true,
+  "vocabulary_version": "v1.4.0",
+  "evaluated_shapes": 12,
+  "timestamp": "2026-09-07T22:30:00Z"
+}
+```
+
+</Steps>
+
+---
+
+## Automated CI/CD Integration
+
+Dataspace engineering teams can incorporate Alexandria's remote conformance endpoint directly into their continuous integration pipelines. Any schema drift or non-compliant ontology modification in a connector immediately breaks the build before deploying to production.
+EOF

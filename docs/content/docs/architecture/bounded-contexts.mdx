@@ -1,0 +1,56 @@
+---
+title: Bounded Contexts
+description: In-process module lifecycle, contracts, and boundary enforcement in Alexandria.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Bounded Contexts
+
+Alexandria organizes features into distinct bounded contexts located in `internal/`. Each module is self-contained and acts as an independent composition root for its domain.
+
+---
+
+## Module Contract
+
+Every bounded context implements a consistent public lifecycle contract:
+
+```go
+type Module interface {
+    Start(ctx context.Context) error
+    Close() error
+    Ready() bool
+}
+```
+
+Each module exposes:
+- **`Deps` struct:** Explicit external requirements (database pool, logger, router group, shared event bus).
+- **`New(deps Deps) (*Module, error)`:** Assembles internal services, repositories, and private adapters.
+- **`Start(ctx context.Context)`:** Spawns background workers, establishes links with external dependencies, and registers routes.
+- **`Close()`:** Gracefully releases resources, flushes buffers, and closes outbound connections.
+
+---
+
+## Existing Contexts
+
+### 1. `ssi-auth` (`internal/ssi-auth`)
+Responsible for decentralized identity, verifiable credentials, and cryptographic signing:
+- Exposes `/.well-known/did.json` for DID resolution.
+- Coordinates key management and attestation.
+- Interacts with wallet adapters through the driven `wallet.Wallet` port.
+
+### 2. `auth-proxy` (`internal/auth-proxy`)
+Secures the HTTP boundary and manages authentication:
+- Terminates OpenID Connect authorization code flows with PKCE.
+- Issues, verifies, and encrypts `HttpOnly` session cookies.
+- Performs token introspection against Zitadel.
+- Protects downstream `/api/v1` routes.
+
+---
+
+## Boundary Enforcement
+
+Package boundaries are maintained by convention:
+- Modules do not import each other's internal implementation packages (e.g., `internal/auth-proxy` never imports `internal/ssi-auth/fafnir`).
+- Cross-context communication is mediated through public interfaces or shared events.
+- Because seams are strictly maintained as Go interfaces, migrating any bounded context into a standalone network microservice in the future requires zero internal refactoring.

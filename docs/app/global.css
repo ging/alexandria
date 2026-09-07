@@ -1,0 +1,151 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+@theme {
+  --color-fd-background: hsl(0, 0%, 99.5%);
+  --color-fd-foreground: hsl(240, 10%, 12%);
+  --color-fd-muted: hsl(335, 25%, 96.5%);
+  --color-fd-muted-foreground: hsl(335, 10%, 42%);
+  --color-fd-popover: hsl(0, 0%, 100%);
+  --color-fd-popover-foreground: hsl(240, 10%, 12%);
+  --color-fd-card: hsl(0, 0%, 100%);
+  --color-fd-card-foreground: hsl(240, 10%, 12%);
+  --color-fd-border: hsla(335, 25%, 86%, 0.75);
+  --color-fd-primary: hsl(338, 95%, 46%);
+  --color-fd-primary-foreground: hsl(0, 0%, 100%);
+  --color-fd-secondary: hsl(335, 30%, 94%);
+  --color-fd-secondary-foreground: hsl(338, 85%, 35%);
+  --color-fd-accent: hsla(338, 85%, 95%, 0.8);
+  --color-fd-accent-foreground: hsl(338, 90%, 35%);
+  --color-fd-ring: hsl(338, 95%, 46%);
+  --color-fd-overlay: hsla(240, 10%, 10%, 0.3);
+}
+
+.dark {
+  --color-fd-background: hsl(240, 12%, 8%);
+  --color-fd-foreground: hsl(40, 20%, 94%);
+  --color-fd-muted: hsl(240, 10%, 13%);
+  --color-fd-muted-foreground: hsl(335, 10%, 65%);
+  --color-fd-popover: hsl(240, 12%, 10.5%);
+  --color-fd-popover-foreground: hsl(40, 20%, 94%);
+  --color-fd-card: hsl(240, 12%, 10.5%);
+  --color-fd-card-foreground: hsl(40, 20%, 94%);
+  --color-fd-border: hsla(335, 25%, 26%, 0.45);
+  --color-fd-primary: hsl(342, 95%, 62%);
+  --color-fd-primary-foreground: hsl(0, 0%, 100%);
+  --color-fd-secondary: hsl(240, 10%, 15%);
+  --color-fd-secondary-foreground: hsl(40, 15%, 90%);
+  --color-fd-accent: hsla(342, 90%, 60%, 0.14);
+  --color-fd-accent-foreground: hsl(342, 95%, 80%);
+  --color-fd-ring: hsl(342, 95%, 62%);
+  --color-fd-overlay: hsla(0, 0%, 0%, 0.6);
+}
+
+.dark #nd-sidebar {
+  --color-fd-muted: hsl(240, 10%, 12%);
+  --color-fd-secondary: hsl(240, 10%, 14%);
+  --color-fd-muted-foreground: hsl(335, 10%, 68%);
+}
+
+html {
+  scrollbar-gutter: stable;
+}
+
+html > body[data-scroll-locked] {
+  margin-right: 0px !important;
+  --removed-body-scroll-bar-size: 0px !important;
+}
+
+/* Alexandria Banner Brand Gradients */
+.bg-alexandria-gradient {
+  background: linear-gradient(135deg, #e6007e 0%, #ff3366 35%, #ff6f00 70%, #ffa000 100%);
+}
+
+.text-alexandria-gradient {
+  background: linear-gradient(135deg, #e6007e 0%, #ff3366 35%, #ff7a00 75%, #ffa000 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Compact Typography for documentation */
+article.prose {
+  font-size: 0.9375rem;
+  line-height: 1.62;
+}
+
+article.prose h1 {
+  font-size: 1.85rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+article.prose h2 {
+  font-size: 1.35rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  margin-top: 1.75rem;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.25rem;
+  border-bottom-width: 1px;
+  border-color: var(--color-fd-border);
+}
+
+article.prose h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  margin-top: 1.25rem;
+  margin-bottom: 0.35rem;
+}
+
+article.prose p {
+  margin-top: 0.55rem;
+  margin-bottom: 0.55rem;
+}
+
+article.prose ul,
+article.prose ol {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding-left: 1.25rem;
+}
+
+article.prose li {
+  margin-top: 0.2rem;
+  margin-bottom: 0.2rem;
+}
+
+article.prose table {
+  font-size: 0.85rem;
+  margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+article.prose th,
+article.prose td {
+  padding: 0.35rem 0.65rem;
+}
+
+article.prose pre {
+  margin-top: 0.65rem;
+  margin-bottom: 0.65rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+article.prose hr {
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+#nd-sidebar {
+  font-size: 0.875rem;
+}
+
+#nd-toc {
+  font-size: 0.8125rem;
+}

@@ -1,0 +1,41 @@
+---
+title: Unified Wallet Port
+description: Decoupling domain logic from wallet implementations with the wallet.Wallet interface.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Unified Wallet Port
+
+In accordance with [ADR 0003](../adr/0003-key-material-lives-in-an-external-wallet) and [ADR 0007](../adr/0007-unified-wallet-port-and-identityhub-adapter), cryptographic private keys never reside inside the Alexandria process. Instead, key custody and signing are delegated to an external wallet service.
+
+The interface `wallet.Wallet` defined in `internal/ssi-auth/wallet/ports.go` establishes the driven port contract.
+
+---
+
+## Core Operations
+
+The `wallet.Wallet` port abstracts three primary capability domains:
+
+### 1. Identity & DID Lifecycle
+- `Link(ctx) (Did, error)`: Refreshes and verifies identity connection with the wallet.
+- `GetAllDids(ctx)` / `GetDidByID(ctx, id)`: Queries stored DIDs.
+- `RegisterDid(ctx, plan)` / `DeleteDid(ctx, id)`: Provisions or deprovisions DIDs.
+- `PublishDid(ctx, id)` / `UnpublishDid(ctx, id)`: Publishes DID documents to public or dataspace resolvers.
+- `AddServiceEndpoint(ctx, id, endpoint)`: Appends service endpoints (e.g. CredentialService) to published DID Documents.
+
+### 2. Key Management & Rotation
+- `GetAllKeys(ctx)` / `RegisterKey(ctx, plan)` / `DeleteKey(ctx, id)`: Manages asymmetric cryptographic key pairs.
+- `RotateKey(ctx, id, duration)`: Implements secure key rotation with overlap validity periods.
+- `RevokeKey(ctx, id)`: Instantly revokes compromised keys.
+
+### 3. Verifiable Credentials & Presentations
+- `GetAllCredentials(ctx)` / `DeleteCredential(ctx, id)`: Manages held verifiable credentials.
+- `ProcessOid4vci(ctx, uri)`: Handles inbound OpenID for Verifiable Credential Issuance (OID4VCI) offers.
+- `ProcessOid4vp(ctx, uri)`: Resolves OpenID for Verifiable Presentations (OID4VP) verification requests.
+
+---
+
+## Why Decouple the Wallet?
+
+Dataspace ecosystems evolve rapidly. Organizations may require enterprise hardware security modules (HSM), sovereign wallets, or Eclipse Dataspace Components (EDC) compliance. Decoupling ensures Alexandria remains agnostic to storage formats, protocols, and vendor lock-in.

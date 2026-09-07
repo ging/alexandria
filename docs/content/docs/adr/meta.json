@@ -1,0 +1,13 @@
+{
+  "title": "Architecture Decisions (ADRs)",
+  "pages": [
+    "index",
+    "0001-bounded-contexts-as-in-process-modules",
+    "0002-one-configuration-document",
+    "0003-key-material-lives-in-an-external-wallet",
+    "0004-authentication-terminated-at-the-node",
+    "0005-tls-terminated-by-a-proxy-in-development-too",
+    "0006-one-image-three-deployment-shapes",
+    "0007-unified-wallet-port-and-identityhub-adapter"
+  ]
+}

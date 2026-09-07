@@ -314,6 +314,16 @@ tasks:
     desc: Scan for known vulnerabilities.
     cmds: ["go run golang.org/x/vuln/cmd/govulncheck@latest ./..."]
 
+  docs:dev:
+    desc: Start the Fumadocs documentation dev server.
+    dir: docs
+    cmds: ["pnpm dev"]
+
+  docs:build:
+    desc: Build static documentation for GitHub Pages.
+    dir: docs
+    cmds: ["pnpm build"]
+
   check:
     desc: "Full pipeline: format, lint and tests."
     cmds:
