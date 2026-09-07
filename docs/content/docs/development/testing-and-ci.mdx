@@ -1,0 +1,86 @@
+---
+title: Testing & CI/CD
+description: Testing strategies, Taskfile automation, and continuous integration workflows.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Testing & CI/CD
+
+Alexandria uses strict quality gates across both unit tests and integration tests.
+
+---
+
+## Running Tests
+
+Testing commands are orchestrated via `Taskfile.yaml`:
+
+### Unit Tests
+Executes unit tests with race detection and generates a coverage profile (`coverage.out`):
+```bash
+task test
+```
+
+Inspect coverage interactively in the browser:
+```bash
+task cover
+```
+
+### Integration Tests
+Integration tests run against live wallet backends and require the `-tags="integration,jwx_es256k"` build tags:
+
+```bash
+# Run all integration tests
+task test:integration
+
+# Test Fafnir adapter specifically
+task test:integration:fafnir
+
+# Test IdentityHub adapter specifically
+task test:integration:identityhub
+
+# Run both unit and integration tests
+task test:all
+```
+
+---
+
+## Code Quality & Linters
+
+Before submitting pull requests, run the full validation pipeline:
+
+```bash
+task check
+```
+
+This task runs:
+1. `task fmt`: Formats all Go files using `gofumpt`.
+2. `task lint`: Runs static analysis with `golangci-lint`.
+3. `task test`: Runs unit tests with race detection.
+
+Additional checks:
+```bash
+# Verify module dependencies are clean
+task tidy
+
+# Scan codebase for known vulnerabilities
+task vuln
+```
+
+---
+
+## Continuous Integration (GitHub Actions)
+
+Alexandria runs two primary workflows on GitHub Actions:
+
+1. **`ci.yaml`:**
+   - Triggers on every push to `main` and all Pull Requests.
+   - Enforces `go mod tidy` synchronization.
+   - Runs `gofumpt` format checks, `go vet`, `golangci-lint`, and race tests.
+   - Scans dependencies with `govulncheck`.
+   - Verifies full binary compilation into `/dev/null`.
+
+2. **`deploy-docs.yaml`:**
+   - Triggers on push to `main` and manual trigger (`workflow_dispatch`).
+   - Compiles static Next.js/Fumadocs documentation.
+   - Deploys static build to GitHub Pages at `https://caparicio-esd.github.io/alexandria/`.

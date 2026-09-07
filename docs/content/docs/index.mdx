@@ -1,12 +1,43 @@
 ---
 title: Introduction
-description: Overview of Alexandria documentation
+description: Official documentation for the Alexandria Vocabulary Hub.
 ---
 
-Welcome to the **Alexandria** documentation.
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Callout } from 'fumadocs-ui/components/callout';
 
-Alexandria is a decentralized identity, verifiable credentials, and wallet integration platform implemented in Go using hexagonal architecture.
+# Alexandria Documentation
 
-## Sections
+Welcome to the **Alexandria** documentation portal. Alexandria is an International Data Spaces (IDS) Vocabulary Hub providing decentralized identity, verifiable credentials, and semantic vocabulary services.
 
-The documentation structure and content will be organized here as we plan and write the guides, architectural decision records (ADRs), and internal references.
+<Callout type="info">
+Alexandria is built with Go, Hexagonal Architecture, and decoupled wallet ports, protected behind Zitadel OIDC authentication and Caddy TLS termination.
+</Callout>
+
+---
+
+## Documentation Sections
+
+<Cards>
+  <Card
+    title="Getting Started"
+    href="./getting-started"
+    description="Prerequisites, step-by-step local quickstart, configuration model, and environment overrides."
+  />
+  <Card
+    title="Architecture & Wallets"
+    href="./architecture"
+    description="Hexagonal architecture, in-process bounded contexts, unified wallet port, and Fafnir vs IdentityHub."
+  />
+  <Card
+    title="API & Development"
+    href="./development"
+    description="REST API reference, node-terminated OIDC with PKCE, testing suites, and CI/CD pipelines."
+  />
+  <Card
+    title="Architecture Decisions (ADRs)"
+    href="./adr"
+    description="Formal record of accepted architectural decisions (0001 through 0007) and decision rationale."
+  />
+</Cards>
+

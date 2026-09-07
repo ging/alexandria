@@ -1,0 +1,29 @@
+---
+title: API & Development Overview
+description: Overview of Alexandria REST APIs, authentication boundary, and developer workflows.
+---
+
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# API & Development
+
+Alexandria provides a versioned REST API built on **Gin**, guarded by OpenID Connect (OIDC) authentication and backed by automated testing pipelines.
+
+---
+
+## Architecture of the HTTP Layer
+
+- **Prefix & Versioning:** All bounded context APIs are mounted under `/api/v1`.
+- **The Guard Interface:** Contexts needing public ingress (like login and callback) register routes before the authentication guard. All subsequent `/api/v1` routes require either a valid authenticated session cookie or bearer token.
+- **Root Escape Hatches:** Fixed specifications like `/.well-known/did.json` and health probes (`/healthz`, `/livez`, `/readyz`) mount directly at the root of the engine via `RootModule`.
+
+---
+
+## Topics
+
+<Cards>
+  <Card title="Authentication & Sessions" href="./development/authentication" description="Zitadel OIDC flows, PKCE, sealed session cookies, and token introspection." />
+  <Card title="REST API Endpoints" href="./development/endpoints" description="Catalog of endpoints for identity, DID documents, and wallet operations." />
+  <Card title="Testing & CI/CD" href="./development/testing-and-ci" description="Running unit and integration test suites, linting, Task commands, and GitHub Actions." />
+</Cards>

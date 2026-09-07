@@ -1,0 +1,60 @@
+---
+title: REST API Endpoints
+description: Reference catalog of HTTP endpoints exposed by the Alexandria node.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# REST API Reference
+
+Alexandria serves endpoints divided into root specifications, authentication management, and identity/wallet operations.
+
+---
+
+## Root & Probes
+
+| Method | Path | Auth Required | Description |
+|:---|:---|:---:|:---|
+| `GET` | `/.well-known/did.json` | No | Public W3C DID Document resolving the node's decentralized identifier. |
+| `GET` | `/healthz` | No | Basic liveness probe confirming the HTTP server is responsive. |
+| `GET` | `/livez` | No | Kubernetes liveness probe. |
+| `GET` | `/readyz` | No | Kubernetes readiness probe confirming database and wallet connections. |
+| `GET` | `/metrics` | No (Internal port `2112`) | Prometheus formatted metrics. |
+
+---
+
+## Authentication Endpoints (`/api/v1/auth`)
+
+| Method | Path | Description |
+|:---|:---|:---|
+| `GET` | `/api/v1/auth/login` | Initiates OIDC authorization flow with Zitadel (redirects browser). |
+| `GET` | `/api/v1/auth/callback` | Handles OAuth2 redirect callback and sets sealed session cookie. |
+| `GET` | `/api/v1/auth/userinfo` | Returns the identity and claims of the currently authenticated caller. |
+| `GET` | `/api/v1/auth/logout` | Terminates user session and invalidates session cookies. |
+
+---
+
+## Identity & Wallet Endpoints (`/api/v1/wallet`)
+
+All endpoints below require authentication.
+
+### Keys
+- `GET /api/v1/wallet/keys`: Lists cryptographic keys registered in the wallet.
+- `POST /api/v1/wallet/keys`: Registers a new asymmetric keypair.
+- `DELETE /api/v1/wallet/keys/:id`: Purges a registered key.
+- `POST /api/v1/wallet/keys/:id/rotate`: Initiates key rotation.
+- `POST /api/v1/wallet/keys/:id/revoke`: Revokes a key.
+
+### DIDs
+- `GET /api/v1/wallet/dids`: Lists managed Decentralized Identifiers.
+- `GET /api/v1/wallet/dids/:id`: Retrieves details for a specific DID.
+- `POST /api/v1/wallet/dids`: Provisions a new DID.
+- `DELETE /api/v1/wallet/dids/:id`: Deletes a DID.
+- `POST /api/v1/wallet/dids/:id/publish`: Publishes the DID document.
+- `POST /api/v1/wallet/dids/:id/unpublish`: Unpublishes the DID document.
+
+### Verifiable Credentials & Exchanges
+- `GET /api/v1/wallet/credentials`: Lists held Verifiable Credentials.
+- `DELETE /api/v1/wallet/credentials/:id`: Purges a Verifiable Credential.
+- `POST /api/v1/wallet/oid4vci`: Processes an OpenID for Verifiable Credential Issuance offer.
+- `POST /api/v1/wallet/oid4vp`: Handles an OpenID for Verifiable Presentations presentation request.

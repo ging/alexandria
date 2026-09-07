@@ -1,0 +1,43 @@
+---
+title: Authentication & Sessions
+description: Node-terminated OpenID Connect (OIDC), PKCE, session cookies, and Zitadel integration.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Authentication & Sessions
+
+In accordance with [ADR 0004](../adr/0004-authentication-terminated-at-the-node), authentication terminates at the **Alexandria node**, rather than requiring clients or browsers to orchestrate OAuth2/OIDC directly with Zitadel.
+
+---
+
+## The Authentication Flow
+
+1. **Initiate Login:** The user navigates to:
+   ```
+   GET https://alexandria.127.0.0.1.nip.io:8443/api/v1/auth/login
+   ```
+   The node creates an ephemeral state and a PKCE code verifier, redirects the browser to Zitadel's authorization endpoint, and sets an encrypted state cookie.
+2. **User Authenticates:** The user enters credentials at Zitadel (`https://auth.127.0.0.1.nip.io:8443`).
+3. **Authorization Callback:** Zitadel redirects back to:
+   ```
+   GET https://alexandria.127.0.0.1.nip.io:8443/api/v1/auth/callback?code=...&state=...
+   ```
+   The node validates the state, exchanges the authorization code with the PKCE verifier for tokens, and seals the user session.
+4. **Sealed Session Cookie:** The browser receives an encrypted, `HttpOnly`, `SameSite=Lax`, `Secure` cookie (`alexandria_session`). All subsequent calls automatically present this cookie.
+5. **Logout:** Visiting `/api/v1/auth/logout` invalidates the session and clears the cookie.
+
+---
+
+## Token Verification & Introspection
+
+Alexandria supports both browser sessions and machine-to-machine API tokens via the `auth_config.introspect` setting:
+
+- **JWT Verification (Local):** Tokens containing valid JWT signatures are checked against Zitadel's JWKS key set, which is cached and refreshed periodically (`jwks_refresh: 15m`).
+- **Opaque Token Introspection:** If Zitadel issues opaque tokens, or if configured to `fallback`, Alexandria introspects the token via Zitadel's OAuth2 introspection endpoint.
+
+---
+
+## Cookie Security
+
+Because TLS is terminated by Caddy across all environments ([ADR 0005](../adr/0005-tls-terminated-by-a-proxy-in-development-too)), session cookies carry the `Secure` flag even in development. Cookies cannot be accessed via JavaScript (`HttpOnly`), mitigating Cross-Site Scripting (XSS) session theft.
