@@ -1,15 +1,5 @@
-// Wiring: the infrastructure constructors newApp draws on.
-//
-// Every one of them takes the whole *config.Config and picks out what it needs.
-// Configuration goes in, a configured component comes out. That uniformity is
-// worth more here than minimal parameters: adding a setting to a component
-// stops being a change to its call site, and a reader can tell at a glance
-// which functions are wiring and which are not.
-//
-// The rule stops at this package. Config is the composition root's input, and
-// it does not travel past it — except into a module, which is a composition
-// root of its own and picks out its sections the same way.
-
+// wiring builds concrete infrastructure adapters and connects bounded contexts.
+// It wires configuration settings into database pools, loggers, and services.
 package main
 
 import (

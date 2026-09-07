@@ -1,14 +1,5 @@
-// Package keys is the driven adapter behind wallet.KeyMaterial.
-//
-// It exists as its own package to keep two rules that would otherwise collide.
-// The domain must not import a JOSE library, and internal/ssi-auth/jose must
-// not import the domain — it is an anti-corruption layer, and a translation
-// layer that knows about the thing on one side of it stops being one. So the
-// wiring lives here: this package imports both and answers in the domain's
-// vocabulary.
-//
-// It holds no state and reaches nothing outside the process. It is an adapter
-// because of which direction it points, not because of what it talks to.
+// inspector implements the wallet.PemInspector port for validating key material.
+// It inspects PEM-encoded cryptographic keys without exposing JOSE details to domain.
 package keys
 
 import (

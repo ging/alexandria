@@ -1,3 +1,5 @@
+// jose_test tests cryptographic algorithm parsing and curve validation.
+// It verifies JWA key types and supported curve identification helpers.
 package jose_test
 
 import (

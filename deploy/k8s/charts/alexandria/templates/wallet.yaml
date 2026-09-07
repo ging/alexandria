@@ -38,9 +38,10 @@ data:
       port: {{ .Values.wallet.deploy.database.port | quote }}
 
     is_docker: true
-    # False, so the credentials come from the Secret mounted below rather than
-    # from a real Vault. See deploy/k8s/README.md.
-    is_vault_real: false
+    # What this switches is where the private keys go: entries under the Vault
+    # mount, or files on the claim. The database credential is read from a file
+    # either way — the wallet reads it before it looks at Vault at all.
+    is_vault_real: {{ .Values.wallet.deploy.vault.enabled }}
 ---
 {{- if not .Values.wallet.deploy.existingSecret }}
 apiVersion: v1
@@ -52,13 +53,16 @@ metadata:
 type: Opaque
 stringData:
   # The whole credential is one JSON document, because that is the shape the
-  # wallet's file-backed vault reads. VAULT_APP_DB below names this key.
+  # wallet reads. VAULT_APP_DB names this key.
   db.json: |
     {
       "user": {{ .Values.wallet.deploy.database.user | quote }},
       "password": {{ required "wallet.deploy.database.password is required" .Values.wallet.deploy.database.password | quote }},
       "name": {{ .Values.wallet.deploy.database.name | quote }}
     }
+  {{- if and .Values.wallet.deploy.vault.enabled (not .Values.wallet.deploy.vault.existingSecret) }}
+  token: {{ required "wallet.deploy.vault.token or .existingSecret is required when vault is enabled" .Values.wallet.deploy.vault.token | quote }}
+  {{- end }}
 {{- end }}
 ---
 {{- if not .Values.wallet.deploy.persistence.existingClaim }}

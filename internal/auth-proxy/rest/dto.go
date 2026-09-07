@@ -1,3 +1,5 @@
+// dto defines the public HTTP request and response structures for authentication.
+// It shapes token responses, session status bodies, and login redirect representations.
 package rest
 
 import (

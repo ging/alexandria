@@ -1,3 +1,5 @@
+// auth defines configuration structures for authentication and OIDC providers.
+// It manages client credentials, session keys, and redirect URLs.
 package config
 
 import (

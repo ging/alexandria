@@ -1,14 +1,5 @@
-// Package config loads the node configuration from a YAML document.
-//
-// The document is flat: its sections are this node's configuration and nothing
-// else. Decoding is strict, so an unknown key is an error rather than a setting
-// silently left at its default.
-//
-// It is a driven adapter like any other: it knows the file format, and it hands
-// the composition root plain values. The domain never imports it, and no type
-// in here is passed wholesale into a use case — main picks out what each
-// constructor needs, so a service cannot reach for configuration it did not
-// declare a dependency on.
+// config loads, merges, and validates configuration from environment and YAML.
+// It serves as the single source of truth for runtime application settings.
 package config
 
 import (

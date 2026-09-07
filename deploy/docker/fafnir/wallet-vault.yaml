@@ -1,0 +1,31 @@
+# The wallet, backed by the Vault in this stack instead of files.
+#
+# Selected by pointing FAFNIR_CONFIG at it in .env. The only difference from
+# wallet.yaml is is_vault_real at the bottom; it is a separate file because the
+# wallet reads that flag from YAML and there is no environment override for it.
+
+http_host: &http_host
+  protocol: "http"
+  url: "127.0.0.1"
+  port: null
+  internal_port: "7001"
+
+hosts:
+  http: *http_host
+  grpc: null
+  graphql: null
+
+db_config:
+  db_type: Postgres
+  url: "fafnir-db"
+  port: "5432"
+
+is_docker: true
+
+# True. What this moves into Vault is the private keys, which is the whole
+# point: they stop being files on a volume and become entries under the mount.
+#
+# What it does not move is the database credential. The wallet still reads that
+# from $VAULT_PATH/$VAULT_APP_DB on disk before it looks at Vault at all — see
+# "Vault" in ../README.md — so fafnir-init still writes it.
+is_vault_real: true

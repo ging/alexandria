@@ -228,6 +228,30 @@ wallet:
     existingSecret: ""
     extraEnv: {}
 
+    # Keep the wallet's private keys in a Vault instead of on the claim below.
+    #
+    # This chart does not deploy Vault, and that is a decision rather than an
+    # omission: a Vault worth trusting is unsealed, audited and backed up on its
+    # own terms, which is a workload with its own lifecycle. Run HashiCorp's
+    # chart, or point this at one you already operate.
+    #
+    # The claim below is still needed with this on: the wallet reads its
+    # database credential from a file before it looks at Vault at all.
+    vault:
+      enabled: false
+      # As the wallet reaches it from inside the cluster.
+      address: http://vault.vault.svc.cluster.local:8200
+      # A KV version 2 mount. The wallet writes one entry per key under it.
+      mount: secret
+      # The token, which must carry a policy reaching that mount plus read on
+      # sys/mounts — the client reads that to learn the KV version, and without
+      # it every call fails with a 403 naming nothing useful.
+      #
+      # Set existingSecret to a Secret with a `token` key instead of putting it
+      # here; a token in a values file is a token in the release's manifest.
+      token: ""
+      existingSecret: ""
+
     # Where the private keys live. Not optional and not an emptyDir: the wallet
     # keeps them as files, so this claim is what the node's identity actually
     # is. It carries a keep resource-policy, so `helm uninstall` leaves it.
@@ -266,8 +290,10 @@ serviceMonitor:
 production: true
 
 vault:
-  # The node resolves key material from Vault when this is on. Off means it
-  # uses the in-process development resolver, which is not a production story.
+  # Sets common_config.connection.is_vault_real on the *node*. Today that flag
+  # only changes a word in its startup banner — the node has no Vault client,
+  # because it holds no key material: the wallet does. The setting that puts
+  # keys in a Vault is wallet.deploy.vault above.
   enabled: false
 
 clientClass: Provider

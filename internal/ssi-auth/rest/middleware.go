@@ -1,3 +1,5 @@
+// middleware provides HTTP logging and request interception for ssi-auth routes.
+// It captures duration, status codes, and context attributes for structured logging.
 package rest
 
 import (

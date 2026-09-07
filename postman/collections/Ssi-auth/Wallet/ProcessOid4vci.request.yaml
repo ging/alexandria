@@ -1,0 +1,15 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/ssi-auth/wallet/oid4vci"
+method: POST
+body:
+  type: json
+  content: |-
+    {
+        "uri": "openid-credential-offer://?credential_issuer=https%3A%2F%2Fissuer.example.com"
+    }
+auth:
+  type: inherit
+  credentials:
+    id: 0812cb1e-4ea1-4bd8-b892-0d22d8d0b103
+settings: {}
+order: 17400

@@ -1,9 +1,5 @@
-// Package httpapi is the process-wide HTTP boundary.
-//
-// It owns the routes that describe the node rather than any one bounded
-// context — the health probes today, the version and specification endpoints
-// tomorrow — and mounts each context underneath. A module speaks for its
-// context; this one speaks for the process.
+// router provides the top-level HTTP engine setup and route mounting pipeline.
+// It binds health probes, metrics, and bounded context routers onto Gin.
 package httpapi
 
 import (

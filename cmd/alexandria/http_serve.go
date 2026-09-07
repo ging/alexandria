@@ -1,5 +1,5 @@
-// Serving: the API listener and its graceful shutdown.
-
+// http_serve manages the HTTP server lifecycle and graceful shutdown timeouts.
+// It listens on configured network addresses and awaits termination signals.
 package main
 
 import (

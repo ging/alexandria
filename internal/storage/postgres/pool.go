@@ -1,9 +1,5 @@
-// Package postgres owns the connection pool.
-//
-// It sits beside the hexagon, like the rest of the infrastructure: the pool is
-// a process resource, opened once at the composition root and handed to
-// whichever bounded context needs it. The repositories that speak SQL belong to
-// their own context, not here.
+// pool manages PostgreSQL database connection lifecycles and pool configurations.
+// It initializes pgx pools with health checks and graceful shutdown support.
 package postgres
 
 import (

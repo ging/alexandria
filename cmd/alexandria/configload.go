@@ -1,5 +1,5 @@
-// Resolving which configuration document to load.
-
+// configload resolves CLI flags and environment paths to locate configuration files.
+// It loads YAML configuration documents with sensible fallback paths.
 package main
 
 import (

@@ -1,3 +1,5 @@
+// pkce provides RFC 7636 Proof Key for Code Exchange generators and verifiers.
+// It creates high-entropy code verifiers and SHA-256 code challenge strings.
 package oidc
 
 import (

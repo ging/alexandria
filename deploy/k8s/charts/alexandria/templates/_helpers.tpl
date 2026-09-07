@@ -124,10 +124,25 @@ and a copy of this in two places is a copy that will diverge.
 */}}
 
 {{- define "alexandria.walletEnv" -}}
+# Relative, and deliberately so: the wallet uses this one value twice — as a
+# directory under its working directory for the files it reads, and as a path
+# inside Vault for what it writes there. An absolute value yields a leading
+# double slash in the Vault path and a 404 on every write.
 - name: VAULT_PATH
-  value: /app/vault/secrets
+  value: vault/secrets
 - name: VAULT_APP_DB
   value: db.json
+{{- if .Values.wallet.deploy.vault.enabled }}
+- name: VAULT_ADDR
+  value: {{ required "wallet.deploy.vault.address is required" .Values.wallet.deploy.vault.address | quote }}
+- name: VAULT_MOUNT
+  value: {{ .Values.wallet.deploy.vault.mount | quote }}
+- name: VAULT_TOKEN
+  valueFrom:
+    secretKeyRef:
+      name: {{ if .Values.wallet.deploy.vault.existingSecret }}{{ .Values.wallet.deploy.vault.existingSecret }}{{ else }}{{ include "alexandria.fullname" . }}-wallet-secrets{{ end }}
+      key: token
+{{- end }}
 {{- range $key, $value := .Values.wallet.deploy.extraEnv }}
 - name: {{ $key }}
   value: {{ $value | quote }}

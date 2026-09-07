@@ -1,4 +1,5 @@
-// Package main is the entry point of the alexandria binary.
+// main is the entry point for the Alexandria application executable.
+// It initializes the application lifecycle and handles fatal exit states.
 package main
 
 import (

@@ -1,3 +1,5 @@
+// database defines PostgreSQL connection settings and pool configuration parameters.
+// It provides connection URL construction with SSL mode support.
 package config
 
 import (

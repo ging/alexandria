@@ -1,3 +1,5 @@
+// wallet_dto defines the public REST transfer objects for wallet operations.
+// It maps domain identity and credential models to external JSON wire structures.
 package rest
 
 import (
@@ -47,6 +49,16 @@ func newDidResp(d wallet.Did) didResp {
 		DefaultKeyFragment: d.DefaultKey.Fragment,
 		Document:           &d.Document,
 	}
+}
+
+// newDidResp projects a domain DID onto the wire.
+func newDidResps(dids []wallet.Did) []didResp {
+	out := make([]didResp, 0, len(dids))
+	for _, d := range dids {
+		out = append(out, newDidResp(d))
+	}
+
+	return out
 }
 
 // ===== KEY rest DTOs =========================================================
@@ -181,4 +193,74 @@ func (b didBuilderReq) toDomain() (common.DidBuilder, error) {
 	}
 
 	return b.builder, nil
+}
+
+// ===== Wallet Info DTO =========================================================
+
+type walletInfoRest struct {
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	CreatedAt  time.Time `json:"createdAt"`
+	AddedAt    time.Time `json:"addedAt"`
+	Permission string    `json:"permission"`
+	Dids       []didResp `json:"dids"`
+}
+
+// newKeyResp projects a domain key onto the wire.
+func newWalletInfoRest(i wallet.WalletInfo) walletInfoRest {
+	return walletInfoRest{
+		ID:         i.ID,
+		Name:       i.Name,
+		CreatedAt:  i.CreatedAt,
+		AddedAt:    i.AddedAt,
+		Permission: i.Permission,
+		Dids:       newDidResps(i.Dids),
+	}
+}
+
+// ===== Credential rest DTOs ==================================================
+
+// credentialResp is the public representation of a stored Verifiable Credential.
+type credentialResp struct {
+	ID             string          `json:"id"`
+	VcBody         json.RawMessage `json:"vcBody"`
+	VcType         string          `json:"vcType"`
+	VcFormat       string          `json:"vcFormat"`
+	HolderDid      string          `json:"holderDid"`
+	IssuerDid      string          `json:"issuerDid"`
+	ParsedDocument json.RawMessage `json:"parsedDocument"`
+	ValidUntil     *time.Time      `json:"validUntil,omitempty"`
+	AddedOn        time.Time       `json:"addedOn"`
+}
+
+// newCredentialResp projects a domain credential onto the wire.
+func newCredentialResp(c wallet.Credential) credentialResp {
+	return credentialResp{
+		ID:             c.ID,
+		VcBody:         c.VcBody,
+		VcType:         c.VcType,
+		VcFormat:       c.VcFormat,
+		HolderDid:      c.HolderDid,
+		IssuerDid:      c.IssuerDid,
+		ParsedDocument: c.ParsedDocument,
+		ValidUntil:     c.ValidUntil,
+		AddedOn:        c.AddedOn,
+	}
+}
+
+// newCredentialResps projects a list of domain credentials, never nil: an empty wallet is an
+// empty JSON array, not null.
+func newCredentialResps(credentials []wallet.Credential) []credentialResp {
+	out := make([]credentialResp, 0, len(credentials))
+	for _, c := range credentials {
+		out = append(out, newCredentialResp(c))
+	}
+
+	return out
+}
+
+// ===== Protocol rest DTOs ====================================================
+
+type oidcUriReq struct {
+	URI string `json:"uri"`
 }

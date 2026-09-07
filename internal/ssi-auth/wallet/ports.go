@@ -1,10 +1,5 @@
-// Package wallet is the domain of this bounded context: the use cases that hold
-// key material and decentralised identifiers, and the ports through which they
-// reach anything outside themselves.
-//
-// Nothing here imports a transport, a JOSE library or an HTTP client. The types
-// the ports speak are the ones declared in this package, which is what lets the
-// adapters be replaced without the rules moving.
+// ports defines the outbound driven interfaces required by the wallet domain.
+// It decouples wallet business logic from external transports and key stores.
 package wallet
 
 import (
@@ -40,6 +35,16 @@ type Wallet interface {
 	RemoveKeyFromDid(ctx context.Context, didID string, keyID string) error
 	// SetDefaultKey
 	SetDefaultKey(ctx context.Context, didID string, keyID string) error
+	// WalletInfo
+	WalletInfo(ctx context.Context) (WalletInfo, error)
+	// GetAllCredentials lists every Verifiable Credential held by the wallet.
+	GetAllCredentials(ctx context.Context) ([]Credential, error)
+	// DeleteCredential purges a stored Verifiable Credential.
+	DeleteCredential(ctx context.Context, credentialID string) error
+	// ProcessOid4vci processes an inbound OID4VCI credential offer URI.
+	ProcessOid4vci(ctx context.Context, uri string) error
+	// ProcessOid4vp processes an outbound OID4VP presentation request URI.
+	ProcessOid4vp(ctx context.Context, uri string) error
 }
 
 // ===== Pem Descriptor ===========================================

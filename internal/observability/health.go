@@ -1,3 +1,5 @@
+// health manages process liveness and readiness dependency checks.
+// It aggregates probe evaluations for Kubernetes /healthz and /readyz endpoints.
 package observability
 
 import (

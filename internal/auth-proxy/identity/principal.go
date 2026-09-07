@@ -1,10 +1,5 @@
-// Package identity carries the authenticated caller across the process.
-//
-// It holds no policy and no transport: a driving adapter puts a Principal on
-// the request context and anything downstream — another bounded context's
-// handler, a use case, an audit record — reads it back without importing the
-// authentication machinery, or knowing that Zitadel is what produced it. That
-// is the whole point of the package being this small.
+// principal models the authenticated caller context within the application.
+// It transports user claims, roles, and scopes across request processing pipelines.
 package identity
 
 import (

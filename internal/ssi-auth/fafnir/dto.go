@@ -1,3 +1,5 @@
+// dto defines Fafnir wire structures and their conversions to domain models.
+// It encapsulates remote API schema representations and anti-corruption parsing.
 package fafnir
 
 import (
@@ -207,4 +209,88 @@ func (k keyResp) ToDomain() (wallet.Key, error) {
 		Crv:       k.Crv,
 		CreatedAt: k.CreatedAt,
 	}, nil
+}
+
+// ===== WalletInfo related DTO's =====================================================
+
+type walletInfoRes struct {
+	ID         string
+	Name       string
+	CreatedAt  string
+	AddedAt    string
+	Permission string
+	Dids       []didResp
+}
+
+func (w *walletInfoRes) ToDomain() (wallet.WalletInfo, error) {
+	var dids []wallet.Did
+	var out wallet.WalletInfo
+
+	entries := make([]didResp, 0, len(w.Dids))
+	for _, d := range entries {
+		innerDid, err := d.ToDomain()
+		if err != nil {
+			return wallet.WalletInfo{}, fmt.Errorf("fafnir: couldn't convert did: %w", err)
+		}
+		dids = append(dids, innerDid)
+	}
+
+	layout := "2014-09-12T11:45:26.371Z"
+	createdAt, err := time.Parse(layout, w.CreatedAt)
+	if err != nil {
+		return wallet.WalletInfo{}, fmt.Errorf("fafnir: couldn't convert created at: %w", err)
+	}
+	addedAt, err := time.Parse(layout, w.AddedAt)
+	if err != nil {
+		return wallet.WalletInfo{}, fmt.Errorf("fafnir: couldn't convert created at: %w", err)
+	}
+
+	out = wallet.WalletInfo{
+		ID:         w.ID,
+		Name:       w.Name,
+		CreatedAt:  createdAt,
+		AddedAt:    addedAt,
+		Permission: w.Permission,
+		Dids:       dids,
+	}
+
+	return out, nil
+}
+
+// ===== Credential related DTO's ==============================================
+
+type vcResp struct {
+	ID             string          `json:"id"`
+	VcBody         json.RawMessage `json:"vc_body"`
+	VcType         string          `json:"vc_type"`
+	VcFormat       string          `json:"vc_format"`
+	HolderDid      string          `json:"holder_did"`
+	IssuerDid      string          `json:"issuer_did"`
+	ParsedDocument json.RawMessage `json:"parsed_document"`
+	ValidUntil     *time.Time      `json:"valid_until"`
+	AddedOn        time.Time       `json:"added_on"`
+}
+
+func (v vcResp) ToDomain() (wallet.Credential, error) {
+	if v.ID == "" {
+		return wallet.Credential{}, fmt.Errorf("fafnir: credential record carries no id: %w", common.ErrNotFound)
+	}
+
+	return wallet.Credential{
+		ID:             v.ID,
+		VcBody:         v.VcBody,
+		VcType:         v.VcType,
+		VcFormat:       v.VcFormat,
+		HolderDid:      v.HolderDid,
+		IssuerDid:      v.IssuerDid,
+		ParsedDocument: v.ParsedDocument,
+		ValidUntil:     v.ValidUntil,
+		AddedOn:        v.AddedOn,
+	}, nil
+}
+
+// ===== Protocol related DTO's ================================================
+
+type oidcUriReq struct {
+	URI string `json:"uri"`
 }

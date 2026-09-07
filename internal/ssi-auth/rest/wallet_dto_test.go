@@ -1,6 +1,5 @@
-// This file is in package rest rather than rest_test because didBuilderReq and
-// its decoding are unexported: the wire format of the union is exactly what is
-// worth pinning down, and it is not reachable from outside.
+// wallet_dto_test verifies unmarshaling and validation of public wallet DTOs.
+// It tests polymorphic DID builder payloads and service endpoint conversions.
 package rest
 
 import (

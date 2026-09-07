@@ -1,11 +1,5 @@
-// Package rest is the driving adapter of the auth-proxy context: the /auth
-// routes, and the middleware every other route in the API passes through.
-//
-// It is thicker than the other adapters in this tree, and deliberately so. The
-// authorization code flow is a protocol made of redirects, cookies and headers;
-// there is no use case underneath it that could be stated without them, and
-// hiding the round trip behind a service would only move HTTP into a package
-// that pretends not to know about it.
+// auth_router is the driving HTTP adapter exposing authentication endpoints.
+// It orchestrates login redirects, callbacks, token endpoints, and session logouts.
 package rest
 
 import (

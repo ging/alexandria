@@ -1,7 +1,10 @@
+// dto_test tests serialization and deserialization of Fafnir wire structures.
+// It verifies field mapping and conversion to pure domain wallet models.
 package fafnir
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/caparicio-esd/alexandria/internal/common"
@@ -316,5 +319,57 @@ func TestNewDidReqCarriesTheWholeRegistration(t *testing.T) {
 
 	if string(encoded) != want {
 		t.Errorf("got  %s\nwant %s", encoded, want)
+	}
+}
+
+func TestVcRespDecodesAndToDomain(t *testing.T) {
+	t.Parallel()
+
+	payload := `{
+		"id": "vc-12345",
+		"vc_body": "eyJhbGciOiJSU0EtT0FFUCIsImVuYyI6IkEyNTZHQ00ifQ...",
+		"vc_type": "gx:LegalPerson",
+		"vc_format": "jwt_vc_json",
+		"holder_did": "did:jwk:holder",
+		"issuer_did": "did:web:issuer",
+		"parsed_document": {"@context": ["https://www.w3.org/2018/credentials/v1"], "type": ["VerifiableCredential"]},
+		"valid_until": "2027-01-01T00:00:00Z",
+		"added_on": "2026-08-21T18:42:05.326269Z"
+	}`
+
+	var got vcResp
+	if err := json.Unmarshal([]byte(payload), &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if got.ID != "vc-12345" {
+		t.Errorf("ID = %q, want vc-12345", got.ID)
+	}
+
+	dom, err := got.ToDomain()
+	if err != nil {
+		t.Fatalf("ToDomain: %v", err)
+	}
+
+	if dom.ID != "vc-12345" || dom.VcType != "gx:LegalPerson" || dom.VcFormat != "jwt_vc_json" {
+		t.Errorf("unexpected domain conversion: %+v", dom)
+	}
+	if dom.HolderDid != "did:jwk:holder" || dom.IssuerDid != "did:web:issuer" {
+		t.Errorf("unexpected DIDs: holder=%q, issuer=%q", dom.HolderDid, dom.IssuerDid)
+	}
+	if dom.ValidUntil == nil {
+		t.Error("valid_until should not be nil")
+	}
+	if dom.AddedOn.IsZero() {
+		t.Error("added_on should not be zero")
+	}
+}
+
+func TestVcRespToDomainRejectsEmptyID(t *testing.T) {
+	t.Parallel()
+
+	v := vcResp{}
+	if _, err := v.ToDomain(); !errors.Is(err, common.ErrNotFound) {
+		t.Errorf("got %v, want ErrNotFound", err)
 	}
 }

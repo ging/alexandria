@@ -1,10 +1,5 @@
-// Package common holds the vocabulary the bounded contexts of this project
-// share: the DID methods, the recipes for minting one, the service entries a
-// DID Document publishes, and the error sentinels adapters branch on.
-//
-// It is a shared kernel, not a utility bin. Nothing here imports a transport, a
-// storage engine or a JOSE library, and nothing here knows which context is
-// using it — that is what makes it safe for a domain package to depend on.
+// did_builder defines builders for constructing decentralised identifiers.
+// It supports did:jwk and did:web methods conforming to W3C specifications.
 package common
 
 import (

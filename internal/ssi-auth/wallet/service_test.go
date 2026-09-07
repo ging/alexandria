@@ -1,3 +1,5 @@
+// service_test exercises the wallet application service use cases and invariants.
+// It tests key registration, DID management, and credential flows with mocks.
 package wallet_test
 
 import (
@@ -15,17 +17,50 @@ const testPem = "-----BEGIN PRIVATE KEY-----\nMC4=\n-----END PRIVATE KEY-----\n"
 // stubWallet stands in for the outsourced wallet. It records the plan it was
 // handed, which is the whole point: RegisterKey's job is minting that plan.
 type stubWallet struct {
-	gotPlan       *wallet.KeyPlan
-	gotDidPlan    *wallet.DidPlan
-	gotDeleteKey  *string
-	gotDeleteDid  *string
-	gotDefaultDid *string
-	gotDidByID    *string
-	gotBinding    *binding
-	keys          []wallet.Key
-	dids          []wallet.Did
-	did           wallet.Did
-	err           error
+	gotPlan             *wallet.KeyPlan
+	gotDidPlan          *wallet.DidPlan
+	gotDeleteKey        *string
+	gotDeleteDid        *string
+	gotDeleteCredential *string
+	gotOid4vciUri       *string
+	gotOid4vpUri        *string
+	gotDefaultDid       *string
+	gotDidByID          *string
+	gotBinding          *binding
+	keys                []wallet.Key
+	dids                []wallet.Did
+	credentials         []wallet.Credential
+	did                 wallet.Did
+	err                 error
+}
+
+func (s *stubWallet) WalletInfo(context.Context) (wallet.WalletInfo, error) {
+	if s.err != nil {
+		return wallet.WalletInfo{}, s.err
+	}
+	return wallet.WalletInfo{}, nil
+}
+
+func (s *stubWallet) GetAllCredentials(context.Context) ([]wallet.Credential, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.credentials, nil
+}
+
+func (s *stubWallet) DeleteCredential(_ context.Context, credentialID string) error {
+	s.gotDeleteCredential = &credentialID
+	return s.err
+}
+
+func (s *stubWallet) ProcessOid4vci(_ context.Context, uri string) error {
+	s.gotOid4vciUri = &uri
+	return s.err
+}
+
+func (s *stubWallet) ProcessOid4vp(_ context.Context, uri string) error {
+	s.gotOid4vpUri = &uri
+	return s.err
 }
 
 func (s *stubWallet) Link(context.Context) (wallet.Did, error) {
@@ -684,5 +719,143 @@ func TestDidMutationsWrapWalletErrors(t *testing.T) {
 				t.Errorf("error = %v, want it to match %v", err, common.ErrNotFound)
 			}
 		})
+	}
+}
+
+func TestCredentials(t *testing.T) {
+	t.Parallel()
+
+	expected := []wallet.Credential{
+		{
+			ID:        "vc-1",
+			VcType:    "gx:LegalPerson",
+			VcFormat:  "jwt_vc_json",
+			HolderDid: "did:web:holder",
+			IssuerDid: "did:web:issuer",
+		},
+	}
+
+	stub := &stubWallet{credentials: expected}
+	svc := wallet.NewService(stub, usableKey("unused"), nil, nil)
+
+	creds, err := svc.Credentials(t.Context())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(creds) != 1 || creds[0].ID != "vc-1" {
+		t.Errorf("got %v, want %v", creds, expected)
+	}
+}
+
+func TestCredentialsError(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubWallet{err: errors.New("network failure")}
+	svc := wallet.NewService(stub, usableKey("unused"), nil, nil)
+
+	_, err := svc.Credentials(t.Context())
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestDeleteCredential(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubWallet{}
+	svc := wallet.NewService(stub, usableKey("unused"), nil, nil)
+
+	if err := svc.DeleteCredential(t.Context(), "vc-123"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if stub.gotDeleteCredential == nil || *stub.gotDeleteCredential != "vc-123" {
+		t.Errorf("got deleted credential %v, want vc-123", stub.gotDeleteCredential)
+	}
+}
+
+func TestDeleteCredentialError(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubWallet{err: common.ErrNotFound}
+	svc := wallet.NewService(stub, usableKey("unused"), nil, nil)
+
+	if err := svc.DeleteCredential(t.Context(), "vc-missing"); !errors.Is(err, common.ErrNotFound) {
+		t.Errorf("got error %v, want ErrNotFound", err)
+	}
+}
+
+func TestProcessOid4vci(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubWallet{}
+	svc := wallet.NewService(stub, usableKey("unused"), nil, nil)
+
+	uri := "openid-credential-offer://?credential_issuer=https%3A%2F%2Fissuer.example.com"
+	if err := svc.ProcessOid4vci(t.Context(), uri); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if stub.gotOid4vciUri == nil || *stub.gotOid4vciUri != uri {
+		t.Errorf("got uri %v, want %s", stub.gotOid4vciUri, uri)
+	}
+}
+
+func TestProcessOid4vciRejectsEmptyUri(t *testing.T) {
+	t.Parallel()
+
+	svc := wallet.NewService(&stubWallet{}, usableKey("unused"), nil, nil)
+
+	if err := svc.ProcessOid4vci(t.Context(), "   "); !errors.Is(err, common.ErrInvalidInput) {
+		t.Errorf("got error %v, want ErrInvalidInput", err)
+	}
+}
+
+func TestProcessOid4vciError(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubWallet{err: errors.New("wallet offline")}
+	svc := wallet.NewService(stub, usableKey("unused"), nil, nil)
+
+	if err := svc.ProcessOid4vci(t.Context(), "openid-credential-offer://test"); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestProcessOid4vp(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubWallet{}
+	svc := wallet.NewService(stub, usableKey("unused"), nil, nil)
+
+	uri := "openid4vp://?client_id=https%3A%2F%2Fverifier.example.com"
+	if err := svc.ProcessOid4vp(t.Context(), uri); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if stub.gotOid4vpUri == nil || *stub.gotOid4vpUri != uri {
+		t.Errorf("got uri %v, want %s", stub.gotOid4vpUri, uri)
+	}
+}
+
+func TestProcessOid4vpRejectsEmptyUri(t *testing.T) {
+	t.Parallel()
+
+	svc := wallet.NewService(&stubWallet{}, usableKey("unused"), nil, nil)
+
+	if err := svc.ProcessOid4vp(t.Context(), ""); !errors.Is(err, common.ErrInvalidInput) {
+		t.Errorf("got error %v, want ErrInvalidInput", err)
+	}
+}
+
+func TestProcessOid4vpError(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubWallet{err: errors.New("wallet offline")}
+	svc := wallet.NewService(stub, usableKey("unused"), nil, nil)
+
+	if err := svc.ProcessOid4vp(t.Context(), "openid4vp://test"); err == nil {
+		t.Fatal("expected error, got nil")
 	}
 }

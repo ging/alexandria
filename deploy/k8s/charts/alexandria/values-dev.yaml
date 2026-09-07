@@ -17,10 +17,30 @@
 # See deploy/k8s/README.md for what to do after the first install: the identity
 # provider mints the client id, so there are two passes.
 
+# Built from the Dockerfile in this repository and loaded straight into the
+# cluster — there is no registry in the loop locally:
+#
+#   docker build -t alexandria:dev .
+#   kind load docker-image alexandria:dev --name alexandria
+#
+# Never, not IfNotPresent: with a tag the node would otherwise try to reach a
+# registry for, a pull that fails is a clearer error than one that half works.
+image:
+  repository: alexandria
+  tag: dev
+  pullPolicy: Never
+
 # Everything in one namespace, including the things a real deployment would
 # not let a chart own.
 postgresql:
   enabled: true
+  # Bitnami retired its public Docker Hub catalogue: the tag this chart version
+  # defaults to is gone from `bitnami/postgresql` and answers "not found". The
+  # same images stayed published under `bitnamilegacy`, which is what the chart
+  # needs here — a plain `postgres` image would not do, the chart depends on
+  # Bitnami's entrypoint and its initdb.scripts handling.
+  image:
+    repository: bitnamilegacy/postgresql
   auth:
     password: alexandria
     # Zitadel's setup job creates its own database and role inside this same
@@ -29,6 +49,14 @@ postgresql:
     postgresPassword: postgres
   primary:
     initdb:
+      # Run the scripts below as the superuser. The default is the application
+      # user, `alexandria`, which can create databases but not roles — so
+      # `CREATE ROLE fafnir` fails, and it fails quietly: the container logs
+      # each script at debug level and then writes its "already initialised"
+      # marker regardless, so the wallet comes up against a role that was never
+      # created and no restart retries it.
+      user: postgres
+      password: postgres
       scripts:
         # The wallet, unlike Zitadel, does not create its own database — its
         # setup step runs migrations against one that already exists. So it is
@@ -98,6 +126,27 @@ zitadel:
   # Explicitly off: see the Database block above.
   postgresql:
     enabled: false
+
+  # Zitadel's init and setup jobs are pre-install hooks by default, and a
+  # pre-install hook runs to completion before Helm applies the release's own
+  # manifests — which is where the Postgres above lives. The init job would
+  # wait for a database Helm has not created yet, and Helm would wait for the
+  # init job: the install hangs on the first pass and never recovers. Moving
+  # both to post-install puts them after Postgres exists; the weights keep init
+  # ahead of setup, and the init job's own connection retry covers the seconds
+  # the database spends starting. A deployment against a database that is
+  # already up wants the defaults instead — see values-prod.yaml.
+  initJob:
+    annotations:
+      helm.sh/hook: post-install,post-upgrade
+      helm.sh/hook-delete-policy: before-hook-creation
+      helm.sh/hook-weight: "1"
+  setupJob:
+    annotations:
+      helm.sh/hook: post-install,post-upgrade
+      helm.sh/hook-delete-policy: before-hook-creation
+      helm.sh/hook-weight: "2"
+
   # The v4 login UI ships as a deployment of its own. The classic login is
   # built into the image and needs nothing else running, which is one fewer
   # pod on a laptop — and it is what LoginV2.Required: false above selects.

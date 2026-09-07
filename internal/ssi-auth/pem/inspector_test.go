@@ -1,3 +1,5 @@
+// inspector_test verifies PEM key inspection logic against the PemInspector port.
+// It ensures invalid, public-only, or unsupported keys are rejected safely.
 package keys_test
 
 import (

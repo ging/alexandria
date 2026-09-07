@@ -1,3 +1,5 @@
+// WalletRouter is the HTTP driving adapter exposing wallet management endpoints.
+// It handles transport decoding and status mapping, delegating logic to the service.
 package rest
 
 import (
@@ -196,7 +198,7 @@ func (r *WalletRouter) getAllDids(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, &dids)
+	c.JSON(http.StatusOK, newDidResps(dids))
 }
 
 func (r *WalletRouter) getDidDoc(c *gin.Context) {
@@ -219,7 +221,7 @@ func (r *WalletRouter) getDid(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, &did)
+	c.JSON(http.StatusOK, newDidResp(did))
 }
 
 func (r *WalletRouter) deleteDid(c *gin.Context) {
@@ -279,12 +281,62 @@ func (r *WalletRouter) setDefaultKey(c *gin.Context) {
 	c.Status(http.StatusAccepted)
 }
 
-func (r *WalletRouter) deleteCredential(_ *gin.Context) {}
+func (r *WalletRouter) deleteCredential(c *gin.Context) {
+	credentialID := c.Params.ByName("id")
+	err := r.holder.DeleteCredential(c, credentialID)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	c.Status(http.StatusAccepted)
+}
 
-func (r *WalletRouter) getWalletCredentials(_ *gin.Context) {}
+func (r *WalletRouter) getWalletCredentials(c *gin.Context) {
+	credentials, err := r.holder.Credentials(c)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, newCredentialResps(credentials))
+}
 
-func (r *WalletRouter) getWalletInfo(_ *gin.Context) {}
+func (r *WalletRouter) getWalletInfo(c *gin.Context) {
+	walletInfo, err := r.holder.Info(c)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, newWalletInfoRest(walletInfo))
+}
 
-func (r *WalletRouter) processOid4vci(_ *gin.Context) {}
+func (r *WalletRouter) processOid4vci(c *gin.Context) {
+	var req oidcUriReq
 
-func (r *WalletRouter) processOid4vp(_ *gin.Context) {}
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		respondError(c, err)
+		return
+	}
+
+	if err := r.holder.ProcessOid4vci(c.Request.Context(), req.URI); err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.Status(http.StatusOK)
+}
+
+func (r *WalletRouter) processOid4vp(c *gin.Context) {
+	var req oidcUriReq
+
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		respondError(c, err)
+		return
+	}
+
+	if err := r.holder.ProcessOid4vp(c.Request.Context(), req.URI); err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.Status(http.StatusOK)
+}

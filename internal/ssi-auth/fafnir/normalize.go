@@ -1,3 +1,5 @@
+// normalize provides JSON normalization utilities for Fafnir payload responses.
+// It aligns raw DID document payloads with W3C DID Core specification rules.
 package fafnir
 
 import (

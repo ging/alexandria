@@ -1,3 +1,5 @@
+// errors declares shared domain error sentinels and error constructor helpers.
+// It defines standard validation and conflict errors used across bounded contexts.
 package common
 
 import (

@@ -1,11 +1,5 @@
-// The global composition: configuration goes in, a wired application comes out.
-//
-// newApp is the single place where concrete implementations meet. Nothing above
-// it constructs anything, and nothing below it reaches upwards: main resolves
-// which document to load, hands it here, and hands the result to Run. That
-// split is what makes the wiring reviewable in one sitting and testable without
-// a process.
-
+// app coordinates application bootstrapping, module wiring, and graceful shutdown.
+// It manages concurrent subsystem lifecycles and signal handling.
 package main
 
 import (

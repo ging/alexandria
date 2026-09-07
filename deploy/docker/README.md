@@ -75,7 +75,10 @@ moving it. It owns every account in the deployment.
 ## What must be backed up
 
 - The `fafnir-secrets` volume, before anything else — it holds the node's
-  private keys, one file per key. Losing it does not lose data; it loses the
+  private keys, one file per key. With Vault on, it is the `vault-data` volume
+  instead, and the unseal keys are then just as essential and must be kept
+  somewhere else entirely: a backup of `vault-data` next to its unseal keys is
+  a backup of the plaintext. Losing it does not lose data; it loses the
   node's identity, and every credential ever issued to that identity with it.
   Note that this is the volume to keep, not `fafnir-data`: the wallet's Postgres
   holds only key *metadata* and the DID records. Losing the keys while keeping
@@ -111,11 +114,77 @@ To use a wallet that runs somewhere else instead, set `WALLET_HOST` and
 `WALLET_PORT` in `.env`. Nothing in the compose file assumes it is the bundled
 one.
 
-### Its credentials are a file, not a Vault
+### Where its keys live
 
-`is_vault_real` is false, so the wallet reads its database credential from
-`/app/vault/secrets/db.json` — written into a volume by the `fafnir-init`
-container from `FAFNIR_DB_PASSWORD`, so the password exists in `.env` and
-nowhere else. That is the right trade for one host. A deployment that wants key
-material under a real Vault turns `is_vault_real` on and gives the wallet a
-Vault to talk to, which this file does not deploy.
+By default `is_vault_real` is false and the wallet keeps private keys as files
+on the `fafnir-secrets` volume, one per key id. Its database credential is a
+file there too, written by the `fafnir-init` container from
+`FAFNIR_DB_PASSWORD`, so that password exists in `.env` and nowhere else.
+
+To keep the keys in Vault instead, see below.
+
+## Vault
+
+Optional, and off as written. Turning it on moves the wallet's private keys out
+of a file on a volume and into a Vault in this stack.
+
+**It costs a manual step on every restart**, and that is deliberate. A Vault
+with file storage seals itself whenever it starts and needs three of its five
+unseal keys to open again. The alternatives are auto-unseal against a cloud KMS,
+which a single-host stack cannot assume, or leaving the unseal keys on the host
+beside the data they open — which would make the whole exercise decorative. So a
+reboot of this host is a human intervention.
+
+While Vault is sealed the wallet does not start: Vault reports itself unhealthy
+and `fafnir-setup` waits on it rather than failing in a loop. The node comes up
+and reports itself not ready, which is exactly what it does for any wallet it
+cannot reach.
+
+### Setting it up, once
+
+```sh
+docker compose --profile vault up -d vault
+bash vault-init.sh        # prints five unseal keys and a root token
+bash vault-unseal.sh      # three of those keys
+VAULT_TOKEN=<root token> bash vault-configure.sh
+docker compose up -d --force-recreate fafnir-wallet
+bash ../../scripts/fafnir-bootstrap.sh
+```
+
+`vault-init.sh` prints the unseal keys and the root token **once**, and writes
+them nowhere: the one place they must never be is beside the store they open.
+Put them somewhere out of band before closing the terminal. Losing them loses
+the node's private keys, and there is no recovery.
+
+`vault-configure.sh` creates the KV mount, a policy scoped to it, a periodic
+token for the wallet under that policy, and the database credential. It writes
+the wallet's token — not the root one — into `.env`, and switches
+`FAFNIR_CONFIG` to the Vault-backed wallet configuration.
+
+A wallet that already had a file-backed identity does not carry it over: the
+keys are in the old volume, not in Vault. `fafnir-bootstrap.sh` gives it a new
+one, which is a new DID.
+
+### After every restart
+
+```sh
+bash vault-unseal.sh
+```
+
+It prompts for three keys without echoing them, and starts the wallet once Vault
+is open.
+
+### What this does and does not buy
+
+It buys: the keys are no longer files an operator can `docker cp` out, they are
+encrypted at rest under the unseal keys, and access to them is a token scoped to
+one mount with an audit trail behind it.
+
+It does not buy: protection from someone who already has root on this host while
+Vault is unsealed — the token is in `.env` and the keys are in memory. On one
+machine that is the honest limit.
+
+Vault listens on plain HTTP and publishes no port: it is reached by the wallet
+on the compose network and by you through `docker compose exec`, the same trust
+boundary as the Postgres beside it. Publishing that port means giving it TLS
+first.

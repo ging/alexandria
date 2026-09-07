@@ -1,0 +1,33 @@
+# The wallet, backed by a real Vault instead of files.
+#
+# Selected by pointing FAFNIR_CONFIG at this file:
+#
+#   task vault:up          brings Vault up, seeds it, and switches the wallet
+#
+# The only difference from wallet.yaml is is_vault_real at the bottom. It is a
+# separate file rather than a setting because the wallet reads YAML and there is
+# no environment override for it — the same reason the compose file selects
+# between the two by path.
+
+http_host: &http_host
+  protocol: "http"
+  url: "127.0.0.1"
+  port: null
+  internal_port: "7001"
+
+hosts:
+  http: *http_host
+  grpc: null
+  graphql: null
+
+db_config:
+  db_type: Postgres
+  url: "fafnir-db"
+  port: "5432"
+
+is_docker: true
+
+# True: private keys are written to Vault under $VAULT_MOUNT/$VAULT_PATH rather
+# than to files in $VAULT_PATH. The database credential is read from Vault too
+# — and, in v0.2.0, from the file as well. See "Vault" in the README.
+is_vault_real: true

@@ -1,10 +1,5 @@
-// Package session keeps the browser's half of the proxy: a sealed cookie.
-//
-// The tokens never leave this process in readable form. The cookie carries them
-// encrypted with AES-256-GCM under a key only the node holds, marked HttpOnly
-// so no script can read it, and stamped with its own expiry so a copy taken
-// today is worthless tomorrow. A browser that has the cookie has a session; it
-// does not have a bearer token, which is the entire reason the proxy exists.
+// session manages encrypted and authenticated HTTP session cookies for callers.
+// It seals identity tokens securely so credentials never leak to the browser.
 package session
 
 import (

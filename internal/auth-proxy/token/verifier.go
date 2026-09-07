@@ -1,10 +1,5 @@
-// Package token turns a bearer credential into the caller it stands for.
-//
-// The fast path is local: an access token that is a JWS is verified against the
-// provider's published signing keys, with no round trip, which is what makes
-// protecting every route affordable. The slow path is introspection, for a
-// provider configured to issue opaque tokens — Zitadel's default for an
-// application that has not asked for JWTs.
+// verifier validates bearer access tokens against remote JWKS and local caches.
+// It extracts authenticated claims and verifies cryptographic signatures.
 package token
 
 import (

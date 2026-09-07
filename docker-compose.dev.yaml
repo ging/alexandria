@@ -3,6 +3,11 @@
 # The credentials mirror common_config.db in config/config.yaml, which is where
 # the node reads them from. They are development values in a committed file on
 # both sides; a real deployment renders its own.
+# Pinned, so the project name does not depend on how compose was invoked: this
+# file reached through COMPOSE_FILE — which is what the Taskfile sets — would
+# otherwise give one name and the same file passed as -f another, and two
+# project names mean two sets of volumes.
+name: alexandria-dev
 
 services:
   postgres:
@@ -89,7 +94,7 @@ services:
       fafnir-db:
         condition: service_healthy
     volumes:
-      - ./config/fafnir/wallet.yaml:/app/static/fafnir/config.yaml:ro
+      - ${FAFNIR_CONFIG:-./config/fafnir/wallet.yaml}:/app/static/fafnir/config.yaml:ro
       # The private keys. With is_vault_real false the wallet keeps them as
       # files here, one per key id — not in Postgres, which holds only their
       # metadata. So this is a volume and not the container's own layer: on the
@@ -104,8 +109,13 @@ services:
       RUST_BACKTRACE: 1
       # Where that directory is, and which file in it holds the database
       # credential. The wallet refuses to start without both.
-      VAULT_PATH: /app/vault/secrets
+      VAULT_PATH: vault/secrets
       VAULT_APP_DB: db.json
+      # Read only when the wallet runs against a real Vault — the `vault`
+      # profile below. Harmless otherwise.
+      VAULT_MOUNT: ${VAULT_MOUNT:-secret}
+      VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}
+      VAULT_TOKEN: ${VAULT_TOKEN:-alexandria-dev-root}
     env_file:
       # Optional. The published wallet needs nothing else; this is the seam for
       # a build of it that does, without editing this file.
@@ -121,13 +131,16 @@ services:
       fafnir-setup:
         condition: service_completed_successfully
     volumes:
-      - ./config/fafnir/wallet.yaml:/app/static/fafnir/config.yaml:ro
+      - ${FAFNIR_CONFIG:-./config/fafnir/wallet.yaml}:/app/static/fafnir/config.yaml:ro
       - fafnir-keys:/app/vault/secrets
       - ./config/fafnir/db.json:/app/vault/secrets/db.json:ro
     environment:
       RUST_BACKTRACE: 1
-      VAULT_PATH: /app/vault/secrets
+      VAULT_PATH: vault/secrets
       VAULT_APP_DB: db.json
+      VAULT_MOUNT: ${VAULT_MOUNT:-secret}
+      VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}
+      VAULT_TOKEN: ${VAULT_TOKEN:-alexandria-dev-root}
     env_file:
       - path: ./config/fafnir/env
         required: false
@@ -148,6 +161,63 @@ services:
       start_period: 10s
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+  # ===== Vault ==============================================================
+  # Off unless asked for: `docker compose --profile vault up -d`, or
+  # `task vault:up`, which also seeds it and switches the wallet over.
+  #
+  # It exists so the Vault path can be exercised on a laptop, because it is a
+  # different code path in the wallet — RealVaultService rather than the
+  # file-backed one — and a path that only ever runs in production is a path
+  # nobody has run.
+  vault:
+    image: hashicorp/vault:1.21
+    container_name: alexandria-vault
+    profiles: [vault]
+    restart: unless-stopped
+    cap_add:
+      # Vault locks its memory so secrets cannot be swapped to disk.
+      - IPC_LOCK
+    environment:
+      # Development mode: in-memory, unsealed at start, one known root token.
+      # Nothing here survives a restart, which is the point — a laptop Vault
+      # that had to be unsealed by hand every morning would not get used.
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_TOKEN:-alexandria-dev-root}
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    ports:
+      # The UI, on loopback. Log in with the token above.
+      - "127.0.0.1:${VAULT_HOST_PORT:-8200}:8200"
+    healthcheck:
+      test: ["CMD", "vault", "status", "-address=http://127.0.0.1:8200"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  # Writes the database credential where the wallet looks for it. In development
+  # mode Vault starts empty on every boot, so this runs on every `up` and is
+  # idempotent by being a plain overwrite.
+  vault-seed:
+    image: hashicorp/vault:1.21
+    container_name: alexandria-vault-seed
+    profiles: [vault]
+    depends_on:
+      vault:
+        condition: service_healthy
+    environment:
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_TOKEN:-alexandria-dev-root}
+      FAFNIR_DB_USER: ${FAFNIR_DB_USER:-fafnir}
+      FAFNIR_DB_PASSWORD: ${FAFNIR_DB_PASSWORD:-fafnir}
+      FAFNIR_DB_NAME: ${FAFNIR_DB_NAME:-fafnir}
+    entrypoint:
+      - sh
+      - -c
+      - |
+        vault kv put "${VAULT_MOUNT:-secret}/db.json" \
+          user="$${FAFNIR_DB_USER}" \
+          password="$${FAFNIR_DB_PASSWORD}" \
+          name="$${FAFNIR_DB_NAME}"
 
   # ===== TLS ================================================================
   # Terminates https for both the node and Zitadel, using the local certificate

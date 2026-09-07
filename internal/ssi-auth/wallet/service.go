@@ -1,3 +1,5 @@
+// Service implements the core wallet business logic and identity use cases.
+// It caches active identity state and orchestrates operations through wallet ports.
 package wallet
 
 import (
@@ -277,33 +279,63 @@ func (s *Service) SetDefaultKey(c context.Context, didID, keyID string) error {
 // ===== Credentials ===========================================================
 
 // DeleteCredential purges a stored Verifiable Credential.
-func (s *Service) DeleteCredential(_ context.Context, _ string) error {
-	panic("wallet: DeleteCredential not implemented")
+func (s *Service) DeleteCredential(c context.Context, credentialID string) error {
+	err := s.wallet.DeleteCredential(c, credentialID)
+	if err != nil {
+		return fmt.Errorf("wallet reported error by deleting credential: %w", err)
+	}
+	return nil
 }
 
 // Credentials lists every Verifiable Credential held by the wallet.
-func (s *Service) Credentials(_ context.Context) error {
-	panic("wallet: Credentials not implemented")
+func (s *Service) Credentials(c context.Context) ([]Credential, error) {
+	credentials, err := s.wallet.GetAllCredentials(c)
+	if err != nil {
+		return []Credential{}, fmt.Errorf("wallet reported error by fetching credentials: %w", err)
+	}
+	return credentials, nil
 }
 
 // ===== Runtime state =========================================================
 
 // Info reports the wallet runtime state.
-func (s *Service) Info(_ context.Context) error {
-	panic("wallet: Info not implemented")
+func (s *Service) Info(c context.Context) (WalletInfo, error) {
+	walletInfo, err := s.wallet.WalletInfo(c)
+	if err != nil {
+		return WalletInfo{}, fmt.Errorf("wallet reported error by getting wallet info: %w", err)
+	}
+	return walletInfo, nil
 }
 
 // ===== OpenID4VC =============================================================
 
 // ProcessOid4vci accepts an inbound OID4VCI credential offer and stores the
 // credential it yields.
-func (s *Service) ProcessOid4vci(_ context.Context) error {
-	panic("wallet: ProcessOid4vci not implemented")
+func (s *Service) ProcessOid4vci(ctx context.Context, uri string) error {
+	if strings.TrimSpace(uri) == "" {
+		return common.Invalid("uri", "is required")
+	}
+
+	if err := s.wallet.ProcessOid4vci(ctx, uri); err != nil {
+		return fmt.Errorf("wallet reported error by processing oid4vci: %w", err)
+	}
+
+	s.logger.InfoContext(ctx, "oid4vci processed", "uri", uri)
+	return nil
 }
 
 // ProcessOid4vp answers an outbound OID4VP presentation request.
-func (s *Service) ProcessOid4vp(_ context.Context) error {
-	panic("wallet: ProcessOid4vp not implemented")
+func (s *Service) ProcessOid4vp(ctx context.Context, uri string) error {
+	if strings.TrimSpace(uri) == "" {
+		return common.Invalid("uri", "is required")
+	}
+
+	if err := s.wallet.ProcessOid4vp(ctx, uri); err != nil {
+		return fmt.Errorf("wallet reported error by processing oid4vp: %w", err)
+	}
+
+	s.logger.InfoContext(ctx, "oid4vp processed", "uri", uri)
+	return nil
 }
 
 // =============================================================

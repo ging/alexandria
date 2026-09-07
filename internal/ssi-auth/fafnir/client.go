@@ -1,5 +1,5 @@
-// Package fafnir is the driven adapter that backs the wallet ports with a
-// remote Fafnir wallet instance, reached over HTTP.
+// Adapter is the driven HTTP adapter communicating with the remote Fafnir wallet.
+// It satisfies the wallet.Wallet domain port across identity and VC operations.
 package fafnir
 
 import (
@@ -471,6 +471,193 @@ func (a *Adapter) SetDefaultKey(ctx context.Context, didID string, keyID string)
 		"status", res.StatusCode(), "duration_ms", time.Since(started).Milliseconds())
 
 	// validate
+	if res.IsStatusFailure() {
+		return statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	return nil
+}
+
+func (a *Adapter) _WalletInfoToBeReplaced(ctx context.Context) (wallet.WalletInfo, error) {
+	path := fmt.Sprintf("/info")
+	var out walletInfoRes
+
+	// call
+	started := time.Now()
+	res, err := a.http.R().
+		SetContext(ctx).
+		SetResult(&out).
+		Get(path)
+	if err != nil {
+		a.logger.DebugContext(ctx, "wallet call failed",
+			"method", http.MethodGet, "path", path,
+			"duration_ms", time.Since(started).Milliseconds(), "err", err)
+
+		return wallet.WalletInfo{}, fmt.Errorf("fafnir: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	a.logger.DebugContext(ctx, "wallet call",
+		"method", http.MethodGet, "path", path,
+		"status", res.StatusCode(), "duration_ms", time.Since(started).Milliseconds())
+
+	// validate
+	if res.IsStatusFailure() {
+		return wallet.WalletInfo{}, statusError(res.StatusCode(), path, res.Bytes())
+	}
+	return out.ToDomain()
+}
+
+func (a *Adapter) WalletInfo(c context.Context) (wallet.WalletInfo, error) {
+	dids, err := a.GetAllDids(c)
+	if err != nil {
+		return wallet.WalletInfo{}, fmt.Errorf("fafnir: getting all dids: %w", err)
+	}
+	out := wallet.WalletInfo{
+		ID:         "fafnir-local",
+		Name:       "fafnir-wallet",
+		CreatedAt:  time.Now(),
+		AddedAt:    time.Now(),
+		Permission: "Administrator",
+		Dids:       dids,
+	}
+
+	return out, nil
+}
+
+// GetAllCredentials lists every Verifiable Credential the wallet holds.
+func (a *Adapter) GetAllCredentials(ctx context.Context) ([]wallet.Credential, error) {
+	const path = "/vcs/all"
+
+	var out []vcResp
+
+	// call
+	started := time.Now()
+	res, err := a.http.R().
+		SetContext(ctx).
+		SetResult(&out).
+		Get(path)
+	if err != nil {
+		a.logger.DebugContext(ctx, "wallet call failed",
+			"method", http.MethodGet, "path", path,
+			"duration_ms", time.Since(started).Milliseconds(), "err", err)
+
+		return []wallet.Credential{}, fmt.Errorf("fafnir: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	a.logger.DebugContext(ctx, "wallet call",
+		"method", http.MethodGet, "path", path,
+		"status", res.StatusCode(), "duration_ms", time.Since(started).Milliseconds())
+
+	// validate
+	if res.IsStatusFailure() {
+		return []wallet.Credential{}, statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	// send back to domain
+	credentials := make([]wallet.Credential, 0, len(out))
+	for _, v := range out {
+		cred, err := v.ToDomain()
+		if err != nil {
+			return nil, err
+		}
+
+		credentials = append(credentials, cred)
+	}
+
+	return credentials, nil
+}
+
+// DeleteCredential purges a Verifiable Credential from the wallet storage.
+func (a *Adapter) DeleteCredential(ctx context.Context, credentialID string) error {
+	path := fmt.Sprintf("/vcs/%s", credentialID)
+
+	// call
+	started := time.Now()
+	res, err := a.http.R().
+		SetContext(ctx).
+		Delete(path)
+	if err != nil {
+		a.logger.DebugContext(ctx, "wallet call failed",
+			"method", http.MethodDelete, "path", path,
+			"duration_ms", time.Since(started).Milliseconds(), "err", err)
+
+		return fmt.Errorf("fafnir: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	a.logger.DebugContext(ctx, "wallet call",
+		"method", http.MethodDelete, "path", path,
+		"status", res.StatusCode(), "duration_ms", time.Since(started).Milliseconds())
+
+	// validate
+	if res.IsStatusFailure() {
+		return statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	return nil
+}
+
+// ProcessOid4vci sends an inbound OID4VCI credential offer URI to the wallet.
+func (a *Adapter) ProcessOid4vci(ctx context.Context, uri string) error {
+	const path = "/oid4vci"
+
+	if strings.TrimSpace(uri) == "" {
+		return fmt.Errorf("fafnir: %s needs a uri: %w", path, common.ErrInvalidInput)
+	}
+
+	started := time.Now()
+	res, err := a.http.R().
+		SetContext(ctx).
+		SetBody(oidcUriReq{URI: uri}).
+		Post(path)
+	if err != nil {
+		a.logger.DebugContext(ctx, "wallet call failed",
+			"method", http.MethodPost, "path", path,
+			"duration_ms", time.Since(started).Milliseconds(), "err", err)
+
+		return fmt.Errorf("fafnir: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	a.logger.DebugContext(ctx, "wallet call",
+		"method", http.MethodPost, "path", path,
+		"status", res.StatusCode(), "duration_ms", time.Since(started).Milliseconds())
+
+	if res.IsStatusFailure() {
+		return statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	return nil
+}
+
+// ProcessOid4vp sends an outbound OID4VP presentation request URI to the wallet.
+func (a *Adapter) ProcessOid4vp(ctx context.Context, uri string) error {
+	const path = "/oid4vp"
+
+	if strings.TrimSpace(uri) == "" {
+		return fmt.Errorf("fafnir: %s needs a uri: %w", path, common.ErrInvalidInput)
+	}
+
+	started := time.Now()
+	res, err := a.http.R().
+		SetContext(ctx).
+		SetBody(oidcUriReq{URI: uri}).
+		Post(path)
+	if err != nil {
+		a.logger.DebugContext(ctx, "wallet call failed",
+			"method", http.MethodPost, "path", path,
+			"duration_ms", time.Since(started).Milliseconds(), "err", err)
+
+		return fmt.Errorf("fafnir: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	a.logger.DebugContext(ctx, "wallet call",
+		"method", http.MethodPost, "path", path,
+		"status", res.StatusCode(), "duration_ms", time.Since(started).Milliseconds())
+
 	if res.IsStatusFailure() {
 		return statusError(res.StatusCode(), path, res.Bytes())
 	}

@@ -1,3 +1,5 @@
+// Package rest provides the HTTP driving adapters for the ssi-auth context.
+// CoreRouter mounts the wallet HTTP surface under the versioned API router group.
 package rest
 
 import "github.com/gin-gonic/gin"

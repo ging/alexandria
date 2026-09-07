@@ -1,3 +1,5 @@
+// observability defines configuration for logging, Prometheus metrics, and tracing.
+// It controls log levels, formatting formats, and monitoring listen addresses.
 package config
 
 import (

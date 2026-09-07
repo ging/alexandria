@@ -48,10 +48,21 @@ Local development needs a wallet running somewhere, which is why
 `docker-compose.dev.yaml` brings one up. It is still the reason the node is
 built to come up without one.
 
-The wallet's own secret — the database credential it reads while
-`is_vault_real` is false — is a file on disk, rendered from the environment
-under compose and from a Secret under Kubernetes. That is not a Vault, and the
-`is_vault_real` switch is where a deployment that wants one starts.
+Where the wallet's keys sit is then a second decision, and it is the wallet's
+rather than the node's. With `is_vault_real` false they are files on a volume;
+with it true they are entries under a Vault mount. Both are deployed: the
+compose stack carries a Vault behind a profile, and the chart takes the address
+of one it does not deploy.
+
+That Vault is sealed on every start and unsealed by a person, which is a cost
+accepted rather than designed around: auto-unseal needs a KMS a single host
+cannot assume, and unseal keys stored beside the data they open are not a
+secret store. The node is unaffected either way — it comes up, reports itself
+not ready, and waits, the same as for any wallet it cannot reach.
+
+The node itself still has no Vault client, and `is_vault_real` in its own
+configuration only names a mode in its startup banner. That is honest: it holds
+nothing a Vault would protect.
 
 ## What would change this
 

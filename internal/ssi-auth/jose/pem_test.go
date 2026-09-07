@@ -1,3 +1,5 @@
+// pem_test validates parsing and thumbprint generation for PEM-encoded keys.
+// It verifies public/private key distinction and RFC 7638 thumbprints.
 package jose_test
 
 import (

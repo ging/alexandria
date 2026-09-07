@@ -160,6 +160,11 @@ services:
           "name": "$${POSTGRES_DB}"
         }
         JSON
+        # The wallet runs as uid 10001 and this container as root, so the file
+        # has to change hands as well as mode: 0400 owned by root is a file the
+        # wallet cannot read, and it fails with a permission error naming the
+        # path rather than the owner.
+        chown -R 10001:10001 /vault/secrets
         chmod 0400 /vault/secrets/db.json
     environment:
       POSTGRES_USER: ${FAFNIR_DB_USER:-fafnir}
@@ -177,7 +182,7 @@ services:
       fafnir-init:
         condition: service_completed_successfully
     volumes:
-      - ./fafnir/wallet.yaml:/app/static/fafnir/config.yaml:ro
+      - ${FAFNIR_CONFIG:-./fafnir/wallet.yaml}:/app/static/fafnir/config.yaml:ro
       # Writable, and a volume rather than the container layer: this is where
       # the wallet keeps the node's private keys, one file per key id. Postgres
       # holds only their metadata. On the container layer the node's identity
@@ -187,8 +192,13 @@ services:
       # The directory the wallet's file-backed vault reads and writes, and the
       # file in it holding the database credentials. It refuses to start
       # without both.
-      VAULT_PATH: /app/vault/secrets
+      VAULT_PATH: vault/secrets
       VAULT_APP_DB: db.json
+      # Read only when FAFNIR_CONFIG selects the Vault-backed configuration.
+      # Ignored otherwise, so they cost nothing when Vault is not in use.
+      VAULT_MOUNT: ${VAULT_MOUNT:-secret}
+      VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}
+      VAULT_TOKEN: ${VAULT_TOKEN:-}
     command: ["setup", "--env-file", "/app/static/fafnir/config.yaml"]
 
   fafnir-wallet:
@@ -198,11 +208,14 @@ services:
       fafnir-setup:
         condition: service_completed_successfully
     volumes:
-      - ./fafnir/wallet.yaml:/app/static/fafnir/config.yaml:ro
+      - ${FAFNIR_CONFIG:-./fafnir/wallet.yaml}:/app/static/fafnir/config.yaml:ro
       - fafnir-secrets:/app/vault/secrets
     environment:
-      VAULT_PATH: /app/vault/secrets
+      VAULT_PATH: vault/secrets
       VAULT_APP_DB: db.json
+      VAULT_MOUNT: ${VAULT_MOUNT:-secret}
+      VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}
+      VAULT_TOKEN: ${VAULT_TOKEN:-}
     command: ["start", "--env-file", "/app/static/fafnir/config.yaml"]
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:7001/readiness"]
@@ -210,6 +223,79 @@ services:
       timeout: 2s
       retries: 10
       start_period: 10s
+
+  # ===== Vault ==============================================================
+  # Where the wallet's private keys live when FAFNIR_CONFIG selects the
+  # Vault-backed configuration. Off unless asked for:
+  #
+  #   docker compose --profile vault up -d vault
+  #   bash vault-init.sh          once, on the very first start
+  #   bash vault-unseal.sh        after every restart, by a human
+  #
+  # It is deliberately not automatic. A Vault with file storage seals itself on
+  # every start and needs its unseal keys to open again; the alternatives are
+  # auto-unseal against a cloud KMS, which this file cannot assume, or leaving
+  # the keys on the host next to the thing they unlock, which is not a secret
+  # store at all. So a reboot of this host is a human intervention. That is the
+  # honest cost of keeping the node's private keys in Vault on one machine, and
+  # it is the reason `restart` below is not `unless-stopped`: a sealed Vault
+  # restarting in a loop only fills the logs.
+  # The image drops to uid 100 to run the server, and a named volume is created
+  # root-owned, so Vault cannot write its own storage. Same one-shot fix as
+  # zitadel-init below, and for the same reason.
+  vault-init:
+    image: alpine:3.22
+    profiles: [vault]
+    command: ["chown", "-R", "100:1000", "/vault/data"]
+    volumes:
+      - vault-data:/vault/data
+
+  vault:
+    image: hashicorp/vault:${VAULT_VERSION:-1.21}
+    profiles: [vault]
+    depends_on:
+      vault-init:
+        condition: service_completed_successfully
+    restart: on-failure
+    cap_add:
+      # Vault locks its memory, so secrets are never swapped to disk.
+      - IPC_LOCK
+    environment:
+      VAULT_ADDR: http://127.0.0.1:8200
+      VAULT_LOCAL_CONFIG: >
+        {
+          "storage": { "file": { "path": "/vault/data" } },
+          "listener": [{
+            "tcp": {
+              "address": "0.0.0.0:8200",
+              "tls_disable": true
+            }
+          }],
+          "ui": true,
+          "api_addr": "http://vault:8200",
+          "disable_mlock": false,
+          "default_lease_ttl": "168h",
+          "max_lease_ttl": "720h"
+        }
+    command: server
+    volumes:
+      # The sealed store. Back this up together with the unseal keys, and never
+      # in the same place as them.
+      - vault-data:/vault/data
+    # No port published. Vault is reached by the wallet on this network and by
+    # the operator through `docker compose exec`, which is why the listener can
+    # be plain HTTP: it is the same trust boundary as Postgres next to it, and
+    # terminating TLS here would need a certificate lifecycle this file has no
+    # way to run. Publish it, and this has to become TLS.
+    healthcheck:
+      # Exit 0 only when unsealed and initialised. So fafnir-setup below waits
+      # for a human rather than failing, and `docker compose ps` says plainly
+      # that the stack is waiting on an unseal.
+      test: ["CMD", "vault", "status", "-address=http://127.0.0.1:8200"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
 
   # ===== Identity ===========================================================
   # Reached by the browser through Caddy on AUTH_DOMAIN, and by the node
@@ -302,5 +388,6 @@ volumes:
   postgres-data:
   fafnir-data:
   fafnir-secrets:
+  vault-data:
   zitadel-data:
   zitadel-machinekey:

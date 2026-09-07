@@ -1,0 +1,15 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/ssi-auth/wallet/oid4vp"
+method: POST
+body:
+  type: json
+  content: |-
+    {
+        "uri": "openid4vp://?client_id=https%3A%2F%2Fverifier.example.com"
+    }
+auth:
+  type: inherit
+  credentials:
+    id: 0812cb1e-4ea1-4bd8-b892-0d22d8d0b103
+settings: {}
+order: 17500

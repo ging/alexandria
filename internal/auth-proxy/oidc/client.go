@@ -1,10 +1,5 @@
-// Package oidc is the driven adapter for the OpenID Provider, reached over its
-// HTTP API.
-//
-// It speaks OAuth 2.0 and OpenID Connect and nothing about this node: the
-// endpoints come from the provider's own discovery document rather than from
-// configuration, so pointing the deployment at a different Zitadel instance —
-// or at another compliant provider — is a URL change and nothing more.
+// client acts as the driven HTTP adapter communicating with the OpenID Provider.
+// It implements OAuth2 authorization code exchanges and discovery metadata fetching.
 package oidc
 
 import (

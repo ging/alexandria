@@ -1,14 +1,5 @@
-// Package jose is the JOSE boundary of the ssi-auth context.
-// ACL layer
-//
-// Two JOSE stacks live in this binary and neither can be dropped: jwx is what
-// this project signs, verifies and thumbprints with, while did-go — whose
-// did.Doc the domain uses — exposes keys as kms-go JWKs, which wrap go-jose.
-// The conversions between them are collected here so that no other file has to
-// hold both vocabularies at once.
-//
-// Nothing in this package belongs to the domain: wallet states keys in its own
-// terms and the adapters translate through here.
+// jose wraps cryptographic algorithms and key type parsing utilities.
+// It validates JWA identifiers and provides safe conversion helpers.
 package jose
 
 import (

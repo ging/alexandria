@@ -1,3 +1,5 @@
+// gaia defines configuration for Gaia-X participant descriptions and metadata.
+// It manages participant identifiers, domains, and terms-and-conditions endpoints.
 package config
 
 // Gaia is the Gaia-X participant description this node publishes.

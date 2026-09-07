@@ -169,6 +169,30 @@ with, so the node reports itself ready and every signature fails.
 The Deployment is one replica with a `Recreate` strategy, because the claim is
 ReadWriteOnce.
 
+### Vault
+
+`wallet.deploy.vault.enabled` moves the wallet's private keys out of that claim
+and into a Vault, under a KV v2 mount, one entry per key.
+
+The chart does not deploy Vault, and that is a decision rather than an omission:
+a Vault worth trusting is unsealed, audited and backed up on its own terms,
+which is a workload with its own lifecycle rather than something an application
+chart should own. Run [HashiCorp's chart](https://github.com/hashicorp/vault-helm),
+or point this at one you already operate.
+
+The token needs a policy covering `<mount>/data/*`, `<mount>/metadata/*` and
+**read on `sys/mounts`** — the client reads that last one to learn the KV
+version, and without it every call fails with a 403 that names nothing useful.
+Put the token in a Secret with a `token` key and name it in
+`wallet.deploy.vault.existingSecret`; a token in a values file ends up in the
+release's stored manifest.
+
+The claim is still needed with Vault on. The wallet reads its database
+credential from a file before it looks at Vault at all.
+
+Note that `vault.enabled` at the top level is a different setting: it sets a
+flag on the node, which has no Vault client and holds no key material.
+
 ### Why production leaves it off
 
 Two things make the bundled wallet a test-cluster story, and

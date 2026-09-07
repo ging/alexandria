@@ -1,6 +1,9 @@
+// types declares the domain models for decentralised identifiers, keys, and VCs.
+// It defines pure domain structures independent of external wire representations.
 package wallet
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/caparicio-esd/alexandria/internal/common"
@@ -83,4 +86,29 @@ type KeyPlan struct {
 	ID    string
 	Alias string
 	Pem   string
+}
+
+// ==== WALLET INFO TYPE ============================================================
+type WalletInfo struct {
+	ID         string
+	Name       string
+	CreatedAt  time.Time
+	AddedAt    time.Time
+	Permission string
+	Dids       []Did
+}
+
+// ==== CREDENTIAL TYPES =======================================================
+
+// Credential is a Verifiable Credential stored in the wallet.
+type Credential struct {
+	ID             string
+	VcBody         json.RawMessage
+	VcType         string
+	VcFormat       string
+	HolderDid      string
+	IssuerDid      string
+	ParsedDocument json.RawMessage
+	ValidUntil     *time.Time
+	AddedOn        time.Time
 }

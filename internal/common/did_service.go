@@ -1,3 +1,5 @@
+// did_service models service endpoint descriptors published in DID documents.
+// It validates service types and endpoints conforming to DID Core rules.
 package common
 
 import (

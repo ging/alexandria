@@ -1,11 +1,5 @@
-// Package observability holds the cross-cutting instrumentation: structured
-// logging, metrics and health probes.
-//
-// It sits beside the hexagon rather than inside it. The domain does not import
-// it: a use case that had to remember to emit a metric would be a use case with
-// an infrastructure concern baked in. Instrumentation is applied at the edges —
-// in the adapters and at the composition root — where the request boundaries
-// actually are.
+// logging configures structured JSON and text log handlers using slog.
+// It provides scoped logger instances with standardized module attributes.
 package observability
 
 import (

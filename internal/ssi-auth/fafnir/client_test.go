@@ -1,3 +1,5 @@
+// client_test verifies the Fafnir HTTP client adapter against mocked endpoints.
+// It validates URL paths, JSON request encodings, and HTTP error conversions.
 package fafnir_test
 
 import (
@@ -347,6 +349,11 @@ func TestDeleteCalls(t *testing.T) {
 			id:   "did:web:alexandria.upm.es",
 			call: func(a *fafnir.Adapter, id string) error { return a.DeleteDid(t.Context(), id) },
 			want: "/dids/did:web:alexandria.upm.es",
+		},
+		"credential": {
+			id:   "cred-uuid-1234",
+			call: func(a *fafnir.Adapter, id string) error { return a.DeleteCredential(t.Context(), id) },
+			want: "/vcs/cred-uuid-1234",
 		},
 	}
 
@@ -786,5 +793,181 @@ func TestDidMutationStatusErrors(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+const vcRecord = `{
+	"id": "vc-uuid-1",
+	"vc_body": "eyJhbGciOiJSU0EtT0FFUCJ9",
+	"vc_type": "gx:LegalPerson",
+	"vc_format": "jwt_vc_json",
+	"holder_did": "did:web:holder",
+	"issuer_did": "did:web:issuer",
+	"parsed_document": {"type": ["VerifiableCredential"]},
+	"valid_until": "2027-01-01T00:00:00Z",
+	"added_on": "2026-08-21T18:42:05.326269Z"
+}`
+
+func TestGetAllCredentialsCall(t *testing.T) {
+	t.Parallel()
+
+	var (
+		gotMethod string
+		gotPath   string
+	)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath = r.Method, r.URL.Path
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, "["+vcRecord+"]")
+	}))
+	defer srv.Close()
+
+	adapter, err := fafnir.New(srv.URL, nil)
+	if err != nil {
+		t.Fatalf("building adapter: %v", err)
+	}
+	defer func() { _ = adapter.Close() }()
+
+	creds, err := adapter.GetAllCredentials(t.Context())
+	if err != nil {
+		t.Fatalf("GetAllCredentials: %v", err)
+	}
+
+	if gotMethod != http.MethodGet {
+		t.Errorf("method = %q, want %q", gotMethod, http.MethodGet)
+	}
+
+	if gotPath != "/vcs/all" {
+		t.Errorf("path = %q, want %q", gotPath, "/vcs/all")
+	}
+
+	if len(creds) != 1 {
+		t.Fatalf("got %d credentials, want 1", len(creds))
+	}
+
+	got := creds[0]
+	if got.ID != "vc-uuid-1" {
+		t.Errorf("id = %q, want vc-uuid-1", got.ID)
+	}
+	if got.VcType != "gx:LegalPerson" || got.VcFormat != "jwt_vc_json" {
+		t.Errorf("unexpected type/format: %s, %s", got.VcType, got.VcFormat)
+	}
+	if got.HolderDid != "did:web:holder" || got.IssuerDid != "did:web:issuer" {
+		t.Errorf("unexpected holder/issuer: %s, %s", got.HolderDid, got.IssuerDid)
+	}
+	if got.ValidUntil == nil {
+		t.Error("validUntil is nil")
+	}
+	if got.AddedOn.IsZero() {
+		t.Error("addedOn is zero")
+	}
+}
+
+func TestGetAllCredentialsOnEmptyWallet(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, "[]")
+	}))
+	defer srv.Close()
+
+	adapter, err := fafnir.New(srv.URL, nil)
+	if err != nil {
+		t.Fatalf("building adapter: %v", err)
+	}
+	defer func() { _ = adapter.Close() }()
+
+	creds, err := adapter.GetAllCredentials(t.Context())
+	if err != nil {
+		t.Fatalf("GetAllCredentials: %v", err)
+	}
+
+	if creds == nil {
+		t.Fatal("creds = nil, want empty slice")
+	}
+
+	if len(creds) != 0 {
+		t.Errorf("got %d creds, want 0", len(creds))
+	}
+}
+
+func TestProcessOid4vciCall(t *testing.T) {
+	t.Parallel()
+
+	var (
+		gotMethod string
+		gotPath   string
+		gotBody   map[string]any
+	)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath = r.Method, r.URL.Path
+		raw, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(raw, &gotBody)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	adapter, err := fafnir.New(srv.URL, nil)
+	if err != nil {
+		t.Fatalf("building adapter: %v", err)
+	}
+	defer func() { _ = adapter.Close() }()
+
+	uri := "openid-credential-offer://test-vci"
+	if err := adapter.ProcessOid4vci(t.Context(), uri); err != nil {
+		t.Fatalf("ProcessOid4vci: %v", err)
+	}
+
+	if gotMethod != http.MethodPost {
+		t.Errorf("method = %q, want %q", gotMethod, http.MethodPost)
+	}
+	if gotPath != "/oid4vci" {
+		t.Errorf("path = %q, want %q", gotPath, "/oid4vci")
+	}
+	if gotBody["uri"] != uri {
+		t.Errorf("body uri = %v, want %s", gotBody["uri"], uri)
+	}
+}
+
+func TestProcessOid4vpCall(t *testing.T) {
+	t.Parallel()
+
+	var (
+		gotMethod string
+		gotPath   string
+		gotBody   map[string]any
+	)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath = r.Method, r.URL.Path
+		raw, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(raw, &gotBody)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	adapter, err := fafnir.New(srv.URL, nil)
+	if err != nil {
+		t.Fatalf("building adapter: %v", err)
+	}
+	defer func() { _ = adapter.Close() }()
+
+	uri := "openid4vp://test-vp"
+	if err := adapter.ProcessOid4vp(t.Context(), uri); err != nil {
+		t.Fatalf("ProcessOid4vp: %v", err)
+	}
+
+	if gotMethod != http.MethodPost {
+		t.Errorf("method = %q, want %q", gotMethod, http.MethodPost)
+	}
+	if gotPath != "/oid4vp" {
+		t.Errorf("path = %q, want %q", gotPath, "/oid4vp")
+	}
+	if gotBody["uri"] != uri {
+		t.Errorf("body uri = %v, want %s", gotBody["uri"], uri)
 	}
 }

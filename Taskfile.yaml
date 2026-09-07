@@ -148,6 +148,36 @@ tasks:
     desc: Follow the local wallet logs.
     cmds: ["docker compose logs -f fafnir-wallet"]
 
+  vault:up:
+    desc: "Start Vault, seed it, and run the wallet against it instead of files."
+    cmds:
+      - docker compose --profile vault up -d --wait vault
+      - docker compose --profile vault up vault-seed
+      # The wallet reads is_vault_real from its YAML, and there is no
+      # environment override for it, so switching modes means mounting the
+      # other file. --force-recreate because only the mount changed.
+      - FAFNIR_CONFIG=./config/fafnir/wallet-vault.yaml docker compose up -d --force-recreate --wait fafnir-wallet
+      - |
+        echo
+        echo "  The wallet now keeps its keys in Vault. Its previous file-backed"
+        echo "  identity is still on the fafnir-keys volume but is not in use, so"
+        echo "  give it one here:"
+        echo
+        echo "      task wallet:bootstrap"
+        echo
+        echo "  Vault UI  http://127.0.0.1:8200   token alexandria-dev-root"
+        echo
+
+  vault:down:
+    desc: "Stop Vault and put the wallet back on files."
+    cmds:
+      - docker compose up -d --force-recreate --wait fafnir-wallet
+      - docker compose --profile vault rm -sf vault vault-seed
+
+  vault:logs:
+    desc: Follow the local Vault logs.
+    cmds: ["docker compose --profile vault logs -f vault"]
+
   tls:ca:
     desc: Create the project's certificate authority in .certs/, if it has none.
     cmds: ["bash scripts/tls-ca.sh"]

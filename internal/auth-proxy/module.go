@@ -1,17 +1,5 @@
-// Package authproxy assembles the authentication bounded context.
-//
-// It is a proxy in the strict sense: nothing outside this node ever addresses
-// the identity provider. A browser navigates to /api/v1/auth/login and is
-// walked through the authorization code flow by this process, which holds the
-// client secret, terminates the callback, and hands back a sealed HttpOnly
-// cookie instead of a token. A service account posts its credentials to
-// /api/v1/auth/token and gets an access token without ever learning where
-// Zitadel lives. Everything else under /api/v1 passes through the guard.
-//
-// The consequence worth stating: the provider's address is deployment
-// configuration on this side only. Moving Zitadel, putting it behind a private
-// network, or replacing it with another OpenID Provider changes one YAML block
-// and nothing a client ever sees.
+// Package authproxy assembles the authentication and session management proxy.
+// It coordinates OIDC login flows, bearer token validation, and cookie sessions.
 package authproxy
 
 import (

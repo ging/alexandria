@@ -1,3 +1,5 @@
+// middleware_test verifies HTTP access logging and context propagation middleware.
+// It checks status code mapping and structured log field formatting.
 package rest_test
 
 import (

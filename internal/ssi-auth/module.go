@@ -1,4 +1,5 @@
-// Package ssiauth assembles the identity and authorization bounded context.
+// Package ssiauth wires the decentralized identity and wallet bounded context.
+// It orchestrates startup background linking and exposes HTTP route mounting.
 package ssiauth
 
 import (

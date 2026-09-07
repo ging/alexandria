@@ -1,3 +1,5 @@
+// errors translates internal domain error sentinels into HTTP responses.
+// It maps domain failures to RFC 7807 problem details and appropriate status codes.
 package rest
 
 import (

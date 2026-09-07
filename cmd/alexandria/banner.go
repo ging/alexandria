@@ -1,3 +1,5 @@
+// banner renders startup diagnostic banners and environment summaries to stdout.
+// It displays version information, active profiles, and subsystem listen ports.
 package main
 
 import (
