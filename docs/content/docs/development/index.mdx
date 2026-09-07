@@ -1,6 +1,6 @@
 ---
 title: API & Development Overview
-description: Overview of Alexandria REST APIs, authentication boundary, and developer workflows.
+description: Overview of Alexandria REST APIs, remote conformance testing, authentication boundary, and developer workflows.
 ---
 
 import { Card, Cards } from 'fumadocs-ui/components/card';
@@ -8,7 +8,7 @@ import { Callout } from 'fumadocs-ui/components/callout';
 
 # API & Development
 
-Alexandria provides a versioned REST API built on **Gin**, guarded by OpenID Connect (OIDC) authentication and backed by automated testing pipelines.
+Alexandria provides versioned REST APIs built on **Gin** to support vocabulary lifecycle management, remote conformance testing, and cryptographic identity operations, all guarded by OpenID Connect (OIDC) authentication.
 
 ---
 
@@ -23,7 +23,24 @@ Alexandria provides a versioned REST API built on **Gin**, guarded by OpenID Con
 ## Topics
 
 <Cards>
-  <Card title="Authentication & Sessions" href="./development/authentication" description="Zitadel OIDC flows, PKCE, sealed session cookies, and token introspection." />
-  <Card title="REST API Endpoints" href="./development/endpoints" description="Catalog of endpoints for identity, DID documents, and wallet operations." />
-  <Card title="Testing & CI/CD" href="./development/testing-and-ci" description="Running unit and integration test suites, linting, Task commands, and GitHub Actions." />
+  <Card
+    title="Remote Conformance Testing"
+    href="./development/conformance"
+    description="Automated semantic verification using SHACL constraint shapes for connector and payload compliance."
+  />
+  <Card
+    title="Authentication & Sessions"
+    href="./development/authentication"
+    description="Zitadel OIDC flows, PKCE, sealed session cookies, and token introspection."
+  />
+  <Card
+    title="REST API Endpoints"
+    href="./development/endpoints"
+    description="Catalog of endpoints for identity, DID documents, and wallet operations."
+  />
+  <Card
+    title="Testing & CI/CD"
+    href="./development/testing-and-ci"
+    description="Running unit and integration test suites, linting, Task commands, and GitHub Actions."
+  />
 </Cards>

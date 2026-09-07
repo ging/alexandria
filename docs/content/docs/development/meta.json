@@ -2,6 +2,7 @@
   "title": "API & Development",
   "pages": [
     "index",
+    "conformance",
     "authentication",
     "endpoints",
     "testing-and-ci"

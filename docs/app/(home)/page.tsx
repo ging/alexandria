@@ -2,15 +2,14 @@ import Image from 'next/image';
 import Link from 'next/link';
 import bannerImg from '@/public/banner.png';
 import {
-  Layers,
+  BookOpen,
+  Globe,
+  FileCheck,
   Wallet,
   ShieldCheck,
-  Network,
-  Sliders,
-  CheckCircle2,
+  Layers,
   ArrowRight,
   Sparkles,
-  BookOpen,
   Terminal,
   ExternalLink,
 } from 'lucide-react';
@@ -18,52 +17,52 @@ import {
 export default function HomePage() {
   const features = [
     {
-      icon: Layers,
-      category: 'Architecture',
-      title: 'In-Process Hexagonal Modules',
+      icon: BookOpen,
+      category: 'IDSA Vocabulary Hub',
+      title: 'Single Source of Semantic Truth',
       description:
-        'Engineered with strict Go package boundaries (ssi-auth, auth-proxy) that assemble into an in-process modular monolith with zero network hops.',
-      link: '/docs/architecture/bounded-contexts',
+        'Author, version, document, and publish domain ontologies, RDF vocabularies, and dataset profiles extending the core IDS Information Model.',
+      link: '/docs/getting-started',
+    },
+    {
+      icon: Globe,
+      category: 'Runtime Semantics',
+      title: 'Dynamic Term Dereferencing',
+      description:
+        'Connectors resolve unknown attribute IRIs in Self-Descriptions on the fly, dereferencing machine-readable RDF schemas, property classes, and multilingual labels.',
+      link: '/docs/getting-started',
+    },
+    {
+      icon: FileCheck,
+      category: 'Compliance & Validation',
+      title: 'Remote Conformance Tests',
+      description:
+        'Automated semantic verification using SHACL constraint shapes. Validates that connector payloads, catalogs, and dataset offerings strictly conform to dataspace rules.',
+      link: '/docs/development',
     },
     {
       icon: Wallet,
-      category: 'Key Custody',
+      category: 'Trust & SSI Anchor',
       title: 'Unified Wallet Port',
       description:
-        'Private keys never reside in the node. Pluggable adapters decouple domain logic from Fafnir and Eclipse EDC IdentityHub.',
+        'Cryptographic keys and signing material never reside in the node. Pluggable adapters decouple domain logic from Fafnir and Eclipse EDC IdentityHub.',
       link: '/docs/architecture/wallet-port',
     },
     {
       icon: ShieldCheck,
-      category: 'Security',
-      title: 'Node-Terminated OIDC',
+      category: 'Access Control',
+      title: 'Node-Terminated OIDC IAM',
       description:
-        'Authentication terminates at the node with encrypted HttpOnly session cookies and PKCE. Downstream APIs remain strictly protected.',
+        'Authentication terminates at the node with encrypted HttpOnly session cookies and PKCE via Zitadel. Protects vocabulary authoring and remote testing endpoints.',
       link: '/docs/development/authentication',
     },
     {
-      icon: Network,
-      category: 'Networking',
-      title: 'Complete TLS Parity',
+      icon: Layers,
+      category: 'Architecture',
+      title: 'In-Process Seams & Full TLS',
       description:
-        'Reverse proxy (Caddy) terminates TLS across all deployment shapes, including development with wildcard nip.io domain routing.',
-      link: '/docs/adr/0005-tls-terminated-by-a-proxy-in-development-too',
-    },
-    {
-      icon: Sliders,
-      category: 'Configuration',
-      title: 'Single Document with Viper',
-      description:
-        'One zero-secret baseline YAML document discovered automatically, with hierarchical environment variable overrides (ALEXANDRIA_*).',
-      link: '/docs/getting-started/configuration',
-    },
-    {
-      icon: CheckCircle2,
-      category: 'Verification',
-      title: 'Rigorous Testing & Automation',
-      description:
-        'Single-command automation with Taskfile, race-condition detectors, live wallet integration suites, and GitHub Actions pipelines.',
-      link: '/docs/development/testing-and-ci',
+        'Engineered as an in-process modular monolith with strict Go package seams, full TLS reverse proxy parity via Caddy, and one-command startup.',
+      link: '/docs/architecture/bounded-contexts',
     },
   ];
 
@@ -75,18 +74,18 @@ export default function HomePage() {
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 mb-8 rounded-full border border-fd-border bg-fd-card/80 backdrop-blur-md text-xs font-medium text-fd-foreground shadow-xs">
             <Sparkles className="size-3.5 text-[#e6007e]" />
-            <span>International Data Spaces (IDS) Vocabulary Hub</span>
+            <span>IDSA Reference Architecture · International Data Spaces</span>
           </div>
 
           {/* Headline */}
           <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight mb-6 leading-[1.15]">
-            The Semantic Core of{' '}
-            <span className="text-alexandria-gradient">Alexandria</span>
+            The IDS Vocabulary Hub for{' '}
+            <span className="text-alexandria-gradient">Sovereign Dataspaces</span>
           </h1>
 
           {/* Subtitle */}
-          <p className="max-w-2xl mx-auto text-base sm:text-lg text-fd-muted-foreground leading-relaxed mb-10">
-            Decentralized identity, cryptographic key delegation, and verifiable semantic ontologies engineered for sovereign dataspace participants.
+          <p className="max-w-3xl mx-auto text-base sm:text-lg text-fd-muted-foreground leading-relaxed mb-10">
+            Maintain and publish domain ontologies, dereference semantic terms in real-time for dataspace connectors, and run automated remote conformance tests with verifiable trust.
           </p>
 
           {/* CTAs */}
@@ -95,16 +94,16 @@ export default function HomePage() {
               href="/docs/getting-started"
               className="inline-flex items-center gap-2 rounded-xl bg-alexandria-gradient text-white px-6 py-3 text-sm font-semibold shadow-md shadow-[#e6007e]/20 transition-all hover:scale-[1.02] hover:shadow-lg hover:shadow-[#e6007e]/30"
             >
-              <span>Get Started</span>
+              <span>Explore Vocabulary Hub</span>
               <ArrowRight className="size-4" />
             </Link>
 
             <Link
-              href="/docs/architecture"
+              href="/docs/development"
               className="inline-flex items-center gap-2 rounded-xl border border-fd-border bg-fd-card px-6 py-3 text-sm font-semibold transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground shadow-xs"
             >
-              <BookOpen className="size-4" />
-              <span>Architecture & Wallets</span>
+              <FileCheck className="size-4 text-[#ff3366]" />
+              <span>Remote Conformance & API</span>
             </Link>
 
             <a
@@ -124,7 +123,7 @@ export default function HomePage() {
             <div className="relative overflow-hidden rounded-2xl border border-fd-border bg-fd-card shadow-2xl p-2 sm:p-3">
               <Image
                 src={bannerImg}
-                alt="Alexandria Architecture Ecosystem Banner"
+                alt="Alexandria IDSA Vocabulary Hub Ecosystem"
                 priority
                 className="w-full h-auto rounded-xl object-cover"
               />
@@ -137,10 +136,10 @@ export default function HomePage() {
       <section className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
         <div className="text-center max-w-2xl mx-auto mb-14">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight mb-3">
-            Architectural Highlights
+            Core Semantic & Architectural Pillars
           </h2>
           <p className="text-sm sm:text-base text-fd-muted-foreground">
-            A cohesive dataspace node built for security, operational clarity, and modular evolution.
+            Enabling frictionless semantic interoperability and verified compliance across heterogeneous dataspace connectors.
           </p>
         </div>
 
@@ -170,7 +169,7 @@ export default function HomePage() {
                   </p>
                 </div>
                 <div className="mt-5 flex items-center gap-1.5 text-xs font-semibold text-[#e6007e] dark:text-[#ff3e73]">
-                  <span>Explore guide</span>
+                  <span>Explore documentation</span>
                   <ArrowRight className="size-3 transition-transform group-hover:translate-x-1" />
                 </div>
               </Link>
@@ -195,14 +194,14 @@ export default function HomePage() {
             <span className="text-[11px] font-mono text-fd-muted-foreground">bash</span>
           </div>
           <div className="p-5 font-mono text-xs sm:text-sm bg-black/90 text-neutral-200 overflow-x-auto leading-relaxed">
-            <div className="text-neutral-400"># Start the full stack with hot reload and automatic dependency wiring:</div>
+            <div className="text-neutral-400"># Start the full IDSA stack with TLS, IAM, and wallet link:</div>
             <div className="text-[#ff3e73] mt-1 font-semibold">$ task dev:auto</div>
-            <div className="text-neutral-400 mt-3">✔ Trusting local root Certificate Authority...</div>
-            <div className="text-neutral-400">✔ PostgreSQL 17 active on port 1500</div>
-            <div className="text-neutral-400">✔ Zitadel IAM running on https://auth.127.0.0.1.nip.io:8443</div>
-            <div className="text-neutral-400">✔ Fafnir wallet connected on port 7003</div>
-            <div className="text-emerald-400 mt-2">✨ Node listening on https://alexandria.127.0.0.1.nip.io:8443</div>
-            <div className="text-neutral-400">   DID Document ready at /.well-known/did.json</div>
+            <div className="text-neutral-400 mt-3">✔ Caddy Reverse Proxy:      https://alexandria.127.0.0.1.nip.io:8443</div>
+            <div className="text-neutral-400">✔ Zitadel IAM Provider:     https://auth.127.0.0.1.nip.io:8443</div>
+            <div className="text-neutral-400">✔ Vocabulary Engine:        Active (RDF / OWL / SHACL registry)</div>
+            <div className="text-neutral-400">✔ Remote Conformance Suite: Ready for connector validation</div>
+            <div className="text-neutral-400">✔ Identity & Wallet Link:   DID resolvable at /.well-known/did.json</div>
+            <div className="text-emerald-400 mt-2">✨ Alexandria IDSA Vocabulary Hub running with live reload</div>
           </div>
         </div>
       </section>
@@ -212,24 +211,24 @@ export default function HomePage() {
         <div className="relative rounded-2xl overflow-hidden p-8 sm:p-12 text-center border border-fd-border bg-fd-card">
           <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-alexandria-gradient rounded-full blur-3xl opacity-10 pointer-events-none" />
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight mb-4">
-            Dive into the Technical Architecture
+            Powering Semantic Interoperability in IDSA Dataspaces
           </h2>
-          <p className="max-w-xl mx-auto text-sm sm:text-base text-fd-muted-foreground mb-8">
-            Read our 7 Architectural Decision Records (ADRs) or learn how to integrate custom wallets and credential schemas.
+          <p className="max-w-2xl mx-auto text-sm sm:text-base text-fd-muted-foreground mb-8">
+            Learn how Alexandria manages vocabulary lifecycles, dereferences term IRIs in real time, and executes remote SHACL conformance tests to certify dataspace data models.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-4">
             <Link
-              href="/docs/adr"
+              href="/docs/getting-started"
               className="inline-flex items-center gap-2 rounded-xl bg-fd-primary text-fd-primary-foreground px-6 py-2.5 text-sm font-semibold shadow-xs hover:bg-fd-primary/90 transition-colors"
             >
-              <span>Read ADRs</span>
+              <span>Explore the Guide</span>
               <ArrowRight className="size-4" />
             </Link>
             <Link
-              href="/docs/getting-started/quickstart"
+              href="/docs/development"
               className="inline-flex items-center gap-2 rounded-xl border border-fd-border bg-fd-card px-6 py-2.5 text-sm font-semibold hover:bg-fd-accent hover:text-fd-accent-foreground transition-colors shadow-xs"
             >
-              <span>Run Locally</span>
+              <span>Remote Conformance & Testing</span>
             </Link>
           </div>
         </div>
