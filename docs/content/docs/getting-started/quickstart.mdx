@@ -1,75 +1,163 @@
 ---
 title: Quickstart
-description: Step-by-step guide to bring up the local Alexandria environment.
+description: Step-by-step tutorial to launch Alexandria, its supporting services, and verify endpoints.
 ---
 
 import { Steps } from 'fumadocs-ui/components/steps';
 import { Callout } from 'fumadocs-ui/components/callout';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 
 # Quickstart Guide
 
-Follow these steps to bootstrap the complete local stack from a fresh checkout.
+This tutorial guides you through launching Alexandria, verifying local TLS certificates, bootstrapping the Zitadel IAM and cryptographic wallet, and running the node.
 
 ---
 
-## First-Time Setup
+## The Fast Path: One-Command Startup
 
-<Steps>
-
-### 1. Trust the Local Certificate Authority
-
-Alexandria generates an ephemeral root Certificate Authority (CA) in `/.certs/` so local HTTPS works cleanly with browser and Go trust stores. This requires `sudo` only once:
+For day-to-day development, Alexandria provides `task dev:auto`. It automatically:
+1. Checks and generates the root Certificate Authority (CA) in `/.certs/`.
+2. Terminates any stale node processes holding internal port `1234`.
+3. Starts all Docker containers (`postgres`, `caddy`, `zitadel`, `fafnir-wallet`).
+4. Executes `scripts/zitadel-bootstrap.sh` to provision OIDC clients and update `.env`.
+5. Executes `scripts/fafnir-bootstrap.sh` to provision the signing key and default DID.
+6. Verifies local CA trust against the Zitadel discovery document.
+7. Starts the Alexandria Go process with hot-reload enabled via `air`.
 
 ```bash
+# 1. On a fresh machine, trust the local CA once (requires sudo):
 task tls:trust
-```
 
-### 2. Start Supporting Infrastructure
-
-Bring up the database and the TLS terminator:
-
-```bash
-task db:up   # Starts PostgreSQL 17 on port 1500
-task tls:up  # Starts Caddy reverse proxy on port 8443
-```
-
-### 3. Bootstrap Authentication (Zitadel)
-
-Provision Zitadel, create the default organization, register the Alexandria relying-party application, and write client secrets into `.env`:
-
-```bash
-task auth:bootstrap
-```
-
-<Callout type="info">
-`auth:bootstrap` is idempotent. It creates the administrative user `admin@alexandria.auth.127.0.0.1.nip.io` with password `Password1!`.
-</Callout>
-
-### 4. Run the Alexandria Node
-
-Start the Alexandria node with hot-reload enabled via `air`:
-
-```bash
-task dev
-```
-
-</Steps>
-
----
-
-## The One-Command Daily Workflow
-
-After completing the first-time setup, you do not need to run individual commands. `task dev:auto` stops any stale node processes holding the port, verifies and brings up all containers, and starts the development server:
-
-```bash
+# 2. Start the full stack with automatic orchestration:
 task dev:auto
 ```
 
 ---
 
+## Step-by-Step Manual Setup
+
+If you prefer to understand each moving piece or start services independently, follow these granular steps:
+
+<Steps>
+
+### 1. Trust the Local Certificate Authority
+
+Alexandria generates an internal root CA in `/.certs/` so local HTTPS and mTLS work transparently across browsers, curl, and Go trust stores without security warnings:
+
+```bash
+task tls:trust
+```
+
+<Callout type="info">
+On macOS, this enrolls the certificate into the System Keychain. On Linux, it installs it into `/usr/local/share/ca-certificates/` and runs `update-ca-certificates`.
+</Callout>
+
+### 2. Start PostgreSQL Database
+
+Bring up the relational database:
+
+```bash
+task db:up
+```
+
+PostgreSQL 17 starts on port `1500` (user: `alexandria`, password: `alexandria`, db: `alexandria`). To open a `psql` shell at any time: `task db:psql`.
+
+### 3. Start Caddy Reverse Proxy
+
+Launch the TLS terminator in front of all services:
+
+```bash
+task tls:up
+```
+
+Caddy binds to port `8443` on your host and terminates TLS using wildcard resolution via `127.0.0.1.nip.io`.
+
+### 4. Bootstrap Zitadel IAM
+
+Provision the identity provider and register Alexandria as an authorized relying-party application:
+
+```bash
+task auth:bootstrap
+```
+
+This task starts Zitadel on container port `8080` (published on host `1600`), creates the default organization, registers the OIDC client, and writes `ALEXANDRIA_AUTH_CONFIG_CLIENT_ID` and `ALEXANDRIA_AUTH_CONFIG_CLIENT_SECRET` into `.env`.
+
+- **Default Administrator:** `admin@alexandria.auth.127.0.0.1.nip.io`
+- **Default Password:** `Password1!`
+- **Zitadel Console:** `task auth:console` -> opens `http://127.0.0.1:1600/ui/console`.
+
+### 5. Bootstrap the Cryptographic Wallet
+
+Start the default wallet backend (Fafnir) and provision its signing key:
+
+```bash
+task wallet:bootstrap
+```
+
+This starts Fafnir on port `7003` and runs `scripts/fafnir-bootstrap.sh` to generate the default Ed25519 signing key and DID (`did:jwk`).
+
+### 6. Run the Alexandria Node
+
+Start the Go application with hot-reloading:
+
+```bash
+task dev
+```
+
+The node connects to PostgreSQL, links with the wallet, registers routes under Gin, and binds to cleartext port `1234` behind Caddy.
+
+</Steps>
+
+---
+
+## Alternative Wallet Configurations
+
+<Tabs items={['Eclipse EDC IdentityHub', 'Fafnir with HashiCorp Vault']}>
+
+<Tab value="Eclipse EDC IdentityHub">
+
+Alexandria supports **Eclipse EDC IdentityHub** for enterprise dataspace compliance:
+
+```bash
+# 1. Start the IdentityHub container on ports 8181 and 8182:
+task identityhub:up
+
+# 2. Launch Alexandria pointing to IdentityHub:
+ALEXANDRIA_WALLET_CONFIG_WALLET=IdentityHub \
+ALEXANDRIA_WALLET_CONFIG_API_HTTP_PORT=8181 \
+task dev
+```
+
+To stop IdentityHub: `task identityhub:down`.
+
+</Tab>
+
+<Tab value="Fafnir with HashiCorp Vault">
+
+By default, Fafnir stores keys on a Docker volume. To run Fafnir backed by a real **HashiCorp Vault**:
+
+```bash
+# 1. Start Vault and seed root tokens:
+task vault:up
+
+# 2. Provision the wallet identity inside Vault:
+task wallet:bootstrap
+
+# 3. Start Alexandria:
+task dev
+```
+
+Vault UI is available at `http://127.0.0.1:8200` with root token `alexandria-dev-root`. To return Fafnir to file storage: `task vault:down`.
+
+</Tab>
+
+</Tabs>
+
+---
+
 ## Verifying the Stack
 
-Once running, verify each endpoint:
+Once services are running, verify each endpoint:
 
 ### 1. Web Portal & Authentication Login
 Open your browser and navigate to:
@@ -80,16 +168,41 @@ Log in using:
 - **Username:** `admin@alexandria.auth.127.0.0.1.nip.io`
 - **Password:** `Password1!`
 
-After authentication, you are redirected back to the root application with a secure session cookie.
+After successful authentication, you are redirected back to `https://alexandria.127.0.0.1.nip.io:8443/` carrying a sealed, `HttpOnly` session cookie (`alexandria_session`).
 
-### 2. DID Document Resolution
-Alexandria exposes its Decentralized Identifier document at:
+### 2. User Info Endpoint
+Verify your session claims:
+```bash
+curl -k https://alexandria.127.0.0.1.nip.io:8443/api/v1/auth/userinfo \
+  -H "Cookie: alexandria_session=<YOUR_COOKIE>"
+```
+
+### 3. DID Document Resolution
+Alexandria exposes its Decentralized Identifier document publicly without authentication:
 ```bash
 curl -k https://alexandria.127.0.0.1.nip.io:8443/.well-known/did.json
 ```
 
-### 3. Health & Readiness
+### 4. Health & Readiness
 Check node health directly:
 ```bash
 curl -k https://alexandria.127.0.0.1.nip.io:8443/healthz
+curl -k https://alexandria.127.0.0.1.nip.io:8443/readyz
 ```
+
+---
+
+## Operational Cheat Sheet
+
+| Action | Command |
+|:---|:---|
+| **View Caddy Logs** | `task tls:logs` |
+| **View Zitadel Logs** | `task auth:logs` |
+| **View Wallet Logs** | `task wallet:logs` |
+| **View Database Logs** | `task db:logs` |
+| **Open Postgres Shell** | `task db:psql` |
+| **Open Zitadel Console** | `task auth:console` |
+| **Reset Database Data** | `task db:reset` |
+| **Reset Zitadel IAM Data**| `task auth:reset` |
+| **Reset Wallet Data** | `task wallet:reset` |
+EOF

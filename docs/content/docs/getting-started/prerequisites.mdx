@@ -1,13 +1,13 @@
 ---
 title: Prerequisites
-description: System requirements, dependencies, and network architecture for running Alexandria.
+description: System requirements, runtime dependencies, and local network port allocations for Alexandria.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
 # Prerequisites
 
-Before developing or running Alexandria locally, ensure your workstation meets the following runtime and tooling dependencies.
+Before developing or running Alexandria locally, ensure your workstation meets the runtime and tooling requirements detailed below.
 
 ---
 
@@ -15,38 +15,42 @@ Before developing or running Alexandria locally, ensure your workstation meets t
 
 | Dependency | Minimum Version | Purpose |
 |:---|:---:|:---|
-| **Go** | `1.26+` | Compiles the node application and runs tests. |
-| **Docker & Compose** | `24+` / v2 | Runs PostgreSQL, Zitadel, Caddy proxy, and wallets. |
-| **[Task](https://taskfile.dev)** | `3+` | Project task runner that manages environments, builds, and lifecycle commands. |
-| **OpenSSL** | `3+` | Generates local Certificate Authority (CA) and certificates (preinstalled on macOS/Linux). |
+| **Go** | `1.26+` | Compiles the node binary and executes unit/integration test suites. |
+| **Docker & Compose** | `24+` / v2 | Manages containerized services (PostgreSQL, Zitadel, Caddy proxy, wallets). |
+| **[Task](https://taskfile.dev)** | `3+` | Project task runner coordinating certificate trust, secret loading, and orchestration. |
+| **OpenSSL** | `3+` | Generates the local Certificate Authority (CA) and server certs (preinstalled on macOS/Linux). |
 
 <Callout type="warn">
-`task` is mandatory: commands defined in `Taskfile.yaml` automate certificate trust, load `.env` secrets, and coordinate multi-container dependencies.
+`task` is mandatory: commands in `Taskfile.yaml` automate certificate trust, load `.env` secrets, and coordinate multi-container dependencies.
 </Callout>
 
 ---
 
 ## Local Network & DNS (`nip.io`)
 
-Alexandria terminates TLS even in local development using **Caddy** (see [ADR 0005](../adr/0005-tls-terminated-by-a-proxy-in-development-too)). All services bind locally using subdomains routed through `127.0.0.1.nip.io`:
+Alexandria terminates TLS even in local development using **Caddy** (documented in [ADR 0005](../adr/0005-tls-terminated-by-a-proxy-in-development-too)). All services bind locally using subdomains routed through `127.0.0.1.nip.io`:
 
 - **Node Portal & API:** `https://alexandria.127.0.0.1.nip.io:8443`
 - **Zitadel IAM:** `https://auth.127.0.0.1.nip.io:8443`
-- **Wallet Service (Fafnir / IdentityHub):** Bound to `http://127.0.0.1:7003`
+- **Wallet Service (Fafnir):** Bound to `http://127.0.0.1:7003`
 
-`nip.io` maps any wildcard IP prefix directly back to loopback `127.0.0.1` without requiring modifications to `/etc/hosts`.
+`nip.io` automatically maps any wildcard IP prefix directly back to loopback `127.0.0.1` without requiring manual edits to `/etc/hosts`.
 
 ---
 
-## Local Port Allocation
+## Port Allocation Map
 
 Ensure the following TCP ports are available on your machine:
 
 | Port | Service | Bound To | Protocol | Notes |
 |:---:|:---|:---:|:---:|:---|
-| **`8443`** | Caddy Reverse Proxy | Host | HTTPS | Single TLS entrypoint for external callers. |
-| **`1234`** | Alexandria Node Core | Internal | HTTP | Listens in the clear behind Caddy. |
-| **`1500`** | PostgreSQL 17 | Host | TCP | Relational persistence for node state. |
-| **`1600`** | Zitadel Console & Direct API | Host | HTTP/gRPC | Direct container access for bootstrap scripts. |
-| **`7003`** | Wallet Service (Fafnir) | Host | HTTP | Provides cryptographic signing and DID storage. |
-| **`2112`** | Prometheus Metrics / pprof | Internal | HTTP | Observability endpoints (`/metrics`). |
+| **`8443`** | Caddy Reverse Proxy | Host | HTTPS | Primary TLS entrypoint for external callers and browser navigation. |
+| **`1234`** | Alexandria Node Core | Internal | HTTP | Listens in the clear behind the Caddy TLS reverse proxy. |
+| **`1500`** | PostgreSQL 17 | Host | TCP | Relational persistence for node state and credentials. |
+| **`1600`** | Zitadel Console & API | Host | HTTP/gRPC | Direct container access for bootstrap automation and admin console. |
+| **`7003`** | Fafnir Wallet | Host | HTTP | Default wallet backend providing key custody and DID signing. |
+| **`8181` / `8182`** | Eclipse EDC IdentityHub | Host | HTTP | Alternative enterprise wallet backend (`task identityhub:up`). |
+| **`8200`** | HashiCorp Vault | Host | HTTP | Optional backend for Fafnir key storage (`task vault:up`). |
+| **`2112`** | Prometheus Metrics / pprof | Internal | HTTP | Observability endpoints (`/metrics`, `/debug/pprof`). |
+| **`3000`** | Documentation Server | Host | HTTP | Local Fumadocs preview server (`task docs:dev`). |
+EOF
