@@ -1,5 +1,6 @@
 // errors translates internal domain error sentinels into HTTP responses.
 // It maps domain failures to RFC 7807 problem details and appropriate status codes.
+
 package rest
 
 import (
@@ -73,6 +74,12 @@ func respondError(c *gin.Context, err error) {
 
 	case errors.Is(err, common.ErrUnsupported):
 		c.AbortWithStatusJSON(http.StatusUnprocessableEntity, errorBody{Error: err.Error()})
+
+	case errors.Is(err, common.ErrNotImplementedInFafnir):
+		c.AbortWithStatusJSON(http.StatusNotImplemented, errorBody{Error: common.ErrNotImplementedInFafnir.Error()})
+
+	case errors.Is(err, common.ErrNotImplementedInIdentityHub):
+		c.AbortWithStatusJSON(http.StatusNotImplemented, errorBody{Error: common.ErrNotImplementedInIdentityHub.Error()})
 
 	case errors.Is(err, common.ErrNotLinked):
 		c.AbortWithStatusJSON(http.StatusPreconditionFailed, errorBody{Error: err.Error()})

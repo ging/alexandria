@@ -1,5 +1,6 @@
 // Service implements the core wallet business logic and identity use cases.
 // It caches active identity state and orchestrates operations through wallet ports.
+
 package wallet
 
 import (
@@ -8,6 +9,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/caparicio-esd/alexandria/internal/common"
 	"github.com/trustbloc/did-go/doc/did"
@@ -336,6 +338,209 @@ func (s *Service) ProcessOid4vp(ctx context.Context, uri string) error {
 
 	s.logger.InfoContext(ctx, "oid4vp processed", "uri", uri)
 	return nil
+}
+
+// RotateKey requests the wallet to rotate an existing key.
+func (s *Service) RotateKey(ctx context.Context, keyID string, duration time.Duration) error {
+	if strings.TrimSpace(keyID) == "" {
+		return common.Invalid("id", "is required")
+	}
+
+	if err := s.wallet.RotateKey(ctx, keyID, duration); err != nil {
+		return fmt.Errorf("wallet reported error by rotating key: %w", err)
+	}
+
+	return nil
+}
+
+// RevokeKey requests the wallet to revoke an existing key.
+func (s *Service) RevokeKey(ctx context.Context, keyID string) error {
+	if strings.TrimSpace(keyID) == "" {
+		return common.Invalid("id", "is required")
+	}
+
+	if err := s.wallet.RevokeKey(ctx, keyID); err != nil {
+		return fmt.Errorf("wallet reported error by revoking key: %w", err)
+	}
+
+	return nil
+}
+
+// PublishDid requests the wallet to publish a DID document.
+func (s *Service) PublishDid(ctx context.Context, didID string) error {
+	if strings.TrimSpace(didID) == "" {
+		return common.Invalid("id", "is required")
+	}
+
+	if err := s.wallet.PublishDid(ctx, didID); err != nil {
+		return fmt.Errorf("wallet reported error by publishing did: %w", err)
+	}
+
+	return nil
+}
+
+// UnpublishDid requests the wallet to unpublish a DID document.
+func (s *Service) UnpublishDid(ctx context.Context, didID string) error {
+	if strings.TrimSpace(didID) == "" {
+		return common.Invalid("id", "is required")
+	}
+
+	if err := s.wallet.UnpublishDid(ctx, didID); err != nil {
+		return fmt.Errorf("wallet reported error by unpublishing did: %w", err)
+	}
+
+	return nil
+}
+
+// GetDidState queries the publication state of a DID.
+func (s *Service) GetDidState(ctx context.Context, didID string) (DidState, error) {
+	if strings.TrimSpace(didID) == "" {
+		return DidState{}, common.Invalid("id", "is required")
+	}
+
+	st, err := s.wallet.GetDidState(ctx, didID)
+	if err != nil {
+		return DidState{}, fmt.Errorf("wallet reported error getting did state: %w", err)
+	}
+
+	return st, nil
+}
+
+// AddServiceEndpoint adds an endpoint to a DID document.
+func (s *Service) AddServiceEndpoint(ctx context.Context, didID string, endpoint ServiceEndpointPlan) error {
+	if strings.TrimSpace(didID) == "" {
+		return common.Invalid("id", "is required")
+	}
+	if strings.TrimSpace(endpoint.ID) == "" {
+		return common.Invalid("endpoint.id", "is required")
+	}
+
+	if err := s.wallet.AddServiceEndpoint(ctx, didID, endpoint); err != nil {
+		return fmt.Errorf("wallet reported error adding service endpoint: %w", err)
+	}
+
+	return nil
+}
+
+// RemoveServiceEndpoint deletes an endpoint from a DID document.
+func (s *Service) RemoveServiceEndpoint(ctx context.Context, didID, endpointID string) error {
+	if strings.TrimSpace(didID) == "" {
+		return common.Invalid("id", "is required")
+	}
+	if strings.TrimSpace(endpointID) == "" {
+		return common.Invalid("endpoint_id", "is required")
+	}
+
+	if err := s.wallet.RemoveServiceEndpoint(ctx, didID, endpointID); err != nil {
+		return fmt.Errorf("wallet reported error removing service endpoint: %w", err)
+	}
+
+	return nil
+}
+
+// StoreCredential imports a verifiable credential directly into wallet storage.
+func (s *Service) StoreCredential(ctx context.Context, cred *CredentialImportPlan) error {
+	if cred == nil {
+		return common.Invalid("credential", "is required")
+	}
+
+	if err := s.wallet.StoreCredential(ctx, cred); err != nil {
+		return fmt.Errorf("wallet reported error storing credential: %w", err)
+	}
+
+	return nil
+}
+
+// GetCredentialsByType queries credentials filtered by type.
+func (s *Service) GetCredentialsByType(ctx context.Context, vcType string) ([]Credential, error) {
+	creds, err := s.wallet.GetCredentialsByType(ctx, vcType)
+	if err != nil {
+		return nil, fmt.Errorf("wallet reported error querying credentials: %w", err)
+	}
+
+	return creds, nil
+}
+
+// RequestDcpCredential requests a verifiable credential through DCP.
+func (s *Service) RequestDcpCredential(ctx context.Context, req *DcpCredentialRequestPlan) (string, error) {
+	if req == nil {
+		return "", common.Invalid("request", "is required")
+	}
+
+	reqID, err := s.wallet.RequestDcpCredential(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("wallet reported error requesting dcp credential: %w", err)
+	}
+
+	return reqID, nil
+}
+
+// GetDcpRequestStatus inspects the status of an ongoing DCP request.
+func (s *Service) GetDcpRequestStatus(ctx context.Context, requestID string) (DcpRequestStatus, error) {
+	if strings.TrimSpace(requestID) == "" {
+		return DcpRequestStatus{}, common.Invalid("id", "is required")
+	}
+
+	st, err := s.wallet.GetDcpRequestStatus(ctx, requestID)
+	if err != nil {
+		return DcpRequestStatus{}, fmt.Errorf("wallet reported error getting dcp status: %w", err)
+	}
+
+	return st, nil
+}
+
+// CreateParticipant creates a new participant context in the wallet.
+func (s *Service) CreateParticipant(ctx context.Context, plan *ParticipantPlan) error {
+	if plan == nil {
+		return common.Invalid("participant", "is required")
+	}
+
+	if err := s.wallet.CreateParticipant(ctx, plan); err != nil {
+		return fmt.Errorf("wallet reported error creating participant: %w", err)
+	}
+
+	return nil
+}
+
+// GetParticipant fetches a participant context from the wallet.
+func (s *Service) GetParticipant(ctx context.Context, participantID string) (Participant, error) {
+	if strings.TrimSpace(participantID) == "" {
+		return Participant{}, common.Invalid("id", "is required")
+	}
+
+	p, err := s.wallet.GetParticipant(ctx, participantID)
+	if err != nil {
+		return Participant{}, fmt.Errorf("wallet reported error getting participant: %w", err)
+	}
+
+	return p, nil
+}
+
+// SetParticipantState toggles active status for a participant context.
+func (s *Service) SetParticipantState(ctx context.Context, participantID string, active bool) error {
+	if strings.TrimSpace(participantID) == "" {
+		return common.Invalid("id", "is required")
+	}
+
+	if err := s.wallet.SetParticipantState(ctx, participantID, active); err != nil {
+		return fmt.Errorf("wallet reported error setting participant state: %w", err)
+	}
+
+	return nil
+}
+
+// RegenerateParticipantToken rotates the token for a participant context.
+func (s *Service) RegenerateParticipantToken(ctx context.Context, participantID string) (string, error) {
+	if strings.TrimSpace(participantID) == "" {
+		return "", common.Invalid("id", "is required")
+	}
+
+	tok, err := s.wallet.RegenerateParticipantToken(ctx, participantID)
+	if err != nil {
+		return "", fmt.Errorf("wallet reported error regenerating token: %w", err)
+	}
+
+	return tok, nil
 }
 
 // =============================================================

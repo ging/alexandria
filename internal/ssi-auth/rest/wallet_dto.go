@@ -1,5 +1,6 @@
 // wallet_dto defines the public REST transfer objects for wallet operations.
 // It maps domain identity and credential models to external JSON wire structures.
+
 package rest
 
 import (
@@ -261,6 +262,78 @@ func newCredentialResps(credentials []wallet.Credential) []credentialResp {
 
 // ===== Protocol rest DTOs ====================================================
 
-type oidcUriReq struct {
+type oidcURIReq struct {
 	URI string `json:"uri"`
+}
+
+// ===== Extended IdentityHub rest DTOs =========================================
+
+type rotateKeyReq struct {
+	Duration string `json:"duration"`
+}
+
+type didStateResp struct {
+	Did   string `json:"did"`
+	State string `json:"state"`
+}
+
+type serviceEndpointReq struct {
+	ID   string `json:"id"`
+	Type string `json:"type"`
+	URL  string `json:"url"`
+}
+
+type storeCredentialReq struct {
+	ID      string          `json:"id"`
+	Format  string          `json:"format"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+type dcpCredentialRequestReq struct {
+	IssuerURL string   `json:"issuerUrl"`
+	HolderPid string   `json:"holderPid"`
+	Types     []string `json:"types"`
+	Format    string   `json:"format"`
+}
+
+type dcpRequestResp struct {
+	RequestID string `json:"requestId"`
+}
+
+type dcpStatusResp struct {
+	RequestID string `json:"requestId"`
+	Status    string `json:"status"`
+	Error     string `json:"error,omitempty"`
+}
+
+type createParticipantReq struct {
+	ID     string `json:"id"`
+	Did    string `json:"did"`
+	Active bool   `json:"active"`
+}
+
+type participantResp struct {
+	ID        string    `json:"id"`
+	Did       string    `json:"did"`
+	Active    bool      `json:"active"`
+	Roles     []string  `json:"roles,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+func newParticipantResp(p wallet.Participant) participantResp {
+	return participantResp{
+		ID:        p.ID,
+		Did:       p.Did,
+		Active:    p.Active,
+		Roles:     p.Roles,
+		CreatedAt: p.CreatedAt,
+	}
+}
+
+type participantStateReq struct {
+	Active bool `json:"active"`
+}
+
+type participantTokenResp struct {
+	Token string `json:"token"`
 }

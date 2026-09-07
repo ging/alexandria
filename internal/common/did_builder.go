@@ -1,5 +1,6 @@
 // did_builder defines builders for constructing decentralised identifiers.
 // It supports did:jwk and did:web methods conforming to W3C specifications.
+
 package common
 
 import (

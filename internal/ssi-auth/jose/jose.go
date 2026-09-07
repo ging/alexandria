@@ -1,4 +1,4 @@
-// jose wraps cryptographic algorithms and key type parsing utilities.
+// Package jose wraps cryptographic algorithms and key type parsing utilities.
 // It validates JWA identifiers and provides safe conversion helpers.
 package jose
 

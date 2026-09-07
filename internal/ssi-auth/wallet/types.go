@@ -1,5 +1,6 @@
 // types declares the domain models for decentralised identifiers, keys, and VCs.
 // It defines pure domain structures independent of external wire representations.
+
 package wallet
 
 import (
@@ -59,7 +60,17 @@ type Key struct {
 	Alias     string
 	Kty       string
 	Crv       *string
+	State     string
 	CreatedAt time.Time
+}
+
+// KeyDescriptor describes an external or structured key reference.
+type KeyDescriptor struct {
+	KeyID       string
+	Type        string
+	KeyContext  *string
+	Properties  map[string]any
+	ResourceURL *string
 }
 
 // PemDescriptor is what the domain needs to know about a piece of key material
@@ -83,12 +94,15 @@ type PemDescriptor struct {
 // wallet should file the material under, the alias it is indexed by, and the
 // PEM itself. It travels outwards only — nothing hands one back.
 type KeyPlan struct {
-	ID    string
-	Alias string
-	Pem   string
+	ID            string
+	Alias         string
+	Pem           string
+	KeyDescriptor *KeyDescriptor
 }
 
-// ==== WALLET INFO TYPE ============================================================
+// WalletInfo carries metadata about the wallet service instance and participants.
+//
+//nolint:revive // WalletInfo name matches domain specification and avoids collision with generic Info.
 type WalletInfo struct {
 	ID         string
 	Name       string
@@ -111,4 +125,74 @@ type Credential struct {
 	ParsedDocument json.RawMessage
 	ValidUntil     *time.Time
 	AddedOn        time.Time
+}
+
+// ==== EXTENDED DID & SERVICE TYPES ===========================================
+
+// DidPublicationState describes the publishing status of a DID in IdentityHub.
+type DidPublicationState string
+
+// DID publication states recognized by the identity wallet.
+const (
+	DidStatePublished   DidPublicationState = "PUBLISHED"
+	DidStateUnpublished DidPublicationState = "UNPUBLISHED"
+	DidStatePublishing  DidPublicationState = "PUBLISHING"
+)
+
+// DidState represents the current state of a published DID.
+type DidState struct {
+	Did   string
+	State DidPublicationState
+}
+
+// ServiceEndpointPlan specifies a service endpoint to be attached to a DID.
+type ServiceEndpointPlan struct {
+	ID   string
+	Type string
+	URL  string
+}
+
+// ==== CREDENTIAL EXTENSIONS =================================================
+
+// CredentialImportPlan contains a pre-formed verifiable credential for manual import.
+type CredentialImportPlan struct {
+	ID      string
+	Format  string
+	Payload json.RawMessage
+}
+
+// ==== DCP TYPES =============================================================
+
+// DcpCredentialRequestPlan specifies an asynchronous DCP credential request.
+type DcpCredentialRequestPlan struct {
+	IssuerURL string
+	HolderPid string
+	Types     []string
+	Format    string
+}
+
+// DcpRequestStatus reports the lifecycle state of a DCP request.
+type DcpRequestStatus struct {
+	RequestID string
+	Status    string
+	Error     string
+}
+
+// ==== PARTICIPANT TYPES =====================================================
+
+// Participant is an IdentityHub participant context.
+type Participant struct {
+	ID        string
+	Did       string
+	Active    bool
+	Roles     []string
+	CreatedAt time.Time
+}
+
+// ParticipantPlan specifies how to create a new participant context.
+type ParticipantPlan struct {
+	ID            string
+	Did           string
+	Active        bool
+	KeyDescriptor *KeyDescriptor
 }

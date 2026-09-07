@@ -1,4 +1,4 @@
-// inspector implements the wallet.PemInspector port for validating key material.
+// Package keys implements the wallet.PemInspector port for validating key material.
 // It inspects PEM-encoded cryptographic keys without exposing JOSE details to domain.
 package keys
 

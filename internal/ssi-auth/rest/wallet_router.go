@@ -1,11 +1,15 @@
-// WalletRouter is the HTTP driving adapter exposing wallet management endpoints.
+// Package rest provides the HTTP driving adapter exposing wallet management endpoints.
 // It handles transport decoding and status mapping, delegating logic to the service.
 package rest
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
+	"time"
 
+	"github.com/caparicio-esd/alexandria/internal/common"
 	"github.com/caparicio-esd/alexandria/internal/ssi-auth/wallet"
 	"github.com/gin-gonic/gin"
 )
@@ -22,26 +26,6 @@ func NewWalletRouter(holder *wallet.Service) *WalletRouter {
 }
 
 // Register mounts the wallet routes under the given parent group.
-//
-//	GET    /wallet/is-linked              asserts the linking state
-//	POST   /wallet/link                   links against the external ecosystem directory
-//	POST   /wallet/key                    imports raw asymmetric key material
-//	GET    /wallet/keys                   lists the registered keys
-//	DELETE /wallet/key/:id                purges a key reference
-//	GET    /wallet/did                    resolves the primary identity string
-//	GET    /wallet/did/all                lists every DID held
-//	POST   /wallet/did                    spawns a local DID
-//	GET    /wallet/did/:id                resolves a single DID record
-//	DELETE /wallet/did/:id                drops a DID mapping
-//	POST   /wallet/did/:id/default        promotes a DID to default
-//	POST   /wallet/did/:id/key/:key_id    binds a key into a DID
-//	DELETE /wallet/did/:id/key/:key_id    unbinds a key from a DID
-//	POST   /wallet/did/:id/key/:key_id/default  promotes a key to default within a DID
-//	DELETE /wallet/credential/:id         purges a credential record
-//	GET    /wallet/info                   resolves runtime telemetry
-//	GET    /wallet/vcs                    collects the full credential array
-//	POST   /wallet/oid4vci                dispatches an inbound credential offer
-//	POST   /wallet/oid4vp                 resolves an outbound presentation request
 func (r *WalletRouter) Register(parent *gin.RouterGroup) *gin.RouterGroup {
 	walletRouter := parent.Group("/wallet")
 
@@ -51,6 +35,8 @@ func (r *WalletRouter) Register(parent *gin.RouterGroup) *gin.RouterGroup {
 	walletRouter.POST("/keys", r.registerKey)     // ok
 	walletRouter.GET("/keys", r.getWalletKeys)    // ok
 	walletRouter.DELETE("/keys/:id", r.deleteKey) // ok
+	walletRouter.POST("/keys/:id/rotate", r.rotateKey)
+	walletRouter.POST("/keys/:id/revoke", r.revokeKey)
 
 	didRouter := walletRouter.Group("/did")
 	didRouter.GET("", r.getWalletDid) // ok
@@ -62,13 +48,29 @@ func (r *WalletRouter) Register(parent *gin.RouterGroup) *gin.RouterGroup {
 	didRouter.POST("/:id/key/:key_id", r.addKeyToDid)
 	didRouter.DELETE("/:id/key/:key_id", r.removeKeyFromDid)
 	didRouter.POST("/:id/key/:key_id/default", r.setDefaultKey)
+	didRouter.POST("/:id/publish", r.publishDid)
+	didRouter.POST("/:id/unpublish", r.unpublishDid)
+	didRouter.GET("/:id/state", r.getDidState)
+	didRouter.POST("/:id/endpoints", r.addServiceEndpoint)
+	didRouter.DELETE("/:id/endpoints/:endpoint_id", r.removeServiceEndpoint)
 
 	walletRouter.DELETE("/credential/:id", r.deleteCredential)
+	walletRouter.POST("/credential", r.storeCredential)
 	walletRouter.GET("/vcs", r.getWalletCredentials)
 	walletRouter.GET("/info", r.getWalletInfo)
 
 	walletRouter.POST("/oid4vci", r.processOid4vci)
 	walletRouter.POST("/oid4vp", r.processOid4vp)
+
+	dcpRouter := walletRouter.Group("/dcp")
+	dcpRouter.POST("/request", r.requestDcpCredential)
+	dcpRouter.GET("/request/:id", r.getDcpRequestStatus)
+
+	partRouter := walletRouter.Group("/participants")
+	partRouter.POST("", r.createParticipant)
+	partRouter.GET("/:id", r.getParticipant)
+	partRouter.POST("/:id/state", r.setParticipantState)
+	partRouter.POST("/:id/token", r.regenerateParticipantToken)
 
 	return walletRouter
 }
@@ -292,7 +294,14 @@ func (r *WalletRouter) deleteCredential(c *gin.Context) {
 }
 
 func (r *WalletRouter) getWalletCredentials(c *gin.Context) {
-	credentials, err := r.holder.Credentials(c)
+	vcType := c.Query("type")
+	var credentials []wallet.Credential
+	var err error
+	if vcType != "" {
+		credentials, err = r.holder.GetCredentialsByType(c.Request.Context(), vcType)
+	} else {
+		credentials, err = r.holder.Credentials(c)
+	}
 	if err != nil {
 		respondError(c, err)
 		return
@@ -310,7 +319,7 @@ func (r *WalletRouter) getWalletInfo(c *gin.Context) {
 }
 
 func (r *WalletRouter) processOid4vci(c *gin.Context) {
-	var req oidcUriReq
+	var req oidcURIReq
 
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
 		respondError(c, err)
@@ -326,7 +335,7 @@ func (r *WalletRouter) processOid4vci(c *gin.Context) {
 }
 
 func (r *WalletRouter) processOid4vp(c *gin.Context) {
-	var req oidcUriReq
+	var req oidcURIReq
 
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
 		respondError(c, err)
@@ -339,4 +348,220 @@ func (r *WalletRouter) processOid4vp(c *gin.Context) {
 	}
 
 	c.Status(http.StatusOK)
+}
+
+func (r *WalletRouter) rotateKey(c *gin.Context) {
+	keyID := c.Params.ByName("id")
+	var req rotateKeyReq
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+		respondError(c, err)
+		return
+	}
+
+	var duration time.Duration
+	if req.Duration != "" {
+		d, err := time.ParseDuration(req.Duration)
+		if err != nil {
+			respondError(c, common.Invalid("duration", "must be a valid duration (e.g. 1h, 24h)"))
+			return
+		}
+		duration = d
+	}
+
+	if err := r.holder.RotateKey(c.Request.Context(), keyID, duration); err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.Status(http.StatusAccepted)
+}
+
+func (r *WalletRouter) revokeKey(c *gin.Context) {
+	keyID := c.Params.ByName("id")
+	if err := r.holder.RevokeKey(c.Request.Context(), keyID); err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.Status(http.StatusAccepted)
+}
+
+func (r *WalletRouter) publishDid(c *gin.Context) {
+	didID := c.Params.ByName("id")
+	if err := r.holder.PublishDid(c.Request.Context(), didID); err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.Status(http.StatusAccepted)
+}
+
+func (r *WalletRouter) unpublishDid(c *gin.Context) {
+	didID := c.Params.ByName("id")
+	if err := r.holder.UnpublishDid(c.Request.Context(), didID); err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.Status(http.StatusAccepted)
+}
+
+func (r *WalletRouter) getDidState(c *gin.Context) {
+	didID := c.Params.ByName("id")
+	st, err := r.holder.GetDidState(c.Request.Context(), didID)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, didStateResp{
+		Did:   st.Did,
+		State: string(st.State),
+	})
+}
+
+func (r *WalletRouter) addServiceEndpoint(c *gin.Context) {
+	didID := c.Params.ByName("id")
+	var req serviceEndpointReq
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		respondError(c, err)
+		return
+	}
+
+	err := r.holder.AddServiceEndpoint(c.Request.Context(), didID, wallet.ServiceEndpointPlan{
+		ID:   req.ID,
+		Type: req.Type,
+		URL:  req.URL,
+	})
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.Status(http.StatusCreated)
+}
+
+func (r *WalletRouter) removeServiceEndpoint(c *gin.Context) {
+	didID := c.Params.ByName("id")
+	endpointID := c.Params.ByName("endpoint_id")
+	if err := r.holder.RemoveServiceEndpoint(c.Request.Context(), didID, endpointID); err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.Status(http.StatusAccepted)
+}
+
+func (r *WalletRouter) storeCredential(c *gin.Context) {
+	var req storeCredentialReq
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		respondError(c, err)
+		return
+	}
+
+	err := r.holder.StoreCredential(c.Request.Context(), &wallet.CredentialImportPlan{
+		ID:      req.ID,
+		Format:  req.Format,
+		Payload: req.Payload,
+	})
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.Status(http.StatusCreated)
+}
+
+func (r *WalletRouter) requestDcpCredential(c *gin.Context) {
+	var req dcpCredentialRequestReq
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		respondError(c, err)
+		return
+	}
+
+	reqID, err := r.holder.RequestDcpCredential(c.Request.Context(), &wallet.DcpCredentialRequestPlan{
+		IssuerURL: req.IssuerURL,
+		HolderPid: req.HolderPid,
+		Types:     req.Types,
+		Format:    req.Format,
+	})
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusAccepted, dcpRequestResp{RequestID: reqID})
+}
+
+func (r *WalletRouter) getDcpRequestStatus(c *gin.Context) {
+	reqID := c.Params.ByName("id")
+	st, err := r.holder.GetDcpRequestStatus(c.Request.Context(), reqID)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, dcpStatusResp{
+		RequestID: st.RequestID,
+		Status:    st.Status,
+		Error:     st.Error,
+	})
+}
+
+func (r *WalletRouter) createParticipant(c *gin.Context) {
+	var req createParticipantReq
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		respondError(c, err)
+		return
+	}
+
+	err := r.holder.CreateParticipant(c.Request.Context(), &wallet.ParticipantPlan{
+		ID:     req.ID,
+		Did:    req.Did,
+		Active: req.Active,
+	})
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.Status(http.StatusCreated)
+}
+
+func (r *WalletRouter) getParticipant(c *gin.Context) {
+	participantID := c.Params.ByName("id")
+	p, err := r.holder.GetParticipant(c.Request.Context(), participantID)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, newParticipantResp(p))
+}
+
+func (r *WalletRouter) setParticipantState(c *gin.Context) {
+	participantID := c.Params.ByName("id")
+	var req participantStateReq
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		respondError(c, err)
+		return
+	}
+
+	if err := r.holder.SetParticipantState(c.Request.Context(), participantID, req.Active); err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.Status(http.StatusAccepted)
+}
+
+func (r *WalletRouter) regenerateParticipantToken(c *gin.Context) {
+	participantID := c.Params.ByName("id")
+	tok, err := r.holder.RegenerateParticipantToken(c.Request.Context(), participantID)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, participantTokenResp{Token: tok})
 }

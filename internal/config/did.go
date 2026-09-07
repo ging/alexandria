@@ -1,5 +1,6 @@
 // did defines configuration options for decentralized identifier generation.
 // It holds settings for did:jwk, did:web domains, and resolution options.
+
 package config
 
 import (

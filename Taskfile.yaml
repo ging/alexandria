@@ -43,7 +43,29 @@ tasks:
 
   test:
     desc: Run tests with the race detector and a coverage profile.
+    env:
+      ALEXANDRIA_AUTH_CONFIG_ENABLED: "false"
     cmds: ["go test -race -coverprofile=coverage.out ./..."]
+
+  test:integration:
+    desc: Run all integration tests against live wallet services.
+    env:
+      ALEXANDRIA_AUTH_CONFIG_ENABLED: "false"
+    cmds: ['go test -race -v -tags="integration,jwx_es256k" ./...']
+
+  test:integration:fafnir:
+    desc: Run Fafnir integration tests.
+    cmds: ['go test -race -v -tags="integration,jwx_es256k" ./internal/ssi-auth/fafnir/...']
+
+  test:integration:identityhub:
+    desc: Run IdentityHub integration tests.
+    cmds: ['go test -race -v -tags="integration,jwx_es256k" ./internal/ssi-auth/identityhub/...']
+
+  test:all:
+    desc: Run both unit tests and integration tests.
+    env:
+      ALEXANDRIA_AUTH_CONFIG_ENABLED: "false"
+    cmds: ['go test -race -v -tags="integration,jwx_es256k" -coverprofile=coverage.out ./...']
 
   cover:
     desc: Open the coverage report in the browser.
@@ -147,6 +169,44 @@ tasks:
   wallet:logs:
     desc: Follow the local wallet logs.
     cmds: ["docker compose logs -f fafnir-wallet"]
+
+  identityhub:up:
+    desc: Start IdentityHub container and wait for it to be healthy.
+    cmds:
+      - |
+        if [ ! "$(docker ps -q -f name=identityhub-test)" ]; then
+          if [ "$(docker ps -aq -f status=exited -f name=identityhub-test)" ]; then
+            docker rm identityhub-test
+          fi
+          docker run -d --rm --name identityhub-test \
+            -p 8181:8181 -p 8182:8182 \
+            -e "WEB_HTTP_PORT=8181" \
+            -e "WEB_HTTP_PATH=/api" \
+            -e "WEB_HTTP_IDENTITY_PORT=8182" \
+            -e "WEB_HTTP_IDENTITY_PATH=/api/identity" \
+            ${IDENTITYHUB_IMAGE:-identity-hub:latest}
+        fi
+      - |
+        echo "Waiting for IdentityHub to be healthy..."
+        for i in $(seq 1 30); do
+          if curl -sf http://127.0.0.1:8181/api/check/health >/dev/null 2>&1; then
+            echo "IdentityHub is healthy on :8181 / :8182"
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "Timed out waiting for IdentityHub" >&2
+        exit 1
+
+  identityhub:down:
+    desc: Stop the IdentityHub container.
+    cmds:
+      - docker stop identityhub-test 2>/dev/null || true
+
+  identityhub:logs:
+    desc: Follow IdentityHub container logs.
+    cmds:
+      - docker logs -f identityhub-test
 
   vault:up:
     desc: "Start Vault, seed it, and run the wallet against it instead of files."

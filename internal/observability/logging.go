@@ -1,4 +1,4 @@
-// logging configures structured JSON and text log handlers using slog.
+// Package observability configures structured JSON and text log handlers using slog.
 // It provides scoped logger instances with standardized module attributes.
 package observability
 

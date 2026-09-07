@@ -1,5 +1,6 @@
 // pem provides low-level decoding and thumbprint extraction for PEM key data.
 // It parses cryptographic keys into JWK representations without leaking secrets.
+
 package jose
 
 import (

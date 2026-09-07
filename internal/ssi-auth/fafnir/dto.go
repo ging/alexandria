@@ -1,5 +1,6 @@
 // dto defines Fafnir wire structures and their conversions to domain models.
 // It encapsulates remote API schema representations and anti-corruption parsing.
+
 package fafnir
 
 import (
@@ -213,50 +214,6 @@ func (k keyResp) ToDomain() (wallet.Key, error) {
 
 // ===== WalletInfo related DTO's =====================================================
 
-type walletInfoRes struct {
-	ID         string
-	Name       string
-	CreatedAt  string
-	AddedAt    string
-	Permission string
-	Dids       []didResp
-}
-
-func (w *walletInfoRes) ToDomain() (wallet.WalletInfo, error) {
-	var dids []wallet.Did
-	var out wallet.WalletInfo
-
-	entries := make([]didResp, 0, len(w.Dids))
-	for _, d := range entries {
-		innerDid, err := d.ToDomain()
-		if err != nil {
-			return wallet.WalletInfo{}, fmt.Errorf("fafnir: couldn't convert did: %w", err)
-		}
-		dids = append(dids, innerDid)
-	}
-
-	layout := "2014-09-12T11:45:26.371Z"
-	createdAt, err := time.Parse(layout, w.CreatedAt)
-	if err != nil {
-		return wallet.WalletInfo{}, fmt.Errorf("fafnir: couldn't convert created at: %w", err)
-	}
-	addedAt, err := time.Parse(layout, w.AddedAt)
-	if err != nil {
-		return wallet.WalletInfo{}, fmt.Errorf("fafnir: couldn't convert created at: %w", err)
-	}
-
-	out = wallet.WalletInfo{
-		ID:         w.ID,
-		Name:       w.Name,
-		CreatedAt:  createdAt,
-		AddedAt:    addedAt,
-		Permission: w.Permission,
-		Dids:       dids,
-	}
-
-	return out, nil
-}
-
 // ===== Credential related DTO's ==============================================
 
 type vcResp struct {
@@ -291,6 +248,6 @@ func (v vcResp) ToDomain() (wallet.Credential, error) {
 
 // ===== Protocol related DTO's ================================================
 
-type oidcUriReq struct {
+type oidcURIReq struct {
 	URI string `json:"uri"`
 }

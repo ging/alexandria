@@ -1,4 +1,4 @@
-// router provides the top-level HTTP engine setup and route mounting pipeline.
+// Package httpapi provides the top-level HTTP engine setup and route mounting pipeline.
 // It binds health probes, metrics, and bounded context routers onto Gin.
 package httpapi
 

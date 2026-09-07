@@ -1,5 +1,6 @@
 // hosts models network hostnames and protocol configurations across services.
 // It constructs public and internal base URLs for HTTP and TLS communication.
+
 package config
 
 import (

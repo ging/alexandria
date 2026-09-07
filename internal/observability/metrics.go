@@ -1,5 +1,6 @@
 // metrics registers Prometheus collectors and HTTP observation instrumentation.
 // It exports request counts, latency histograms, and runtime telemetry.
+
 package observability
 
 import (

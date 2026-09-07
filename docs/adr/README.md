@@ -15,6 +15,7 @@ show. A decision that left no trace in either does not need a record.
 | [0004](0004-authentication-terminated-at-the-node.md) | Authentication is terminated at the node, not at the client | Accepted |
 | [0005](0005-tls-terminated-by-a-proxy-in-development-too.md) | TLS is terminated by a proxy, in development too | Accepted |
 | [0006](0006-one-image-three-deployment-shapes.md) | One image, three deployment shapes | Accepted |
+| [0007](0007-unified-wallet-port-and-identityhub-adapter.md) | Unified wallet port and pluggable IdentityHub adapter | Accepted |
 
 ## Writing one
 

@@ -1,5 +1,6 @@
 // guard provides HTTP middleware for enforcing authentication and role policies.
 // It inspects session cookies and bearer tokens to protect downstream handlers.
+
 package rest
 
 import (

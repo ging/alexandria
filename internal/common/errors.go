@@ -1,4 +1,4 @@
-// errors declares shared domain error sentinels and error constructor helpers.
+// Package common declares shared domain error sentinels and error constructor helpers.
 // It defines standard validation and conflict errors used across bounded contexts.
 package common
 
@@ -19,6 +19,10 @@ var (
 	// ErrUnsupported reports that the request names a capability this build
 	// does not implement.
 	ErrUnsupported = errors.New("unsupported")
+	// ErrNotImplementedInFafnir reports that an operation is unsupported by Fafnir.
+	ErrNotImplementedInFafnir = errors.New("Error not implemented in fafnir wallet")
+	// ErrNotImplementedInIdentityHub reports that an operation is unsupported by IdentityHub.
+	ErrNotImplementedInIdentityHub = errors.New("Error not implemented in IdentityHub wallet")
 )
 
 // ValidationError pinpoints the offending field of an invalid request, so a

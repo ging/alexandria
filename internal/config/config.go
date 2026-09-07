@@ -1,4 +1,4 @@
-// config loads, merges, and validates configuration from environment and YAML.
+// Package config loads, merges, and validates configuration from environment and YAML.
 // It serves as the single source of truth for runtime application settings.
 package config
 
@@ -331,8 +331,22 @@ type Verify struct {
 // Kind names the wallet product backing the key material.
 type Kind string
 
-// KindFafnir is the Fafnir wallet, reached over its HTTP API.
-const KindFafnir Kind = "fafnir"
+const (
+	// KindFafnir is the Fafnir wallet, reached over its HTTP API.
+	KindFafnir Kind = "fafnir"
+	// KindIdentityHub is the Eclipse EDC IdentityHub wallet.
+	KindIdentityHub Kind = "identityhub"
+)
+
+// IdentityHubConfig configures connection details for Eclipse EDC IdentityHub.
+type IdentityHubConfig struct {
+	IdentityAPIURL string `mapstructure:"identity_api_url"`
+	IssuerAPIURL   string `mapstructure:"issuer_api_url"`
+	StsAPIURL      string `mapstructure:"sts_api_url"`
+	CredentialsURL string `mapstructure:"credentials_api_url"`
+	APIKey         string `mapstructure:"api_key"`
+	ParticipantID  string `mapstructure:"participant_id"`
+}
 
 // Wallet points at the outsourced wallet backing the key material.
 type Wallet struct {
@@ -345,6 +359,8 @@ type Wallet struct {
 	// usually come up together, so a short wait catches the common case; past
 	// it, readiness is the better place to report the problem.
 	StartupLinkTimeout time.Duration `mapstructure:"startup_link_timeout"`
+	// IdentityHub configures parameters specific to IdentityHub.
+	IdentityHub *IdentityHubConfig `mapstructure:"identityhub,omitempty"`
 }
 
 // Validate implements the section contract, and canonicalises the product name:
@@ -352,7 +368,7 @@ type Wallet struct {
 func (w *Wallet) Validate() error {
 	w.Kind = Kind(strings.ToLower(strings.TrimSpace(string(w.Kind))))
 
-	if w.Kind != KindFafnir {
+	if w.Kind != KindFafnir && w.Kind != KindIdentityHub {
 		return invalid("wallet_config.wallet", fmt.Sprintf("unsupported wallet %q", w.Kind))
 	}
 
@@ -360,7 +376,28 @@ func (w *Wallet) Validate() error {
 		return invalid("wallet_config.startup_link_timeout", "must not be negative")
 	}
 
-	return w.API.Validate("wallet_config.api")
+	if w.Kind == KindFafnir {
+		return w.API.Validate("wallet_config.api")
+	}
+
+	if w.Kind == KindIdentityHub {
+		if w.IdentityHub == nil {
+			endpoint, err := w.API.Endpoint(HostHTTP)
+			if err != nil {
+				return invalid("wallet_config.identityhub", "must be configured when wallet is identityhub")
+			}
+			w.IdentityHub = &IdentityHubConfig{
+				IdentityAPIURL: endpoint.URL() + "/api/identity/v1",
+				APIKey:         "ApiKeyDefaultValue",
+				ParticipantID:  "default",
+			}
+		}
+		if w.IdentityHub.IdentityAPIURL == "" {
+			return invalid("wallet_config.identityhub.identity_api_url", "must be set")
+		}
+	}
+
+	return nil
 }
 
 // APIURL resolves the wallet endpoint for a transport.

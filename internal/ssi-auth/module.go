@@ -5,6 +5,7 @@ package ssiauth
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"sync"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/caparicio-esd/alexandria/internal/config"
 	"github.com/caparicio-esd/alexandria/internal/observability"
 	"github.com/caparicio-esd/alexandria/internal/ssi-auth/fafnir"
+	"github.com/caparicio-esd/alexandria/internal/ssi-auth/identityhub"
 	keys "github.com/caparicio-esd/alexandria/internal/ssi-auth/pem"
 	"github.com/caparicio-esd/alexandria/internal/ssi-auth/rest"
 	"github.com/caparicio-esd/alexandria/internal/ssi-auth/wallet"
@@ -43,7 +45,7 @@ type Deps struct {
 // Module is the assembled context.
 type Module struct {
 	wallet  *wallet.Service
-	adapter *fafnir.Adapter
+	adapter io.Closer
 	router  *rest.CoreRouter
 	logger  *slog.Logger
 	budget  time.Duration
@@ -61,24 +63,50 @@ func New(deps Deps) (*Module, error) {
 		return nil, fmt.Errorf("%s: no configuration given", Name)
 	}
 
-	walletURL, err := deps.Config.Wallet.APIURL(config.HostHTTP)
-	if err != nil {
-		return nil, fmt.Errorf("%s: resolving the wallet endpoint: %w", Name, err)
-	}
-
 	logger := observability.Scoped(deps.Logger, observability.ModuleSSIAuth, "")
 
-	adapter, err := fafnir.New(walletURL, observability.Scoped(deps.Logger, observability.ModuleSSIAuth, "fafnir"))
-	if err != nil {
-		return nil, fmt.Errorf("%s: building the wallet adapter: %w", Name, err)
+	var (
+		walletAdapter wallet.Wallet
+		closer        io.Closer
+	)
+
+	switch deps.Config.Wallet.Kind {
+	case config.KindIdentityHub:
+		ihAdapter, err := identityhub.New(
+			deps.Config.Wallet.IdentityHub,
+			observability.Scoped(deps.Logger, observability.ModuleSSIAuth, "identityhub"),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("%s: building the identityhub adapter: %w", Name, err)
+		}
+		walletAdapter = ihAdapter
+		closer = ihAdapter
+
+	case config.KindFafnir:
+		fallthrough
+	default:
+		walletURL, err := deps.Config.Wallet.APIURL(config.HostHTTP)
+		if err != nil {
+			return nil, fmt.Errorf("%s: resolving the wallet endpoint: %w", Name, err)
+		}
+
+		fafnirAdapter, err := fafnir.New(
+			walletURL,
+			observability.Scoped(deps.Logger, observability.ModuleSSIAuth, "fafnir"),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("%s: building the wallet adapter: %w", Name, err)
+		}
+		walletAdapter = fafnirAdapter
+		closer = fafnirAdapter
 	}
 
-	service := wallet.NewService(adapter, keys.NewInspector(), deps.Clock,
+	service := wallet.NewService(walletAdapter, keys.NewInspector(), deps.Clock,
 		observability.Scoped(deps.Logger, observability.ModuleSSIAuth, "wallet"))
 
 	return &Module{
 		wallet:  service,
-		adapter: adapter,
+		adapter: closer,
 		router:  rest.NewCoreRouter(rest.NewWalletRouter(service)),
 		logger:  logger,
 		budget:  deps.Config.Wallet.StartupLinkTimeout,

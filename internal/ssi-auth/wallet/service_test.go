@@ -7,6 +7,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/caparicio-esd/alexandria/internal/common"
 	"github.com/caparicio-esd/alexandria/internal/ssi-auth/wallet"
@@ -22,8 +23,8 @@ type stubWallet struct {
 	gotDeleteKey        *string
 	gotDeleteDid        *string
 	gotDeleteCredential *string
-	gotOid4vciUri       *string
-	gotOid4vpUri        *string
+	gotOid4vciURI       *string
+	gotOid4vpURI        *string
 	gotDefaultDid       *string
 	gotDidByID          *string
 	gotBinding          *binding
@@ -54,12 +55,12 @@ func (s *stubWallet) DeleteCredential(_ context.Context, credentialID string) er
 }
 
 func (s *stubWallet) ProcessOid4vci(_ context.Context, uri string) error {
-	s.gotOid4vciUri = &uri
+	s.gotOid4vciURI = &uri
 	return s.err
 }
 
 func (s *stubWallet) ProcessOid4vp(_ context.Context, uri string) error {
-	s.gotOid4vpUri = &uri
+	s.gotOid4vpURI = &uri
 	return s.err
 }
 
@@ -139,6 +140,54 @@ func (s *stubWallet) SetDefaultKey(_ context.Context, didID, keyID string) error
 	s.gotBinding = &binding{op: "default", did: didID, key: keyID}
 
 	return s.err
+}
+
+func (s *stubWallet) RotateKey(_ context.Context, _ string, _ time.Duration) error { return s.err }
+func (s *stubWallet) RevokeKey(_ context.Context, _ string) error                  { return s.err }
+func (s *stubWallet) PublishDid(_ context.Context, _ string) error                 { return s.err }
+func (s *stubWallet) UnpublishDid(_ context.Context, _ string) error               { return s.err }
+func (s *stubWallet) GetDidState(_ context.Context, _ string) (wallet.DidState, error) {
+	return wallet.DidState{}, s.err
+}
+
+func (s *stubWallet) AddServiceEndpoint(_ context.Context, _ string, _ wallet.ServiceEndpointPlan) error {
+	return s.err
+}
+
+func (s *stubWallet) RemoveServiceEndpoint(_ context.Context, _ string, _ string) error {
+	return s.err
+}
+
+func (s *stubWallet) StoreCredential(_ context.Context, _ *wallet.CredentialImportPlan) error {
+	return s.err
+}
+
+func (s *stubWallet) GetCredentialsByType(_ context.Context, _ string) ([]wallet.Credential, error) {
+	return s.credentials, s.err
+}
+
+func (s *stubWallet) RequestDcpCredential(_ context.Context, _ *wallet.DcpCredentialRequestPlan) (string, error) {
+	return "req-1", s.err
+}
+
+func (s *stubWallet) GetDcpRequestStatus(_ context.Context, _ string) (wallet.DcpRequestStatus, error) {
+	return wallet.DcpRequestStatus{Status: "COMPLETED"}, s.err
+}
+
+func (s *stubWallet) CreateParticipant(_ context.Context, _ *wallet.ParticipantPlan) error {
+	return s.err
+}
+
+func (s *stubWallet) GetParticipant(_ context.Context, id string) (wallet.Participant, error) {
+	return wallet.Participant{ID: id}, s.err
+}
+
+func (s *stubWallet) SetParticipantState(_ context.Context, _ string, _ bool) error {
+	return s.err
+}
+
+func (s *stubWallet) RegenerateParticipantToken(_ context.Context, _ string) (string, error) {
+	return "new-token", s.err
 }
 
 // binding records which verification-method mutation the port saw, and with
@@ -797,8 +846,8 @@ func TestProcessOid4vci(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if stub.gotOid4vciUri == nil || *stub.gotOid4vciUri != uri {
-		t.Errorf("got uri %v, want %s", stub.gotOid4vciUri, uri)
+	if stub.gotOid4vciURI == nil || *stub.gotOid4vciURI != uri {
+		t.Errorf("got uri %v, want %s", stub.gotOid4vciURI, uri)
 	}
 }
 
@@ -834,8 +883,8 @@ func TestProcessOid4vp(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if stub.gotOid4vpUri == nil || *stub.gotOid4vpUri != uri {
-		t.Errorf("got uri %v, want %s", stub.gotOid4vpUri, uri)
+	if stub.gotOid4vpURI == nil || *stub.gotOid4vpURI != uri {
+		t.Errorf("got uri %v, want %s", stub.gotOid4vpURI, uri)
 	}
 }
 
