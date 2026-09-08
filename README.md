@@ -19,7 +19,7 @@
 [![task](https://img.shields.io/badge/task-runner-29BEB0?logo=task&logoColor=white)](Taskfile.yaml)
 [![adr](https://img.shields.io/badge/decisions-ADR-informational)](https://caparicio-esd.github.io/alexandria/docs/adr)
 
-> 📖 **Full Documentation Portal:** Comprehensive guides, architecture diagrams, API specs, and Architecture Decision Records (ADRs) are published at **[caparicio-esd.github.io/alexandria](https://caparicio-esd.github.io/alexandria/)**.
+> 📖 **Full Documentation Portal:** Comprehensive guides, architecture diagrams, API specs, and Architecture Decision Records (ADRs) are published at **[caparicio-esd.github.io/alexandria](https://ging.github.io/alexandria/)**.
 
 ---
 
