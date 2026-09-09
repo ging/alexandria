@@ -146,8 +146,16 @@ type KeyPairDto struct {
 	ParticipantContextID string            `json:"participantContextId"`
 	State                StateString       `json:"state"`
 	Timestamp            EpochMillis       `json:"timestamp"`
+	CreatedAt            EpochMillis       `json:"createdAt,omitempty"`
 	KeyContext           *string           `json:"keyContext,omitempty"`
 	Descriptor           *KeyDescriptorDto `json:"descriptor,omitempty"`
+	SerializedPublicKey  string            `json:"serializedPublicKey,omitempty"`
+	PrivateKeyAlias      string            `json:"privateKeyAlias,omitempty"`
+	DefaultPair          bool              `json:"defaultPair,omitempty"`
+	Usage                []string          `json:"usage,omitempty"`
+	GroupName            *string           `json:"groupName,omitempty"`
+	UseDuration          int64             `json:"useDuration,omitempty"`
+	RotationDuration     int64             `json:"rotationDuration,omitempty"`
 }
 
 // DidDocumentPublishDto contains DID document details for publication.

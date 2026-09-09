@@ -4,6 +4,7 @@ package identityhub
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -248,10 +249,10 @@ func (c *Client) UnpublishDid(ctx context.Context, pid string, did string) error
 
 // GetDidState queries the publication state for a DID.
 func (c *Client) GetDidState(ctx context.Context, pid string, did string) (*DidStateDto, error) {
-	path := fmt.Sprintf("/participants/%s/dids/state?did=%s", url.PathEscape(pid), url.QueryEscape(did))
-	var out DidStateDto
+	path := fmt.Sprintf("/participants/%s/dids/state", url.PathEscape(pid))
+	req := DidDocumentPublishDto{Did: did}
 
-	res, err := c.http.R().SetContext(ctx).SetResult(&out).Get(path)
+	res, err := c.http.R().SetContext(ctx).SetBody(req).Post(path)
 	if err != nil {
 		return nil, fmt.Errorf("identityhub: calling %s: %w", path, err)
 	}
@@ -261,12 +262,44 @@ func (c *Client) GetDidState(ctx context.Context, pid string, did string) (*DidS
 		return nil, statusError(res.StatusCode(), path, res.Bytes())
 	}
 
-	return &out, nil
+	var out DidStateDto
+	if err := json.Unmarshal(res.Bytes(), &out); err == nil && out.State != "" {
+		if out.Did == "" {
+			out.Did = did
+		}
+		return &out, nil
+	}
+
+	stateStr := strings.Trim(strings.TrimSpace(string(res.Bytes())), "\"")
+
+	return &DidStateDto{
+		Did:   did,
+		State: DidStateString(stateStr),
+	}, nil
+}
+
+// QueryDids queries all DID documents for a participant context.
+func (c *Client) QueryDids(ctx context.Context, pid string) ([]json.RawMessage, error) {
+	path := fmt.Sprintf("/participants/%s/dids/query", url.PathEscape(pid))
+	var out []json.RawMessage
+
+	res, err := c.http.R().SetContext(ctx).SetBody(map[string]any{}).SetResult(&out).Post(path)
+	if err != nil {
+		return nil, fmt.Errorf("identityhub: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.IsStatusFailure() {
+		return nil, statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	return out, nil
 }
 
 // AddServiceEndpoint binds a service endpoint to a participant's DID.
-func (c *Client) AddServiceEndpoint(ctx context.Context, pid string, endpoint *ServiceEndpointDto) error {
-	path := fmt.Sprintf("/participants/%s/dids/endpoints", url.PathEscape(pid))
+func (c *Client) AddServiceEndpoint(ctx context.Context, pid string, did string, endpoint *ServiceEndpointDto) error {
+	encodedDid := base64.RawURLEncoding.EncodeToString([]byte(did))
+	path := fmt.Sprintf("/participants/%s/dids/%s/endpoints", url.PathEscape(pid), encodedDid)
 
 	res, err := c.http.R().SetContext(ctx).SetBody(endpoint).Post(path)
 	if err != nil {
@@ -282,8 +315,9 @@ func (c *Client) AddServiceEndpoint(ctx context.Context, pid string, endpoint *S
 }
 
 // RemoveServiceEndpoint deletes a service endpoint from a participant's DID.
-func (c *Client) RemoveServiceEndpoint(ctx context.Context, pid string, endpointID string) error {
-	path := fmt.Sprintf("/participants/%s/dids/endpoints/%s", url.PathEscape(pid), url.PathEscape(endpointID))
+func (c *Client) RemoveServiceEndpoint(ctx context.Context, pid string, did string, endpointID string) error {
+	encodedDid := base64.RawURLEncoding.EncodeToString([]byte(did))
+	path := fmt.Sprintf("/participants/%s/dids/%s/endpoints/%s", url.PathEscape(pid), encodedDid, url.PathEscape(endpointID))
 
 	res, err := c.http.R().SetContext(ctx).Delete(path)
 	if err != nil {
@@ -405,5 +439,5 @@ func statusError(status int, path string, body []byte) error {
 		sentinel = errors.New("unexpected status")
 	}
 
-	return fmt.Errorf("identityhub: %s returned %d: %s: %w", path, status, body, sentinel)
+	return common.NewUpstreamError("IdentityHub", status, path, body, sentinel)
 }

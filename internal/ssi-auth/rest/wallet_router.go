@@ -113,17 +113,18 @@ func (r *WalletRouter) registerKey(c *gin.Context) {
 		return
 	}
 
-	if err := r.holder.RegisterKey(
+	key, err := r.holder.RegisterKey(
 		c.Request.Context(),
 		registerKeyReq.Pem,
 		&registerKeyReq.Alias,
 		registerKeyReq.ID,
-	); err != nil {
+	)
+	if err != nil {
 		respondError(c, err)
 		return
 	}
 
-	c.Status(http.StatusCreated)
+	c.JSON(http.StatusCreated, newKeyResp(key))
 }
 
 func (r *WalletRouter) deleteKey(c *gin.Context) {
@@ -165,7 +166,7 @@ func (r *WalletRouter) registerDid(c *gin.Context) {
 		return
 	}
 
-	err = r.holder.RegisterDid(
+	did, err := r.holder.RegisterDid(
 		c.Request.Context(),
 		builder,
 		req.Keys,
@@ -177,7 +178,7 @@ func (r *WalletRouter) registerDid(c *gin.Context) {
 		return
 	}
 
-	c.Status(http.StatusCreated)
+	c.JSON(http.StatusCreated, newDidResp(did))
 }
 
 func (r *WalletRouter) getWalletDid(c *gin.Context) {
@@ -239,48 +240,48 @@ func (r *WalletRouter) deleteDid(c *gin.Context) {
 // setDefaultDid promotes a DID to be the wallet active identity.
 func (r *WalletRouter) setDefaultDid(c *gin.Context) {
 	didID := c.Params.ByName("id")
-	err := r.holder.SetDefaultDid(c, didID)
+	did, err := r.holder.SetDefaultDid(c, didID)
 	if err != nil {
 		respondError(c, err)
 		return
 	}
-	c.Status(http.StatusAccepted)
+	c.JSON(http.StatusOK, newDidResp(did))
 }
 
 // addKeyToDid binds a key into the verification methods of a DID.
 func (r *WalletRouter) addKeyToDid(c *gin.Context) {
 	didID := c.Params.ByName("id")
 	keyID := c.Params.ByName("key_id")
-	err := r.holder.AddKeyToDid(c, didID, keyID)
+	did, err := r.holder.AddKeyToDid(c, didID, keyID)
 	if err != nil {
 		respondError(c, err)
 		return
 	}
-	c.Status(http.StatusCreated)
+	c.JSON(http.StatusOK, newDidResp(did))
 }
 
 // removeKeyFromDid unbinds a key from the verification methods of a DID.
 func (r *WalletRouter) removeKeyFromDid(c *gin.Context) {
 	didID := c.Params.ByName("id")
 	keyID := c.Params.ByName("key_id")
-	err := r.holder.RemoveKeyFromDid(c, didID, keyID)
+	did, err := r.holder.RemoveKeyFromDid(c, didID, keyID)
 	if err != nil {
 		respondError(c, err)
 		return
 	}
-	c.Status(http.StatusAccepted)
+	c.JSON(http.StatusOK, newDidResp(did))
 }
 
 // setDefaultKey promotes a key to be the default verification method of a DID.
 func (r *WalletRouter) setDefaultKey(c *gin.Context) {
 	didID := c.Params.ByName("id")
 	keyID := c.Params.ByName("key_id")
-	err := r.holder.SetDefaultKey(c, didID, keyID)
+	did, err := r.holder.SetDefaultKey(c, didID, keyID)
 	if err != nil {
 		respondError(c, err)
 		return
 	}
-	c.Status(http.StatusAccepted)
+	c.JSON(http.StatusOK, newDidResp(did))
 }
 
 func (r *WalletRouter) deleteCredential(c *gin.Context) {
@@ -368,12 +369,13 @@ func (r *WalletRouter) rotateKey(c *gin.Context) {
 		duration = d
 	}
 
-	if err := r.holder.RotateKey(c.Request.Context(), keyID, duration); err != nil {
+	key, err := r.holder.RotateKey(c.Request.Context(), keyID, duration)
+	if err != nil {
 		respondError(c, err)
 		return
 	}
 
-	c.Status(http.StatusAccepted)
+	c.JSON(http.StatusOK, newKeyResp(key))
 }
 
 func (r *WalletRouter) revokeKey(c *gin.Context) {
@@ -388,22 +390,30 @@ func (r *WalletRouter) revokeKey(c *gin.Context) {
 
 func (r *WalletRouter) publishDid(c *gin.Context) {
 	didID := c.Params.ByName("id")
-	if err := r.holder.PublishDid(c.Request.Context(), didID); err != nil {
+	st, err := r.holder.PublishDid(c.Request.Context(), didID)
+	if err != nil {
 		respondError(c, err)
 		return
 	}
 
-	c.Status(http.StatusAccepted)
+	c.JSON(http.StatusOK, didStateResp{
+		Did:   st.Did,
+		State: string(st.State),
+	})
 }
 
 func (r *WalletRouter) unpublishDid(c *gin.Context) {
 	didID := c.Params.ByName("id")
-	if err := r.holder.UnpublishDid(c.Request.Context(), didID); err != nil {
+	st, err := r.holder.UnpublishDid(c.Request.Context(), didID)
+	if err != nil {
 		respondError(c, err)
 		return
 	}
 
-	c.Status(http.StatusAccepted)
+	c.JSON(http.StatusOK, didStateResp{
+		Did:   st.Did,
+		State: string(st.State),
+	})
 }
 
 func (r *WalletRouter) getDidState(c *gin.Context) {
@@ -428,7 +438,7 @@ func (r *WalletRouter) addServiceEndpoint(c *gin.Context) {
 		return
 	}
 
-	err := r.holder.AddServiceEndpoint(c.Request.Context(), didID, wallet.ServiceEndpointPlan{
+	did, err := r.holder.AddServiceEndpoint(c.Request.Context(), didID, wallet.ServiceEndpointPlan{
 		ID:   req.ID,
 		Type: req.Type,
 		URL:  req.URL,
@@ -438,18 +448,19 @@ func (r *WalletRouter) addServiceEndpoint(c *gin.Context) {
 		return
 	}
 
-	c.Status(http.StatusCreated)
+	c.JSON(http.StatusCreated, newDidResp(did))
 }
 
 func (r *WalletRouter) removeServiceEndpoint(c *gin.Context) {
 	didID := c.Params.ByName("id")
 	endpointID := c.Params.ByName("endpoint_id")
-	if err := r.holder.RemoveServiceEndpoint(c.Request.Context(), didID, endpointID); err != nil {
+	did, err := r.holder.RemoveServiceEndpoint(c.Request.Context(), didID, endpointID)
+	if err != nil {
 		respondError(c, err)
 		return
 	}
 
-	c.Status(http.StatusAccepted)
+	c.JSON(http.StatusOK, newDidResp(did))
 }
 
 func (r *WalletRouter) storeCredential(c *gin.Context) {
@@ -459,7 +470,7 @@ func (r *WalletRouter) storeCredential(c *gin.Context) {
 		return
 	}
 
-	err := r.holder.StoreCredential(c.Request.Context(), &wallet.CredentialImportPlan{
+	cred, err := r.holder.StoreCredential(c.Request.Context(), &wallet.CredentialImportPlan{
 		ID:      req.ID,
 		Format:  req.Format,
 		Payload: req.Payload,
@@ -469,7 +480,7 @@ func (r *WalletRouter) storeCredential(c *gin.Context) {
 		return
 	}
 
-	c.Status(http.StatusCreated)
+	c.JSON(http.StatusCreated, newCredentialResp(cred))
 }
 
 func (r *WalletRouter) requestDcpCredential(c *gin.Context) {
@@ -515,7 +526,7 @@ func (r *WalletRouter) createParticipant(c *gin.Context) {
 		return
 	}
 
-	err := r.holder.CreateParticipant(c.Request.Context(), &wallet.ParticipantPlan{
+	p, err := r.holder.CreateParticipant(c.Request.Context(), &wallet.ParticipantPlan{
 		ID:     req.ID,
 		Did:    req.Did,
 		Active: req.Active,
@@ -525,7 +536,7 @@ func (r *WalletRouter) createParticipant(c *gin.Context) {
 		return
 	}
 
-	c.Status(http.StatusCreated)
+	c.JSON(http.StatusCreated, newParticipantResp(p))
 }
 
 func (r *WalletRouter) getParticipant(c *gin.Context) {
@@ -547,12 +558,13 @@ func (r *WalletRouter) setParticipantState(c *gin.Context) {
 		return
 	}
 
-	if err := r.holder.SetParticipantState(c.Request.Context(), participantID, req.Active); err != nil {
+	p, err := r.holder.SetParticipantState(c.Request.Context(), participantID, req.Active)
+	if err != nil {
 		respondError(c, err)
 		return
 	}
 
-	c.Status(http.StatusAccepted)
+	c.JSON(http.StatusOK, newParticipantResp(p))
 }
 
 func (r *WalletRouter) regenerateParticipantToken(c *gin.Context) {

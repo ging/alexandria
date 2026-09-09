@@ -1,0 +1,9 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/ssi-auth/wallet/keys/key-1"
+method: DELETE
+auth:
+  type: inherit
+  credentials:
+    id: 0812cb1e-4ea1-4bd8-b892-0d22d8d0b103
+settings: {}
+order: 10000

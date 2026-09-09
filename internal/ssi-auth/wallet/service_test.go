@@ -68,10 +68,15 @@ func (s *stubWallet) Link(context.Context) (wallet.Did, error) {
 	return wallet.Did{}, errors.New("not used in this test")
 }
 
-func (s *stubWallet) RegisterKey(_ context.Context, plan *wallet.KeyPlan) error {
+func (s *stubWallet) RegisterKey(_ context.Context, plan *wallet.KeyPlan) (wallet.Key, error) {
 	s.gotPlan = plan
-
-	return s.err
+	if s.err != nil {
+		return wallet.Key{}, s.err
+	}
+	if plan != nil {
+		return wallet.Key{ID: plan.ID, Alias: plan.Alias}, nil
+	}
+	return wallet.Key{}, nil
 }
 
 func (s *stubWallet) GetAllKeys(context.Context) ([]wallet.Key, error) {
@@ -94,10 +99,15 @@ func (s *stubWallet) DeleteDid(_ context.Context, didID string) error {
 	return s.err
 }
 
-func (s *stubWallet) RegisterDid(_ context.Context, plan *wallet.DidPlan) error {
+func (s *stubWallet) RegisterDid(_ context.Context, plan *wallet.DidPlan) (wallet.Did, error) {
 	s.gotDidPlan = plan
-
-	return s.err
+	if s.err != nil {
+		return wallet.Did{}, s.err
+	}
+	if plan != nil {
+		return wallet.Did{Alias: plan.Alias}, nil
+	}
+	return wallet.Did{}, nil
 }
 
 func (s *stubWallet) GetAllDids(context.Context) ([]wallet.Did, error) {
@@ -118,48 +128,64 @@ func (s *stubWallet) GetDidByID(_ context.Context, didID string) (wallet.Did, er
 	return s.did, nil
 }
 
-func (s *stubWallet) SetDefaultDid(_ context.Context, didID string) error {
+func (s *stubWallet) SetDefaultDid(_ context.Context, didID string) (wallet.Did, error) {
 	s.gotDefaultDid = &didID
-
-	return s.err
+	if s.err != nil {
+		return wallet.Did{}, s.err
+	}
+	return s.did, nil
 }
 
-func (s *stubWallet) AddKeyToDid(_ context.Context, didID, keyID string) error {
+func (s *stubWallet) AddKeyToDid(_ context.Context, didID, keyID string) (wallet.Did, error) {
 	s.gotBinding = &binding{op: "add", did: didID, key: keyID}
-
-	return s.err
+	if s.err != nil {
+		return wallet.Did{}, s.err
+	}
+	return s.did, nil
 }
 
-func (s *stubWallet) RemoveKeyFromDid(_ context.Context, didID, keyID string) error {
+func (s *stubWallet) RemoveKeyFromDid(_ context.Context, didID, keyID string) (wallet.Did, error) {
 	s.gotBinding = &binding{op: "remove", did: didID, key: keyID}
-
-	return s.err
+	if s.err != nil {
+		return wallet.Did{}, s.err
+	}
+	return s.did, nil
 }
 
-func (s *stubWallet) SetDefaultKey(_ context.Context, didID, keyID string) error {
+func (s *stubWallet) SetDefaultKey(_ context.Context, didID, keyID string) (wallet.Did, error) {
 	s.gotBinding = &binding{op: "default", did: didID, key: keyID}
-
-	return s.err
+	if s.err != nil {
+		return wallet.Did{}, s.err
+	}
+	return s.did, nil
 }
 
-func (s *stubWallet) RotateKey(_ context.Context, _ string, _ time.Duration) error { return s.err }
-func (s *stubWallet) RevokeKey(_ context.Context, _ string) error                  { return s.err }
-func (s *stubWallet) PublishDid(_ context.Context, _ string) error                 { return s.err }
-func (s *stubWallet) UnpublishDid(_ context.Context, _ string) error               { return s.err }
+func (s *stubWallet) RotateKey(_ context.Context, keyID string, _ time.Duration) (wallet.Key, error) {
+	return wallet.Key{ID: keyID}, s.err
+}
+func (s *stubWallet) RevokeKey(_ context.Context, _ string) error { return s.err }
+func (s *stubWallet) PublishDid(_ context.Context, _ string) (wallet.DidState, error) {
+	return wallet.DidState{State: "PUBLISHED"}, s.err
+}
+
+func (s *stubWallet) UnpublishDid(_ context.Context, _ string) (wallet.DidState, error) {
+	return wallet.DidState{State: "UNPUBLISHED"}, s.err
+}
+
 func (s *stubWallet) GetDidState(_ context.Context, _ string) (wallet.DidState, error) {
 	return wallet.DidState{}, s.err
 }
 
-func (s *stubWallet) AddServiceEndpoint(_ context.Context, _ string, _ wallet.ServiceEndpointPlan) error {
-	return s.err
+func (s *stubWallet) AddServiceEndpoint(_ context.Context, _ string, _ wallet.ServiceEndpointPlan) (wallet.Did, error) {
+	return s.did, s.err
 }
 
-func (s *stubWallet) RemoveServiceEndpoint(_ context.Context, _ string, _ string) error {
-	return s.err
+func (s *stubWallet) RemoveServiceEndpoint(_ context.Context, _ string, _ string) (wallet.Did, error) {
+	return s.did, s.err
 }
 
-func (s *stubWallet) StoreCredential(_ context.Context, _ *wallet.CredentialImportPlan) error {
-	return s.err
+func (s *stubWallet) StoreCredential(_ context.Context, _ *wallet.CredentialImportPlan) (wallet.Credential, error) {
+	return wallet.Credential{ID: "cred-1"}, s.err
 }
 
 func (s *stubWallet) GetCredentialsByType(_ context.Context, _ string) ([]wallet.Credential, error) {
@@ -174,16 +200,19 @@ func (s *stubWallet) GetDcpRequestStatus(_ context.Context, _ string) (wallet.Dc
 	return wallet.DcpRequestStatus{Status: "COMPLETED"}, s.err
 }
 
-func (s *stubWallet) CreateParticipant(_ context.Context, _ *wallet.ParticipantPlan) error {
-	return s.err
+func (s *stubWallet) CreateParticipant(_ context.Context, plan *wallet.ParticipantPlan) (wallet.Participant, error) {
+	if plan != nil {
+		return wallet.Participant{ID: plan.ID}, s.err
+	}
+	return wallet.Participant{ID: "p-1"}, s.err
 }
 
 func (s *stubWallet) GetParticipant(_ context.Context, id string) (wallet.Participant, error) {
 	return wallet.Participant{ID: id}, s.err
 }
 
-func (s *stubWallet) SetParticipantState(_ context.Context, _ string, _ bool) error {
-	return s.err
+func (s *stubWallet) SetParticipantState(_ context.Context, id string, active bool) (wallet.Participant, error) {
+	return wallet.Participant{ID: id, Active: active}, s.err
 }
 
 func (s *stubWallet) RegenerateParticipantToken(_ context.Context, _ string) (string, error) {
@@ -238,7 +267,7 @@ func TestRegisterKeyMintsAPlan(t *testing.T) {
 	inspector := usableKey(thumbprint)
 	svc := wallet.NewService(stub, inspector, nil, nil)
 
-	if err := svc.RegisterKey(t.Context(), testPem, &alias, nil); err != nil {
+	if _, err := svc.RegisterKey(t.Context(), testPem, &alias, nil); err != nil {
 		t.Fatalf("RegisterKey: %v", err)
 	}
 
@@ -283,13 +312,13 @@ func TestRegisterKeyIsIdempotentInItsID(t *testing.T) {
 	stub := &stubWallet{}
 	svc := wallet.NewService(stub, usableKey("same-key"), nil, nil)
 
-	if err := svc.RegisterKey(t.Context(), testPem, nil, nil); err != nil {
+	if _, err := svc.RegisterKey(t.Context(), testPem, nil, nil); err != nil {
 		t.Fatalf("first RegisterKey: %v", err)
 	}
 
 	first := stub.gotPlan.ID
 
-	if err := svc.RegisterKey(t.Context(), testPem, nil, nil); err != nil {
+	if _, err := svc.RegisterKey(t.Context(), testPem, nil, nil); err != nil {
 		t.Fatalf("second RegisterKey: %v", err)
 	}
 
@@ -306,14 +335,14 @@ func TestRegisterKeyDistinguishesKeys(t *testing.T) {
 	stub := &stubWallet{}
 
 	svc := wallet.NewService(stub, usableKey("first-key"), nil, nil)
-	if err := svc.RegisterKey(t.Context(), testPem, nil, nil); err != nil {
+	if _, err := svc.RegisterKey(t.Context(), testPem, nil, nil); err != nil {
 		t.Fatalf("first RegisterKey: %v", err)
 	}
 
 	first := stub.gotPlan.ID
 
 	svc = wallet.NewService(stub, usableKey("second-key"), nil, nil)
-	if err := svc.RegisterKey(t.Context(), testPem, nil, nil); err != nil {
+	if _, err := svc.RegisterKey(t.Context(), testPem, nil, nil); err != nil {
 		t.Fatalf("second RegisterKey: %v", err)
 	}
 
@@ -332,7 +361,7 @@ func TestRegisterKeyRejectsUnreadableMaterial(t *testing.T) {
 	stub := &stubWallet{}
 	svc := wallet.NewService(stub, &stubKeys{err: errors.New(reason)}, nil, nil)
 
-	err := svc.RegisterKey(t.Context(), "not a pem", nil, nil)
+	_, err := svc.RegisterKey(t.Context(), "not a pem", nil, nil)
 	if !errors.Is(err, common.ErrInvalidInput) {
 		t.Fatalf("error = %v, want it to match %v", err, common.ErrInvalidInput)
 	}
@@ -367,7 +396,7 @@ func TestRegisterKeyRejectsAPublicKey(t *testing.T) {
 
 	svc := wallet.NewService(stub, inspector, nil, nil)
 
-	err := svc.RegisterKey(t.Context(), testPem, nil, nil)
+	_, err := svc.RegisterKey(t.Context(), testPem, nil, nil)
 	if !errors.Is(err, common.ErrInvalidInput) {
 		t.Fatalf("error = %v, want it to match %v", err, common.ErrInvalidInput)
 	}
@@ -385,7 +414,7 @@ func TestRegisterKeyWithoutAlias(t *testing.T) {
 	stub := &stubWallet{}
 	svc := wallet.NewService(stub, usableKey("no-alias"), nil, nil)
 
-	if err := svc.RegisterKey(t.Context(), testPem, nil, nil); err != nil {
+	if _, err := svc.RegisterKey(t.Context(), testPem, nil, nil); err != nil {
 		t.Fatalf("RegisterKey: %v", err)
 	}
 
@@ -402,7 +431,7 @@ func TestRegisterKeyWrapsWalletErrors(t *testing.T) {
 	stub := &stubWallet{err: common.ErrConflict}
 	svc := wallet.NewService(stub, usableKey("conflicting"), nil, nil)
 
-	err := svc.RegisterKey(t.Context(), testPem, nil, nil)
+	_, err := svc.RegisterKey(t.Context(), testPem, nil, nil)
 	if !errors.Is(err, common.ErrConflict) {
 		t.Errorf("error = %v, want it to match %v", err, common.ErrConflict)
 	}
@@ -684,7 +713,7 @@ func TestSetDefaultDidForwardsTheIdentifier(t *testing.T) {
 	stub := &stubWallet{}
 	svc := wallet.NewService(stub, usableKey("unused"), nil, nil)
 
-	if err := svc.SetDefaultDid(t.Context(), didID); err != nil {
+	if _, err := svc.SetDefaultDid(t.Context(), didID); err != nil {
 		t.Fatalf("SetDefaultDid: %v", err)
 	}
 
@@ -708,9 +737,18 @@ func TestKeyBindingsForwardBothIdentifiers(t *testing.T) {
 	)
 
 	calls := map[string]func(*wallet.Service) error{
-		"add":     func(s *wallet.Service) error { return s.AddKeyToDid(t.Context(), didID, keyID) },
-		"remove":  func(s *wallet.Service) error { return s.RemoveKeyFromDid(t.Context(), didID, keyID) },
-		"default": func(s *wallet.Service) error { return s.SetDefaultKey(t.Context(), didID, keyID) },
+		"add": func(s *wallet.Service) error {
+			_, err := s.AddKeyToDid(t.Context(), didID, keyID)
+			return err
+		},
+		"remove": func(s *wallet.Service) error {
+			_, err := s.RemoveKeyFromDid(t.Context(), didID, keyID)
+			return err
+		},
+		"default": func(s *wallet.Service) error {
+			_, err := s.SetDefaultKey(t.Context(), didID, keyID)
+			return err
+		},
 	}
 
 	for op, call := range calls {
@@ -744,16 +782,20 @@ func TestDidMutationsWrapWalletErrors(t *testing.T) {
 
 	calls := map[string]func(*wallet.Service) error{
 		"set default did": func(s *wallet.Service) error {
-			return s.SetDefaultDid(t.Context(), "did:web:missing")
+			_, err := s.SetDefaultDid(t.Context(), "did:web:missing")
+			return err
 		},
 		"add key to did": func(s *wallet.Service) error {
-			return s.AddKeyToDid(t.Context(), "did:web:missing", "missing.json")
+			_, err := s.AddKeyToDid(t.Context(), "did:web:missing", "missing.json")
+			return err
 		},
 		"remove key from did": func(s *wallet.Service) error {
-			return s.RemoveKeyFromDid(t.Context(), "did:web:missing", "missing.json")
+			_, err := s.RemoveKeyFromDid(t.Context(), "did:web:missing", "missing.json")
+			return err
 		},
 		"set default key": func(s *wallet.Service) error {
-			return s.SetDefaultKey(t.Context(), "did:web:missing", "missing.json")
+			_, err := s.SetDefaultKey(t.Context(), "did:web:missing", "missing.json")
+			return err
 		},
 	}
 

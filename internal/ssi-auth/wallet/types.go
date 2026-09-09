@@ -56,12 +56,17 @@ type DidPlan struct {
 
 // Key is a keypair registered in the wallet.
 type Key struct {
-	ID        string
-	Alias     string
-	Kty       string
-	Crv       *string
-	State     string
-	CreatedAt time.Time
+	ID                  string
+	Alias               string
+	Kty                 string
+	Crv                 *string
+	State               string
+	CreatedAt           time.Time
+	SerializedPublicKey *string
+	KeyContext          *string
+	Usage               []string
+	DefaultPair         *bool
+	PrivateKeyAlias     *string
 }
 
 // KeyDescriptor describes an external or structured key reference.
@@ -116,15 +121,21 @@ type WalletInfo struct {
 
 // Credential is a Verifiable Credential stored in the wallet.
 type Credential struct {
-	ID             string
-	VcBody         json.RawMessage
-	VcType         string
-	VcFormat       string
-	HolderDid      string
-	IssuerDid      string
-	ParsedDocument json.RawMessage
-	ValidUntil     *time.Time
-	AddedOn        time.Time
+	ID                   string
+	RawVc                string
+	Format               string
+	Credential           json.RawMessage
+	VcBody               json.RawMessage
+	VcType               string
+	VcFormat             string
+	Types                []string
+	HolderDid            string
+	IssuerDid            string
+	ParsedDocument       json.RawMessage
+	ParticipantContextID *string
+	ValidUntil           *time.Time
+	IssuanceDate         *time.Time
+	AddedOn              time.Time
 }
 
 // ==== EXTENDED DID & SERVICE TYPES ===========================================

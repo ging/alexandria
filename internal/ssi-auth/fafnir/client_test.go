@@ -38,13 +38,22 @@ func TestRegisterKeyCall(t *testing.T) {
 	)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotMethod, gotPath = r.Method, r.URL.Path
+		if r.Method == http.MethodPost {
+			gotMethod, gotPath = r.Method, r.URL.Path
 
-		raw, _ := io.ReadAll(r.Body)
-		_ = json.Unmarshal(raw, &gotBody)
+			raw, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(raw, &gotBody)
 
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, keyRecord)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, keyRecord)
+			return
+		}
+		if r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, "["+keyRecord+"]")
+			return
+		}
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	}))
 	defer srv.Close()
 
@@ -60,7 +69,7 @@ func TestRegisterKeyCall(t *testing.T) {
 		Pem:   "-----BEGIN PRIVATE KEY-----\nMC4=\n-----END PRIVATE KEY-----\n",
 	}
 
-	if err := adapter.RegisterKey(t.Context(), plan); err != nil {
+	if _, err := adapter.RegisterKey(t.Context(), plan); err != nil {
 		t.Fatalf("RegisterKey: %v", err)
 	}
 
@@ -115,7 +124,7 @@ func TestRegisterKeyStatusErrors(t *testing.T) {
 			}
 			defer func() { _ = adapter.Close() }()
 
-			err = adapter.RegisterKey(t.Context(), &wallet.KeyPlan{ID: "a.json"})
+			_, err = adapter.RegisterKey(t.Context(), &wallet.KeyPlan{ID: "a.json"})
 			if err == nil {
 				t.Fatalf("status %d: expected an error", tc.status)
 			}
@@ -143,7 +152,7 @@ func TestRegisterKeyRejectsNilPlan(t *testing.T) {
 	}
 	defer func() { _ = adapter.Close() }()
 
-	if err := adapter.RegisterKey(t.Context(), nil); !errors.Is(err, common.ErrInvalidInput) {
+	if _, err := adapter.RegisterKey(t.Context(), nil); !errors.Is(err, common.ErrInvalidInput) {
 		t.Errorf("error = %v, want it to match %v", err, common.ErrInvalidInput)
 	}
 }
@@ -682,28 +691,32 @@ var didMutations = map[string]struct {
 }{
 	"set default did": {
 		call: func(t *testing.T, a *fafnir.Adapter) error {
-			return a.SetDefaultDid(t.Context(), "did:web:alexandria.upm.es")
+			_, err := a.SetDefaultDid(t.Context(), "did:web:alexandria.upm.es")
+			return err
 		},
 		method: http.MethodPost,
 		path:   "/dids/default/did:web:alexandria.upm.es",
 	},
 	"add key to did": {
 		call: func(t *testing.T, a *fafnir.Adapter) error {
-			return a.AddKeyToDid(t.Context(), "did:web:alexandria.upm.es", "key.json")
+			_, err := a.AddKeyToDid(t.Context(), "did:web:alexandria.upm.es", "key.json")
+			return err
 		},
 		method: http.MethodPost,
 		path:   "/dids/did:web:alexandria.upm.es/key/key.json",
 	},
 	"remove key from did": {
 		call: func(t *testing.T, a *fafnir.Adapter) error {
-			return a.RemoveKeyFromDid(t.Context(), "did:web:alexandria.upm.es", "key.json")
+			_, err := a.RemoveKeyFromDid(t.Context(), "did:web:alexandria.upm.es", "key.json")
+			return err
 		},
 		method: http.MethodDelete,
 		path:   "/dids/did:web:alexandria.upm.es/key/key.json",
 	},
 	"set default key": {
 		call: func(t *testing.T, a *fafnir.Adapter) error {
-			return a.SetDefaultKey(t.Context(), "did:web:alexandria.upm.es", "key.json")
+			_, err := a.SetDefaultKey(t.Context(), "did:web:alexandria.upm.es", "key.json")
+			return err
 		},
 		method: http.MethodPost,
 		path:   "/dids/did:web:alexandria.upm.es/key/default/key.json",
@@ -724,9 +737,17 @@ func TestDidMutationCalls(t *testing.T) {
 			)
 
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				gotMethod, gotPath = r.Method, r.URL.Path
-
-				w.WriteHeader(http.StatusNoContent)
+				if r.Method == tc.method {
+					gotMethod, gotPath = r.Method, r.URL.Path
+					w.WriteHeader(http.StatusNoContent)
+					return
+				}
+				if r.Method == http.MethodGet {
+					w.Header().Set("Content-Type", "application/json")
+					_, _ = io.WriteString(w, didRecord)
+					return
+				}
+				w.WriteHeader(http.StatusMethodNotAllowed)
 			}))
 			defer srv.Close()
 

@@ -24,20 +24,36 @@ type mockWallet struct {
 	err                 error
 }
 
-func (m *mockWallet) Link(context.Context) (wallet.Did, error)           { return wallet.Did{}, nil }
-func (m *mockWallet) RegisterKey(context.Context, *wallet.KeyPlan) error { return nil }
-func (m *mockWallet) GetAllKeys(context.Context) ([]wallet.Key, error)   { return nil, nil }
-func (m *mockWallet) DeleteKey(context.Context, string) error            { return nil }
-func (m *mockWallet) RegisterDid(context.Context, *wallet.DidPlan) error { return nil }
-func (m *mockWallet) GetAllDids(context.Context) ([]wallet.Did, error)   { return nil, nil }
+func (m *mockWallet) Link(context.Context) (wallet.Did, error) { return wallet.Did{}, nil }
+func (m *mockWallet) RegisterKey(context.Context, *wallet.KeyPlan) (wallet.Key, error) {
+	return wallet.Key{}, m.err
+}
+func (m *mockWallet) GetAllKeys(context.Context) ([]wallet.Key, error) { return nil, nil }
+func (m *mockWallet) DeleteKey(context.Context, string) error          { return nil }
+func (m *mockWallet) RegisterDid(context.Context, *wallet.DidPlan) (wallet.Did, error) {
+	return wallet.Did{}, m.err
+}
+func (m *mockWallet) GetAllDids(context.Context) ([]wallet.Did, error) { return nil, nil }
 func (m *mockWallet) GetDidByID(context.Context, string) (wallet.Did, error) {
 	return wallet.Did{}, nil
 }
-func (m *mockWallet) DeleteDid(context.Context, string) error                { return nil }
-func (m *mockWallet) SetDefaultDid(context.Context, string) error            { return nil }
-func (m *mockWallet) AddKeyToDid(context.Context, string, string) error      { return nil }
-func (m *mockWallet) RemoveKeyFromDid(context.Context, string, string) error { return nil }
-func (m *mockWallet) SetDefaultKey(context.Context, string, string) error    { return nil }
+func (m *mockWallet) DeleteDid(context.Context, string) error { return nil }
+func (m *mockWallet) SetDefaultDid(context.Context, string) (wallet.Did, error) {
+	return wallet.Did{}, m.err
+}
+
+func (m *mockWallet) AddKeyToDid(context.Context, string, string) (wallet.Did, error) {
+	return wallet.Did{}, m.err
+}
+
+func (m *mockWallet) RemoveKeyFromDid(context.Context, string, string) (wallet.Did, error) {
+	return wallet.Did{}, m.err
+}
+
+func (m *mockWallet) SetDefaultKey(context.Context, string, string) (wallet.Did, error) {
+	return wallet.Did{}, m.err
+}
+
 func (m *mockWallet) WalletInfo(context.Context) (wallet.WalletInfo, error) {
 	return wallet.WalletInfo{}, nil
 }
@@ -61,20 +77,33 @@ func (m *mockWallet) ProcessOid4vci(_ context.Context, _ string) error {
 func (m *mockWallet) ProcessOid4vp(_ context.Context, _ string) error {
 	return m.err
 }
-func (m *mockWallet) RotateKey(context.Context, string, time.Duration) error { return m.err }
-func (m *mockWallet) RevokeKey(context.Context, string) error                { return m.err }
-func (m *mockWallet) PublishDid(context.Context, string) error               { return m.err }
-func (m *mockWallet) UnpublishDid(context.Context, string) error             { return m.err }
+
+func (m *mockWallet) RotateKey(context.Context, string, time.Duration) (wallet.Key, error) {
+	return wallet.Key{}, m.err
+}
+func (m *mockWallet) RevokeKey(context.Context, string) error { return m.err }
+func (m *mockWallet) PublishDid(context.Context, string) (wallet.DidState, error) {
+	return wallet.DidState{State: "PUBLISHED"}, m.err
+}
+
+func (m *mockWallet) UnpublishDid(context.Context, string) (wallet.DidState, error) {
+	return wallet.DidState{State: "UNPUBLISHED"}, m.err
+}
+
 func (m *mockWallet) GetDidState(context.Context, string) (wallet.DidState, error) {
 	return wallet.DidState{}, m.err
 }
 
-func (m *mockWallet) AddServiceEndpoint(context.Context, string, wallet.ServiceEndpointPlan) error {
-	return m.err
+func (m *mockWallet) AddServiceEndpoint(context.Context, string, wallet.ServiceEndpointPlan) (wallet.Did, error) {
+	return wallet.Did{}, m.err
 }
-func (m *mockWallet) RemoveServiceEndpoint(context.Context, string, string) error { return m.err }
-func (m *mockWallet) StoreCredential(context.Context, *wallet.CredentialImportPlan) error {
-	return m.err
+
+func (m *mockWallet) RemoveServiceEndpoint(context.Context, string, string) (wallet.Did, error) {
+	return wallet.Did{}, m.err
+}
+
+func (m *mockWallet) StoreCredential(context.Context, *wallet.CredentialImportPlan) (wallet.Credential, error) {
+	return wallet.Credential{ID: "c1"}, m.err
 }
 
 func (m *mockWallet) GetCredentialsByType(context.Context, string) ([]wallet.Credential, error) {
@@ -89,14 +118,18 @@ func (m *mockWallet) GetDcpRequestStatus(context.Context, string) (wallet.DcpReq
 	return wallet.DcpRequestStatus{Status: "COMPLETED"}, m.err
 }
 
-func (m *mockWallet) CreateParticipant(context.Context, *wallet.ParticipantPlan) error {
-	return m.err
+func (m *mockWallet) CreateParticipant(context.Context, *wallet.ParticipantPlan) (wallet.Participant, error) {
+	return wallet.Participant{ID: "pid1"}, m.err
 }
 
 func (m *mockWallet) GetParticipant(context.Context, string) (wallet.Participant, error) {
 	return wallet.Participant{}, m.err
 }
-func (m *mockWallet) SetParticipantState(context.Context, string, bool) error { return m.err }
+
+func (m *mockWallet) SetParticipantState(context.Context, string, bool) (wallet.Participant, error) {
+	return wallet.Participant{}, m.err
+}
+
 func (m *mockWallet) RegenerateParticipantToken(context.Context, string) (string, error) {
 	return "new-tok", m.err
 }
@@ -376,8 +409,8 @@ func TestIdentityHubEndpointsSuccess(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/wallet/keys/k1/rotate", strings.NewReader(`{"duration":"2h"}`))
 	engine.ServeHTTP(rec, req)
-	if rec.Code != http.StatusAccepted {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusAccepted)
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 
 	// Key revoke
@@ -392,15 +425,15 @@ func TestIdentityHubEndpointsSuccess(t *testing.T) {
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/wallet/did/did1/publish", nil)
 	engine.ServeHTTP(rec, req)
-	if rec.Code != http.StatusAccepted {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusAccepted)
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/wallet/did/did1/unpublish", nil)
 	engine.ServeHTTP(rec, req)
-	if rec.Code != http.StatusAccepted {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusAccepted)
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 
 	// Store credential

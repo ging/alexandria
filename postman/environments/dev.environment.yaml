@@ -8,4 +8,6 @@ values:
     value: ''
   - key: client-secret
     secret: true
+  - key: current-did
+    value: ''
 color: 120

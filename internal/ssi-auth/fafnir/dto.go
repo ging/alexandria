@@ -233,14 +233,39 @@ func (v vcResp) ToDomain() (wallet.Credential, error) {
 		return wallet.Credential{}, fmt.Errorf("fafnir: credential record carries no id: %w", common.ErrNotFound)
 	}
 
+	rawVc := string(v.VcBody)
+	var unquoted string
+	if err := json.Unmarshal(v.VcBody, &unquoted); err == nil && unquoted != "" {
+		rawVc = unquoted
+	}
+
+	format := v.VcFormat
+	if format == "" {
+		format = "VC1_0_JWT"
+	}
+
+	credDoc := v.ParsedDocument
+	if len(credDoc) == 0 {
+		credDoc = v.VcBody
+	}
+
+	var types []string
+	if v.VcType != "" {
+		types = []string{v.VcType}
+	}
+
 	return wallet.Credential{
 		ID:             v.ID,
+		RawVc:          rawVc,
+		Format:         format,
+		Credential:     credDoc,
 		VcBody:         v.VcBody,
 		VcType:         v.VcType,
-		VcFormat:       v.VcFormat,
+		VcFormat:       format,
+		Types:          types,
 		HolderDid:      v.HolderDid,
 		IssuerDid:      v.IssuerDid,
-		ParsedDocument: v.ParsedDocument,
+		ParsedDocument: credDoc,
 		ValidUntil:     v.ValidUntil,
 		AddedOn:        v.AddedOn,
 	}, nil

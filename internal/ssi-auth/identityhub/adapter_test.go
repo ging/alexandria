@@ -4,8 +4,10 @@ package identityhub_test
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,6 +17,7 @@ import (
 	"github.com/caparicio-esd/alexandria/internal/config"
 	"github.com/caparicio-esd/alexandria/internal/ssi-auth/identityhub"
 	"github.com/caparicio-esd/alexandria/internal/ssi-auth/wallet"
+	"github.com/trustbloc/did-go/doc/did"
 )
 
 func writeJSON(w http.ResponseWriter, v any) {
@@ -33,6 +36,16 @@ func TestAdapterOperations(t *testing.T) {
 		writeJSON(w, identityhub.ParticipantContextDto{
 			ParticipantContextID: "test-pid",
 			Did:                  "did:web:example.com",
+			State:                "ACTIVATED",
+			Roles:                []string{"admin"},
+			CreatedAt:            identityhub.EpochMillis(time.Now().UnixMilli()),
+		})
+	})
+
+	mux.HandleFunc("/participants/p-2", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, identityhub.ParticipantContextDto{
+			ParticipantContextID: "p-2",
+			Did:                  "did:web:p2",
 			State:                "ACTIVATED",
 			Roles:                []string{"admin"},
 			CreatedAt:            identityhub.EpochMillis(time.Now().UnixMilli()),
@@ -82,7 +95,31 @@ func TestAdapterOperations(t *testing.T) {
 		})
 	})
 
-	mux.HandleFunc("/participants/test-pid/dids/endpoints", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/participants/test-pid/dids/query", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, []any{
+			map[string]any{
+				"id":       "did:web:example.com",
+				"@context": []string{"https://www.w3.org/ns/did/v1"},
+				"verificationMethod": []any{
+					map[string]any{
+						"id":         "key-1",
+						"type":       "JsonWebKey2020",
+						"controller": "did:web:example.com",
+						"publicKeyJwk": map[string]any{
+							"kty": "RSA",
+							"e":   "AQAB",
+							"n":   "AQAB",
+						},
+					},
+				},
+				"authentication": []string{"key-1"},
+				"service":        []any{},
+			},
+		})
+	})
+
+	encodedTestDid := base64.RawURLEncoding.EncodeToString([]byte("did:web:example.com"))
+	mux.HandleFunc(fmt.Sprintf("/participants/test-pid/dids/%s/endpoints", encodedTestDid), func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
@@ -132,7 +169,7 @@ func TestAdapterOperations(t *testing.T) {
 		writeJSON(w, identityhub.TokenResponseDto{Token: "new-token-123"})
 	})
 
-	mux.HandleFunc("/participants/test-pid/dids/endpoints/ep-1", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc(fmt.Sprintf("/participants/test-pid/dids/%s/endpoints/ep-1", encodedTestDid), func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -190,10 +227,10 @@ func TestAdapterOperations(t *testing.T) {
 	if err != nil || len(keys) != 1 {
 		t.Fatalf("GetAllKeys failed: %v, len=%d", err, len(keys))
 	}
-	if err := adapter.RegisterKey(ctx, &wallet.KeyPlan{ID: "key-2", Pem: "mock"}); err != nil {
+	if _, err := adapter.RegisterKey(ctx, &wallet.KeyPlan{ID: "key-2", Pem: "mock"}); err != nil {
 		t.Errorf("RegisterKey failed: %v", err)
 	}
-	if err := adapter.RotateKey(ctx, "key-1", 10*time.Minute); err != nil {
+	if _, err := adapter.RotateKey(ctx, "key-1", 10*time.Minute); err != nil {
 		t.Errorf("RotateKey failed: %v", err)
 	}
 	if err := adapter.RevokeKey(ctx, "key-1"); err != nil {
@@ -201,20 +238,20 @@ func TestAdapterOperations(t *testing.T) {
 	}
 
 	// 3. DIDs
-	if err := adapter.PublishDid(ctx, "did:web:example.com"); err != nil {
+	if _, err := adapter.PublishDid(ctx, "did:web:example.com"); err != nil {
 		t.Errorf("PublishDid failed: %v", err)
 	}
 	st, err := adapter.GetDidState(ctx, "did:web:example.com")
 	if err != nil || st.State != wallet.DidStatePublished {
 		t.Errorf("GetDidState failed: %v, state=%s", err, st.State)
 	}
-	if err := adapter.AddServiceEndpoint(ctx, "did:web:example.com", wallet.ServiceEndpointPlan{ID: "ep-1", Type: "CredentialService", URL: "https://example.com/ep"}); err != nil {
+	if _, err := adapter.AddServiceEndpoint(ctx, "did:web:example.com", wallet.ServiceEndpointPlan{ID: "ep-1", Type: "CredentialService", URL: "https://example.com/ep"}); err != nil {
 		t.Errorf("AddServiceEndpoint failed: %v", err)
 	}
-	if err := adapter.RemoveServiceEndpoint(ctx, "did:web:example.com", "ep-1"); err != nil {
+	if _, err := adapter.RemoveServiceEndpoint(ctx, "did:web:example.com", "ep-1"); err != nil {
 		t.Errorf("RemoveServiceEndpoint failed: %v", err)
 	}
-	if err := adapter.UnpublishDid(ctx, "did:web:example.com"); err != nil {
+	if _, err := adapter.UnpublishDid(ctx, "did:web:example.com"); err != nil {
 		t.Errorf("UnpublishDid failed: %v", err)
 	}
 
@@ -227,7 +264,7 @@ func TestAdapterOperations(t *testing.T) {
 	if err != nil || len(byType) != 1 {
 		t.Errorf("GetCredentialsByType failed: %v", err)
 	}
-	if err := adapter.StoreCredential(ctx, &wallet.CredentialImportPlan{ID: "cred-2", Payload: []byte(`{}`)}); err != nil {
+	if _, err := adapter.StoreCredential(ctx, &wallet.CredentialImportPlan{ID: "cred-2", Payload: []byte(`{}`)}); err != nil {
 		t.Errorf("StoreCredential failed: %v", err)
 	}
 	if err := adapter.DeleteCredential(ctx, "cred-1"); err != nil {
@@ -235,14 +272,14 @@ func TestAdapterOperations(t *testing.T) {
 	}
 
 	// 5. Participants
-	if err := adapter.CreateParticipant(ctx, &wallet.ParticipantPlan{ID: "p-2", Did: "did:web:p2"}); err != nil {
+	if _, err := adapter.CreateParticipant(ctx, &wallet.ParticipantPlan{ID: "p-2", Did: "did:web:p2"}); err != nil {
 		t.Errorf("CreateParticipant failed: %v", err)
 	}
 	part, err := adapter.GetParticipant(ctx, "test-pid")
 	if err != nil || part.ID != "test-pid" {
 		t.Errorf("GetParticipant failed: %v", err)
 	}
-	if err := adapter.SetParticipantState(ctx, "test-pid", false); err != nil {
+	if _, err := adapter.SetParticipantState(ctx, "test-pid", false); err != nil {
 		t.Errorf("SetParticipantState failed: %v", err)
 	}
 	tok, err := adapter.RegenerateParticipantToken(ctx, "test-pid")
@@ -267,7 +304,16 @@ func TestAdapterOperations(t *testing.T) {
 	if err := adapter.ProcessOid4vp(ctx, "oid4vp://request"); !errors.Is(err, common.ErrNotImplementedInIdentityHub) {
 		t.Errorf("expected ErrNotImplementedInIdentityHub, got %v", err)
 	}
-	if err := adapter.SetDefaultDid(ctx, "did:web:default"); !errors.Is(err, common.ErrNotImplementedInIdentityHub) {
+	if _, err := adapter.SetDefaultDid(ctx, "did:web:default"); !errors.Is(err, common.ErrNotImplementedInIdentityHub) {
 		t.Errorf("expected ErrNotImplementedInIdentityHub, got %v", err)
 	}
+}
+
+func TestParseIdentityHubDoc(t *testing.T) {
+	raw := []byte(`{"id":"did:web:super-user","service":[],"verificationMethod":[{"id":"super-user-key","type":"JsonWebKey2020","controller":"did:web:super-user","publicKeyMultibase":null,"publicKeyJwk":{"kty":"OKP","crv":"Ed25519","kid":"super-user-key","x":"A3xPgplaUBuhjG2DZGSEVvVBUvyLkm4PAWKqk47aEEw"}}],"authentication":["super-user-key"],"capabilityInvocation":["super-user-key"],"@context":["https://www.w3.org/ns/did/v1"]}`)
+	doc, err := did.ParseDocument(raw)
+	if err != nil {
+		t.Fatalf("ParseDocument failed: %v", err)
+	}
+	t.Logf("Parsed doc ID: %s, verificationMethods: %d", doc.ID, len(doc.VerificationMethod))
 }

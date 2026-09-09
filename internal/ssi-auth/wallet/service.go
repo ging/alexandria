@@ -80,19 +80,7 @@ func (s *Service) IsLinked(_ context.Context) bool {
 
 // RegisterKey imports raw PEM key material and indexes it under an optional
 // alias, filed under the identifier the caller names.
-//
-// A nil id means the caller has no opinion, and the domain names the key after
-// its RFC 7638 thumbprint: the same keypair always lands on the same value, so
-// registering it twice is idempotent rather than duplicated. A caller that does
-// name it takes that guarantee off the table, which is its right — it is the one
-// that has to find the key again.
-//
-// The material is inspected before it travels: a wallet that accepts anything
-// fails later, at signing time, with an error that no longer points at the
-// request that caused it. What the inspection rejects is stated here rather
-// than in the adapter, because "a registered key must be able to sign" is a
-// rule of this domain, not a property of PEM.
-func (s *Service) RegisterKey(ctx context.Context, pem string, alias *string, id *string) error {
+func (s *Service) RegisterKey(ctx context.Context, pem string, alias *string, id *string) (Key, error) {
 	var a string
 	if alias != nil {
 		a = *alias
@@ -100,17 +88,17 @@ func (s *Service) RegisterKey(ctx context.Context, pem string, alias *string, id
 
 	pemDescriptor, err := s.pemInspector.Inspect(pem)
 	if err != nil {
-		return common.Invalid("pem", err.Error())
+		return Key{}, common.Invalid("pem", err.Error())
 	}
 
 	if !pemDescriptor.Private {
-		return common.Invalid("pem", "carries only a public key; the wallet has to be able to sign with it")
+		return Key{}, common.Invalid("pem", "carries only a public key; the wallet has to be able to sign with it")
 	}
 
 	keyID := fmt.Sprintf("%s.json", pemDescriptor.Thumbprint)
 	if id != nil {
 		if strings.TrimSpace(*id) == "" {
-			return common.Invalid("id", "is present but empty; omit it to have the key named after its thumbprint")
+			return Key{}, common.Invalid("id", "is present but empty; omit it to have the key named after its thumbprint")
 		}
 
 		keyID = *id
@@ -122,15 +110,16 @@ func (s *Service) RegisterKey(ctx context.Context, pem string, alias *string, id
 		Pem:   pem,
 	}
 
-	if err := s.wallet.RegisterKey(ctx, keyPlan); err != nil {
-		return fmt.Errorf("wallet reported error by key registering: %w", err)
+	key, err := s.wallet.RegisterKey(ctx, keyPlan)
+	if err != nil {
+		return Key{}, fmt.Errorf("wallet reported error by key registering: %w", err)
 	}
 
 	s.logger.InfoContext(ctx, "key registered",
 		"id", keyID, "kid", pemDescriptor.Thumbprint,
 		"kty", pemDescriptor.Kty, "alias", a)
 
-	return nil
+	return key, nil
 }
 
 // DeleteKey purges a key, provided no DID still references it.
@@ -161,18 +150,14 @@ func (s *Service) RegisterDid(
 	keys []string,
 	alias string,
 	services []common.DidService,
-) error {
+) (Did, error) {
 	if err := builder.Validate(); err != nil {
-		return fmt.Errorf("wallet reported error by did registering: %w", err)
-	}
-
-	if len(keys) == 0 {
-		return common.Invalid("keys", "is required: a did needs at least one key bound into it")
+		return Did{}, fmt.Errorf("wallet reported error by did registering: %w", err)
 	}
 
 	for _, k := range keys {
 		if strings.TrimSpace(k) == "" {
-			return common.Invalid("keys", "carries an empty key id")
+			return Did{}, common.Invalid("keys", "carries an empty key id")
 		}
 	}
 
@@ -183,15 +168,17 @@ func (s *Service) RegisterDid(
 		Service: &services,
 	}
 
-	err := s.wallet.RegisterDid(ctx, didPlan)
+	did, err := s.wallet.RegisterDid(ctx, didPlan)
 	if err != nil {
-		return fmt.Errorf("wallet reported error by did registering: %w", err)
+		return Did{}, fmt.Errorf("wallet reported error by did registering: %w", err)
 	}
 
-	s.logger.InfoContext(ctx, "did registered",
-		"method", builder.Method(), "keys", keys)
+	s.adopt(did)
 
-	return nil
+	s.logger.InfoContext(ctx, "did registered",
+		"method", builder.Method(), "keys", keys, "id", did.ID)
+
+	return did, nil
 }
 
 // Did resolves the identifier of the wallet default DID.
@@ -240,42 +227,46 @@ func (s *Service) DeleteDid(c context.Context, didID string) error {
 	return nil
 }
 
-// SetDefaultDid promotes a DID to be the wallet primary identity.
-func (s *Service) SetDefaultDid(c context.Context, didID string) error {
-	err := s.wallet.SetDefaultDid(c, didID)
+// SetDefaultDid promotes a DID to be the wallet primary identity and returns it.
+func (s *Service) SetDefaultDid(c context.Context, didID string) (Did, error) {
+	did, err := s.wallet.SetDefaultDid(c, didID)
 	if err != nil {
-		return fmt.Errorf("wallet reported error by setting did as default: %w", err)
+		return Did{}, fmt.Errorf("wallet reported error by setting did as default: %w", err)
 	}
-	return nil
+	s.adopt(did)
+	return did, nil
 }
 
 // ===== DID verification methods ==============================================
 
-// AddKeyToDid binds a key into the verification methods of a DID.
-func (s *Service) AddKeyToDid(c context.Context, didID, keyID string) error {
-	err := s.wallet.AddKeyToDid(c, didID, keyID)
+// AddKeyToDid binds a key into the verification methods of a DID and returns the updated DID.
+func (s *Service) AddKeyToDid(c context.Context, didID, keyID string) (Did, error) {
+	did, err := s.wallet.AddKeyToDid(c, didID, keyID)
 	if err != nil {
-		return fmt.Errorf("wallet reported error by adding key from did: %w", err)
+		return Did{}, fmt.Errorf("wallet reported error by adding key from did: %w", err)
 	}
-	return nil
+	s.adopt(did)
+	return did, nil
 }
 
-// RemoveKeyFromDid unbinds a key from the verification methods of a DID.
-func (s *Service) RemoveKeyFromDid(c context.Context, didID, keyID string) error {
-	err := s.wallet.RemoveKeyFromDid(c, didID, keyID)
+// RemoveKeyFromDid unbinds a key from the verification methods of a DID and returns the updated DID.
+func (s *Service) RemoveKeyFromDid(c context.Context, didID, keyID string) (Did, error) {
+	did, err := s.wallet.RemoveKeyFromDid(c, didID, keyID)
 	if err != nil {
-		return fmt.Errorf("wallet reported error by removing key from did: %w", err)
+		return Did{}, fmt.Errorf("wallet reported error by removing key from did: %w", err)
 	}
-	return nil
+	s.adopt(did)
+	return did, nil
 }
 
-// SetDefaultKey promotes a key to be the default verification method of a DID.
-func (s *Service) SetDefaultKey(c context.Context, didID, keyID string) error {
-	err := s.wallet.SetDefaultKey(c, didID, keyID)
+// SetDefaultKey promotes a key to be the default verification method of a DID and returns the updated DID.
+func (s *Service) SetDefaultKey(c context.Context, didID, keyID string) (Did, error) {
+	did, err := s.wallet.SetDefaultKey(c, didID, keyID)
 	if err != nil {
-		return fmt.Errorf("wallet reported error by setting key as default: %w", err)
+		return Did{}, fmt.Errorf("wallet reported error by setting key as default: %w", err)
 	}
-	return nil
+	s.adopt(did)
+	return did, nil
 }
 
 // ===== Credentials ===========================================================
@@ -340,17 +331,18 @@ func (s *Service) ProcessOid4vp(ctx context.Context, uri string) error {
 	return nil
 }
 
-// RotateKey requests the wallet to rotate an existing key.
-func (s *Service) RotateKey(ctx context.Context, keyID string, duration time.Duration) error {
+// RotateKey requests the wallet to rotate an existing key and returns the updated key.
+func (s *Service) RotateKey(ctx context.Context, keyID string, duration time.Duration) (Key, error) {
 	if strings.TrimSpace(keyID) == "" {
-		return common.Invalid("id", "is required")
+		return Key{}, common.Invalid("id", "is required")
 	}
 
-	if err := s.wallet.RotateKey(ctx, keyID, duration); err != nil {
-		return fmt.Errorf("wallet reported error by rotating key: %w", err)
+	key, err := s.wallet.RotateKey(ctx, keyID, duration)
+	if err != nil {
+		return Key{}, fmt.Errorf("wallet reported error by rotating key: %w", err)
 	}
 
-	return nil
+	return key, nil
 }
 
 // RevokeKey requests the wallet to revoke an existing key.
@@ -366,30 +358,32 @@ func (s *Service) RevokeKey(ctx context.Context, keyID string) error {
 	return nil
 }
 
-// PublishDid requests the wallet to publish a DID document.
-func (s *Service) PublishDid(ctx context.Context, didID string) error {
+// PublishDid requests the wallet to publish a DID document and returns its publication state.
+func (s *Service) PublishDid(ctx context.Context, didID string) (DidState, error) {
 	if strings.TrimSpace(didID) == "" {
-		return common.Invalid("id", "is required")
+		return DidState{}, common.Invalid("id", "is required")
 	}
 
-	if err := s.wallet.PublishDid(ctx, didID); err != nil {
-		return fmt.Errorf("wallet reported error by publishing did: %w", err)
+	st, err := s.wallet.PublishDid(ctx, didID)
+	if err != nil {
+		return DidState{}, fmt.Errorf("wallet reported error by publishing did: %w", err)
 	}
 
-	return nil
+	return st, nil
 }
 
-// UnpublishDid requests the wallet to unpublish a DID document.
-func (s *Service) UnpublishDid(ctx context.Context, didID string) error {
+// UnpublishDid requests the wallet to unpublish a DID document and returns its publication state.
+func (s *Service) UnpublishDid(ctx context.Context, didID string) (DidState, error) {
 	if strings.TrimSpace(didID) == "" {
-		return common.Invalid("id", "is required")
+		return DidState{}, common.Invalid("id", "is required")
 	}
 
-	if err := s.wallet.UnpublishDid(ctx, didID); err != nil {
-		return fmt.Errorf("wallet reported error by unpublishing did: %w", err)
+	st, err := s.wallet.UnpublishDid(ctx, didID)
+	if err != nil {
+		return DidState{}, fmt.Errorf("wallet reported error by unpublishing did: %w", err)
 	}
 
-	return nil
+	return st, nil
 }
 
 // GetDidState queries the publication state of a DID.
@@ -406,49 +400,54 @@ func (s *Service) GetDidState(ctx context.Context, didID string) (DidState, erro
 	return st, nil
 }
 
-// AddServiceEndpoint adds an endpoint to a DID document.
-func (s *Service) AddServiceEndpoint(ctx context.Context, didID string, endpoint ServiceEndpointPlan) error {
+// AddServiceEndpoint adds an endpoint to a DID document and returns the updated DID.
+func (s *Service) AddServiceEndpoint(ctx context.Context, didID string, endpoint ServiceEndpointPlan) (Did, error) {
 	if strings.TrimSpace(didID) == "" {
-		return common.Invalid("id", "is required")
+		return Did{}, common.Invalid("id", "is required")
 	}
 	if strings.TrimSpace(endpoint.ID) == "" {
-		return common.Invalid("endpoint.id", "is required")
+		return Did{}, common.Invalid("endpoint.id", "is required")
 	}
 
-	if err := s.wallet.AddServiceEndpoint(ctx, didID, endpoint); err != nil {
-		return fmt.Errorf("wallet reported error adding service endpoint: %w", err)
+	did, err := s.wallet.AddServiceEndpoint(ctx, didID, endpoint)
+	if err != nil {
+		return Did{}, fmt.Errorf("wallet reported error adding service endpoint: %w", err)
 	}
 
-	return nil
+	s.adopt(did)
+	return did, nil
 }
 
-// RemoveServiceEndpoint deletes an endpoint from a DID document.
-func (s *Service) RemoveServiceEndpoint(ctx context.Context, didID, endpointID string) error {
+// RemoveServiceEndpoint deletes an endpoint from a DID document and returns the updated DID.
+func (s *Service) RemoveServiceEndpoint(ctx context.Context, didID, endpointID string) (Did, error) {
 	if strings.TrimSpace(didID) == "" {
-		return common.Invalid("id", "is required")
+		return Did{}, common.Invalid("id", "is required")
 	}
 	if strings.TrimSpace(endpointID) == "" {
-		return common.Invalid("endpoint_id", "is required")
+		return Did{}, common.Invalid("endpoint_id", "is required")
 	}
 
-	if err := s.wallet.RemoveServiceEndpoint(ctx, didID, endpointID); err != nil {
-		return fmt.Errorf("wallet reported error removing service endpoint: %w", err)
+	did, err := s.wallet.RemoveServiceEndpoint(ctx, didID, endpointID)
+	if err != nil {
+		return Did{}, fmt.Errorf("wallet reported error removing service endpoint: %w", err)
 	}
 
-	return nil
+	s.adopt(did)
+	return did, nil
 }
 
-// StoreCredential imports a verifiable credential directly into wallet storage.
-func (s *Service) StoreCredential(ctx context.Context, cred *CredentialImportPlan) error {
+// StoreCredential imports a verifiable credential directly into wallet storage and returns it.
+func (s *Service) StoreCredential(ctx context.Context, cred *CredentialImportPlan) (Credential, error) {
 	if cred == nil {
-		return common.Invalid("credential", "is required")
+		return Credential{}, common.Invalid("credential", "is required")
 	}
 
-	if err := s.wallet.StoreCredential(ctx, cred); err != nil {
-		return fmt.Errorf("wallet reported error storing credential: %w", err)
+	c, err := s.wallet.StoreCredential(ctx, cred)
+	if err != nil {
+		return Credential{}, fmt.Errorf("wallet reported error storing credential: %w", err)
 	}
 
-	return nil
+	return c, nil
 }
 
 // GetCredentialsByType queries credentials filtered by type.
@@ -489,17 +488,18 @@ func (s *Service) GetDcpRequestStatus(ctx context.Context, requestID string) (Dc
 	return st, nil
 }
 
-// CreateParticipant creates a new participant context in the wallet.
-func (s *Service) CreateParticipant(ctx context.Context, plan *ParticipantPlan) error {
+// CreateParticipant creates a new participant context in the wallet and returns it.
+func (s *Service) CreateParticipant(ctx context.Context, plan *ParticipantPlan) (Participant, error) {
 	if plan == nil {
-		return common.Invalid("participant", "is required")
+		return Participant{}, common.Invalid("participant", "is required")
 	}
 
-	if err := s.wallet.CreateParticipant(ctx, plan); err != nil {
-		return fmt.Errorf("wallet reported error creating participant: %w", err)
+	p, err := s.wallet.CreateParticipant(ctx, plan)
+	if err != nil {
+		return Participant{}, fmt.Errorf("wallet reported error creating participant: %w", err)
 	}
 
-	return nil
+	return p, nil
 }
 
 // GetParticipant fetches a participant context from the wallet.
@@ -516,17 +516,18 @@ func (s *Service) GetParticipant(ctx context.Context, participantID string) (Par
 	return p, nil
 }
 
-// SetParticipantState toggles active status for a participant context.
-func (s *Service) SetParticipantState(ctx context.Context, participantID string, active bool) error {
+// SetParticipantState toggles active status for a participant context and returns it.
+func (s *Service) SetParticipantState(ctx context.Context, participantID string, active bool) (Participant, error) {
 	if strings.TrimSpace(participantID) == "" {
-		return common.Invalid("id", "is required")
+		return Participant{}, common.Invalid("id", "is required")
 	}
 
-	if err := s.wallet.SetParticipantState(ctx, participantID, active); err != nil {
-		return fmt.Errorf("wallet reported error setting participant state: %w", err)
+	p, err := s.wallet.SetParticipantState(ctx, participantID, active)
+	if err != nil {
+		return Participant{}, fmt.Errorf("wallet reported error setting participant state: %w", err)
 	}
 
-	return nil
+	return p, nil
 }
 
 // RegenerateParticipantToken rotates the token for a participant context.
@@ -556,11 +557,6 @@ func (s *Service) setIdentity(d Did) {
 
 // adopt replaces the active identity only if the wallet promoted this DID
 // to default. Mutations funnel through here.
-//
-// AddKeyToDid, RegisterDid once it returns the minted DID — are the ones still
-// unimplemented below. It states the invariant they have to keep.
-//
-//nolint:unused // the mutations that funnel through it — SetDefaultDid,
 func (s *Service) adopt(d Did) {
 	if d.Default {
 		s.setIdentity(d)

@@ -1,5 +1,0 @@
-$kind: http-request
-url: http://localhost:7002/dids/blabla/key/asds
-method: POST
-settings: {}
-order: 18000

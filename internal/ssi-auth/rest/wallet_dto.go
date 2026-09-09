@@ -6,6 +6,7 @@ package rest
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/caparicio-esd/alexandria/internal/common"
@@ -66,21 +67,33 @@ func newDidResps(dids []wallet.Did) []didResp {
 
 // keyResp is the public representation of a wallet key.
 type keyResp struct {
-	ID        string    `json:"id"`
-	Alias     string    `json:"alias,omitempty"`
-	Kty       string    `json:"kty"`
-	Crv       *string   `json:"crv,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID                  string    `json:"id"`
+	Alias               string    `json:"alias,omitempty"`
+	Kty                 string    `json:"kty"`
+	Crv                 *string   `json:"crv,omitempty"`
+	State               string    `json:"state,omitempty"`
+	CreatedAt           time.Time `json:"createdAt"`
+	SerializedPublicKey *string   `json:"serializedPublicKey,omitempty"`
+	KeyContext          *string   `json:"keyContext,omitempty"`
+	Usage               []string  `json:"usage,omitempty"`
+	DefaultPair         *bool     `json:"defaultPair,omitempty"`
+	PrivateKeyAlias     *string   `json:"privateKeyAlias,omitempty"`
 }
 
 // newKeyResp projects a domain key onto the wire.
 func newKeyResp(k wallet.Key) keyResp {
 	return keyResp{
-		ID:        k.ID,
-		Alias:     k.Alias,
-		Kty:       k.Kty,
-		Crv:       k.Crv,
-		CreatedAt: k.CreatedAt,
+		ID:                  k.ID,
+		Alias:               k.Alias,
+		Kty:                 k.Kty,
+		Crv:                 k.Crv,
+		State:               k.State,
+		CreatedAt:           k.CreatedAt,
+		SerializedPublicKey: k.SerializedPublicKey,
+		KeyContext:          k.KeyContext,
+		Usage:               k.Usage,
+		DefaultPair:         k.DefaultPair,
+		PrivateKeyAlias:     k.PrivateKeyAlias,
 	}
 }
 
@@ -159,29 +172,70 @@ func (b *didBuilderReq) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("reading did builder: %w", err)
 	}
 
-	method, err := common.ParseMethod(peek.Method)
-	if err != nil {
-		return err
-	}
-
-	switch method {
-	case common.MethodJwk:
-		var v jwkBuilderReq
-		if err := json.Unmarshal(data, &v); err != nil {
-			return fmt.Errorf("reading did:jwk builder: %w", err)
+	if peek.Method != "" {
+		method, err := common.ParseMethod(peek.Method)
+		if err != nil {
+			return err
 		}
 
-		b.builder = common.JwkDidBuilder{Pem: v.Pem}
-	case common.MethodWeb:
-		var v webBuilderReq
-		if err := json.Unmarshal(data, &v); err != nil {
-			return fmt.Errorf("reading did:web builder: %w", err)
+		switch method {
+		case common.MethodJwk:
+			var v jwkBuilderReq
+			if err := json.Unmarshal(data, &v); err != nil {
+				return fmt.Errorf("reading did:jwk builder: %w", err)
+			}
+
+			b.builder = common.JwkDidBuilder{Pem: v.Pem}
+		case common.MethodWeb:
+			var v webBuilderReq
+			if err := json.Unmarshal(data, &v); err != nil {
+				return fmt.Errorf("reading did:web builder: %w", err)
+			}
+
+			domain := cleanDomain(v.Domain)
+			b.builder = common.WebDidBuilder{Domain: domain, Port: v.Port, Path: v.Path}
 		}
 
-		b.builder = common.WebDidBuilder{Domain: v.Domain, Port: v.Port, Path: v.Path}
+		return nil
 	}
 
-	return nil
+	// Support external tagging: {"Web": {...}} or {"Jwk": {...}} (commonly used in Fafnir / Serde)
+	var ext struct {
+		Web      *webBuilderReq `json:"Web"`
+		WebLower *webBuilderReq `json:"web"`
+		Jwk      *jwkBuilderReq `json:"Jwk"`
+		JwkLower *jwkBuilderReq `json:"jwk"`
+	}
+	if err := json.Unmarshal(data, &ext); err == nil {
+		webReq := ext.Web
+		if webReq == nil {
+			webReq = ext.WebLower
+		}
+		if webReq != nil {
+			domain := cleanDomain(webReq.Domain)
+			b.builder = common.WebDidBuilder{Domain: domain, Port: webReq.Port, Path: webReq.Path}
+			return nil
+		}
+
+		jwkReq := ext.Jwk
+		if jwkReq == nil {
+			jwkReq = ext.JwkLower
+		}
+		if jwkReq != nil {
+			b.builder = common.JwkDidBuilder{Pem: jwkReq.Pem}
+			return nil
+		}
+	}
+
+	return fmt.Errorf("did method %q: %w", peek.Method, common.ErrUnsupported)
+}
+
+func cleanDomain(domain string) string {
+	d := strings.TrimSpace(domain)
+	d = strings.TrimPrefix(d, "did:web:")
+	d = strings.TrimPrefix(d, "https://")
+	d = strings.TrimPrefix(d, "http://")
+	return d
 }
 
 func (b didBuilderReq) toDomain() (common.DidBuilder, error) {
@@ -223,29 +277,67 @@ func newWalletInfoRest(i wallet.WalletInfo) walletInfoRest {
 
 // credentialResp is the public representation of a stored Verifiable Credential.
 type credentialResp struct {
-	ID             string          `json:"id"`
-	VcBody         json.RawMessage `json:"vcBody"`
-	VcType         string          `json:"vcType"`
-	VcFormat       string          `json:"vcFormat"`
-	HolderDid      string          `json:"holderDid"`
-	IssuerDid      string          `json:"issuerDid"`
-	ParsedDocument json.RawMessage `json:"parsedDocument"`
-	ValidUntil     *time.Time      `json:"validUntil,omitempty"`
-	AddedOn        time.Time       `json:"addedOn"`
+	ID                   string          `json:"id"`
+	RawVc                string          `json:"rawVc"`
+	Format               string          `json:"format"`
+	Credential           json.RawMessage `json:"credential,omitempty"`
+	VcBody               json.RawMessage `json:"vcBody"`
+	VcType               string          `json:"vcType"`
+	VcFormat             string          `json:"vcFormat"`
+	Types                []string        `json:"types,omitempty"`
+	HolderDid            string          `json:"holderDid"`
+	IssuerDid            string          `json:"issuerDid"`
+	ParticipantContextID *string         `json:"participantContextId,omitempty"`
+	ParsedDocument       json.RawMessage `json:"parsedDocument"`
+	ValidUntil           *time.Time      `json:"validUntil,omitempty"`
+	IssuanceDate         *time.Time      `json:"issuanceDate,omitempty"`
+	AddedOn              time.Time       `json:"addedOn"`
 }
 
 // newCredentialResp projects a domain credential onto the wire.
 func newCredentialResp(c wallet.Credential) credentialResp {
+	rawVc := c.RawVc
+	if rawVc == "" && len(c.VcBody) > 0 {
+		rawVc = string(c.VcBody)
+	}
+
+	format := c.Format
+	if format == "" {
+		format = c.VcFormat
+	}
+	if format == "" {
+		format = "VC1_0_JWT"
+	}
+
+	credDoc := c.Credential
+	if len(credDoc) == 0 {
+		credDoc = c.ParsedDocument
+	}
+	if len(credDoc) == 0 {
+		credDoc = c.VcBody
+	}
+
+	vcBody := c.VcBody
+	if len(vcBody) == 0 {
+		vcBody = json.RawMessage(rawVc)
+	}
+
 	return credentialResp{
-		ID:             c.ID,
-		VcBody:         c.VcBody,
-		VcType:         c.VcType,
-		VcFormat:       c.VcFormat,
-		HolderDid:      c.HolderDid,
-		IssuerDid:      c.IssuerDid,
-		ParsedDocument: c.ParsedDocument,
-		ValidUntil:     c.ValidUntil,
-		AddedOn:        c.AddedOn,
+		ID:                   c.ID,
+		RawVc:                rawVc,
+		Format:               format,
+		Credential:           credDoc,
+		VcBody:               vcBody,
+		VcType:               c.VcType,
+		VcFormat:             format,
+		Types:                c.Types,
+		HolderDid:            c.HolderDid,
+		IssuerDid:            c.IssuerDid,
+		ParticipantContextID: c.ParticipantContextID,
+		ParsedDocument:       credDoc,
+		ValidUntil:           c.ValidUntil,
+		IssuanceDate:         c.IssuanceDate,
+		AddedOn:              c.AddedOn,
 	}
 }
 

@@ -12,8 +12,8 @@ import (
 )
 
 // RotateKey returns not implemented for Fafnir.
-func (a *Adapter) RotateKey(_ context.Context, _ string, _ time.Duration) error {
-	return common.ErrNotImplementedInFafnir
+func (a *Adapter) RotateKey(_ context.Context, _ string, _ time.Duration) (wallet.Key, error) {
+	return wallet.Key{}, common.ErrNotImplementedInFafnir
 }
 
 // RevokeKey returns not implemented for Fafnir.
@@ -22,13 +22,13 @@ func (a *Adapter) RevokeKey(_ context.Context, _ string) error {
 }
 
 // PublishDid returns not implemented for Fafnir.
-func (a *Adapter) PublishDid(_ context.Context, _ string) error {
-	return common.ErrNotImplementedInFafnir
+func (a *Adapter) PublishDid(_ context.Context, _ string) (wallet.DidState, error) {
+	return wallet.DidState{}, common.ErrNotImplementedInFafnir
 }
 
 // UnpublishDid returns not implemented for Fafnir.
-func (a *Adapter) UnpublishDid(_ context.Context, _ string) error {
-	return common.ErrNotImplementedInFafnir
+func (a *Adapter) UnpublishDid(_ context.Context, _ string) (wallet.DidState, error) {
+	return wallet.DidState{}, common.ErrNotImplementedInFafnir
 }
 
 // GetDidState returns not implemented for Fafnir.
@@ -37,18 +37,18 @@ func (a *Adapter) GetDidState(_ context.Context, _ string) (wallet.DidState, err
 }
 
 // AddServiceEndpoint returns not implemented for Fafnir.
-func (a *Adapter) AddServiceEndpoint(_ context.Context, _ string, _ wallet.ServiceEndpointPlan) error {
-	return common.ErrNotImplementedInFafnir
+func (a *Adapter) AddServiceEndpoint(_ context.Context, _ string, _ wallet.ServiceEndpointPlan) (wallet.Did, error) {
+	return wallet.Did{}, common.ErrNotImplementedInFafnir
 }
 
 // RemoveServiceEndpoint returns not implemented for Fafnir.
-func (a *Adapter) RemoveServiceEndpoint(_ context.Context, _ string, _ string) error {
-	return common.ErrNotImplementedInFafnir
+func (a *Adapter) RemoveServiceEndpoint(_ context.Context, _ string, _ string) (wallet.Did, error) {
+	return wallet.Did{}, common.ErrNotImplementedInFafnir
 }
 
 // StoreCredential returns not implemented for Fafnir.
-func (a *Adapter) StoreCredential(_ context.Context, _ *wallet.CredentialImportPlan) error {
-	return common.ErrNotImplementedInFafnir
+func (a *Adapter) StoreCredential(_ context.Context, _ *wallet.CredentialImportPlan) (wallet.Credential, error) {
+	return wallet.Credential{}, common.ErrNotImplementedInFafnir
 }
 
 // GetCredentialsByType returns not implemented for Fafnir.
@@ -67,8 +67,8 @@ func (a *Adapter) GetDcpRequestStatus(_ context.Context, _ string) (wallet.DcpRe
 }
 
 // CreateParticipant returns not implemented for Fafnir.
-func (a *Adapter) CreateParticipant(_ context.Context, _ *wallet.ParticipantPlan) error {
-	return common.ErrNotImplementedInFafnir
+func (a *Adapter) CreateParticipant(_ context.Context, _ *wallet.ParticipantPlan) (wallet.Participant, error) {
+	return wallet.Participant{}, common.ErrNotImplementedInFafnir
 }
 
 // GetParticipant returns not implemented for Fafnir.
@@ -77,8 +77,8 @@ func (a *Adapter) GetParticipant(_ context.Context, _ string) (wallet.Participan
 }
 
 // SetParticipantState returns not implemented for Fafnir.
-func (a *Adapter) SetParticipantState(_ context.Context, _ string, _ bool) error {
-	return common.ErrNotImplementedInFafnir
+func (a *Adapter) SetParticipantState(_ context.Context, _ string, _ bool) (wallet.Participant, error) {
+	return wallet.Participant{}, common.ErrNotImplementedInFafnir
 }
 
 // RegenerateParticipantToken returns not implemented for Fafnir.

@@ -96,13 +96,13 @@ func (a *Adapter) Link(ctx context.Context) (wallet.Did, error) {
 	return out.ToDomain()
 }
 
-// RegisterKey imports raw PEM key material into the wallet
-func (a *Adapter) RegisterKey(ctx context.Context, keyPlan *wallet.KeyPlan) error {
+// RegisterKey imports raw PEM key material into the wallet and returns the registered key.
+func (a *Adapter) RegisterKey(ctx context.Context, keyPlan *wallet.KeyPlan) (wallet.Key, error) {
 	const path = "/keys/new"
 
 	// validate input
 	if keyPlan == nil {
-		return fmt.Errorf("fafnir: %s needs a key plan: %w", path, common.ErrInvalidInput)
+		return wallet.Key{}, fmt.Errorf("fafnir: %s needs a key plan: %w", path, common.ErrInvalidInput)
 	}
 
 	// call
@@ -116,7 +116,7 @@ func (a *Adapter) RegisterKey(ctx context.Context, keyPlan *wallet.KeyPlan) erro
 			"method", http.MethodPost, "path", path,
 			"duration_ms", time.Since(started).Milliseconds(), "err", err)
 
-		return fmt.Errorf("fafnir: calling %s: %w", path, err)
+		return wallet.Key{}, fmt.Errorf("fafnir: calling %s: %w", path, err)
 	}
 	defer func() { _ = res.Body.Close() }()
 	a.logger.DebugContext(ctx, "wallet call",
@@ -125,11 +125,25 @@ func (a *Adapter) RegisterKey(ctx context.Context, keyPlan *wallet.KeyPlan) erro
 
 	// validate
 	if res.IsStatusFailure() {
-		return statusError(res.StatusCode(), path, res.Bytes())
+		return wallet.Key{}, statusError(res.StatusCode(), path, res.Bytes())
 	}
 
-	//
-	return nil
+	// Query keys to find the registered key
+	keys, err := a.GetAllKeys(ctx)
+	if err == nil {
+		for _, k := range keys {
+			if k.ID == keyPlan.ID || (keyPlan.Alias != "" && k.Alias == keyPlan.Alias) {
+				return k, nil
+			}
+		}
+	}
+
+	return wallet.Key{
+		ID:        keyPlan.ID,
+		Alias:     keyPlan.Alias,
+		Kty:       "RSA",
+		CreatedAt: time.Now(),
+	}, nil
 }
 
 // GetAllKeys lists every key the wallet holds. It satisfies the wallet.Wallet
@@ -153,7 +167,6 @@ func (a *Adapter) GetAllKeys(ctx context.Context) ([]wallet.Key, error) {
 		return nil, fmt.Errorf("fafnir: calling %s: %w", path, err)
 	}
 	defer func() { _ = res.Body.Close() }()
-
 	a.logger.DebugContext(ctx, "wallet call",
 		"method", http.MethodGet, "path", path,
 		"status", res.StatusCode(), "duration_ms", time.Since(started).Milliseconds())
@@ -166,18 +179,18 @@ func (a *Adapter) GetAllKeys(ctx context.Context) ([]wallet.Key, error) {
 	// send back to domain
 	keys := make([]wallet.Key, 0, len(out))
 	for _, k := range out {
-		key, err := k.ToDomain()
+		d, err := k.ToDomain()
 		if err != nil {
-			return nil, err
+			return []wallet.Key{}, err
 		}
 
-		keys = append(keys, key)
+		keys = append(keys, d)
 	}
 
 	return keys, nil
 }
 
-// DeleteKey purges a key reference from the wallet vault.
+// DeleteKey drops a key from the wallet, provided no DID still references it.
 func (a *Adapter) DeleteKey(ctx context.Context, keyID string) error {
 	path := fmt.Sprintf("/keys/%s", keyID)
 
@@ -208,20 +221,20 @@ func (a *Adapter) DeleteKey(ctx context.Context, keyID string) error {
 }
 
 // RegisterDid asks the wallet to mint a DID from the given builder and bind the
-// referenced keys into it, returning the identifier it minted.
+// referenced keys into it, returning the minted DID record.
 func (a *Adapter) RegisterDid(
 	ctx context.Context,
 	didPlan *wallet.DidPlan,
-) error {
+) (wallet.Did, error) {
 	const path = "/dids/new"
 
 	// validate input
 	if didPlan == nil {
-		return fmt.Errorf("fafnir: %s needs a did plan: %w", path, common.ErrInvalidInput)
+		return wallet.Did{}, fmt.Errorf("fafnir: %s needs a did plan: %w", path, common.ErrInvalidInput)
 	}
 	didReq, err := newDidReq(*didPlan)
 	if err != nil {
-		return fmt.Errorf("fafnir: %s needs a did correct plan: %w", path, err)
+		return wallet.Did{}, fmt.Errorf("fafnir: %s needs a did correct plan: %w", path, err)
 	}
 
 	// call
@@ -235,7 +248,7 @@ func (a *Adapter) RegisterDid(
 			"method", http.MethodPost, "path", path,
 			"duration_ms", time.Since(started).Milliseconds(), "err", err)
 
-		return fmt.Errorf("fafnir: calling %s: %w", path, err)
+		return wallet.Did{}, fmt.Errorf("fafnir: calling %s: %w", path, err)
 	}
 	defer func() { _ = res.Body.Close() }()
 	a.logger.DebugContext(ctx, "wallet call",
@@ -244,11 +257,22 @@ func (a *Adapter) RegisterDid(
 
 	// validate
 	if res.IsStatusFailure() {
-		return statusError(res.StatusCode(), path, res.Bytes())
+		return wallet.Did{}, statusError(res.StatusCode(), path, res.Bytes())
 	}
 
-	//
-	return nil
+	dids, err := a.GetAllDids(ctx)
+	if err == nil {
+		for _, d := range dids {
+			if d.Alias == didPlan.Alias {
+				return d, nil
+			}
+		}
+		if len(dids) > 0 {
+			return dids[len(dids)-1], nil
+		}
+	}
+
+	return wallet.Did{Alias: didPlan.Alias}, nil
 }
 
 // DeleteDid drops a DID record and its verification method bindings.
@@ -281,8 +305,8 @@ func (a *Adapter) DeleteDid(ctx context.Context, didID string) error {
 	return nil
 }
 
-// SetDefaultDid promotes a DID to be the wallet active identity.
-func (a *Adapter) SetDefaultDid(ctx context.Context, didID string) error {
+// SetDefaultDid promotes a DID to be the wallet active identity and returns it.
+func (a *Adapter) SetDefaultDid(ctx context.Context, didID string) (wallet.Did, error) {
 	path := fmt.Sprintf("/dids/default/%s", didID)
 
 	// call
@@ -295,7 +319,7 @@ func (a *Adapter) SetDefaultDid(ctx context.Context, didID string) error {
 			"method", http.MethodPost, "path", path,
 			"duration_ms", time.Since(started).Milliseconds(), "err", err)
 
-		return fmt.Errorf("fafnir: calling %s: %w", path, err)
+		return wallet.Did{}, fmt.Errorf("fafnir: calling %s: %w", path, err)
 	}
 	defer func() { _ = res.Body.Close() }()
 
@@ -305,11 +329,10 @@ func (a *Adapter) SetDefaultDid(ctx context.Context, didID string) error {
 
 	// validate
 	if res.IsStatusFailure() {
-		return statusError(res.StatusCode(), path, res.Bytes())
+		return wallet.Did{}, statusError(res.StatusCode(), path, res.Bytes())
 	}
 
-	// send back to domain
-	return nil
+	return a.GetDidByID(ctx, didID)
 }
 
 // GetAllDids lists every DID the wallet holds.
@@ -329,36 +352,36 @@ func (a *Adapter) GetAllDids(ctx context.Context) ([]wallet.Did, error) {
 			"method", http.MethodGet, "path", path,
 			"duration_ms", time.Since(started).Milliseconds(), "err", err)
 
-		return []wallet.Did{}, fmt.Errorf("fafnir: calling %s: %w", path, err)
+		return nil, fmt.Errorf("fafnir: calling %s: %w", path, err)
 	}
 	defer func() { _ = res.Body.Close() }()
-
 	a.logger.DebugContext(ctx, "wallet call",
 		"method", http.MethodGet, "path", path,
 		"status", res.StatusCode(), "duration_ms", time.Since(started).Milliseconds())
 
 	// validate
 	if res.IsStatusFailure() {
-		return []wallet.Did{}, statusError(res.StatusCode(), path, res.Bytes())
+		return nil, statusError(res.StatusCode(), path, res.Bytes())
 	}
 
 	// send back to domain
 	dids := make([]wallet.Did, 0, len(out))
 	for _, d := range out {
-		did, err := d.ToDomain()
+		dom, err := d.ToDomain()
 		if err != nil {
-			return nil, err
+			return []wallet.Did{}, err
 		}
 
-		dids = append(dids, did)
+		dids = append(dids, dom)
 	}
 
 	return dids, nil
 }
 
-// GetDidByID resolves a single DID record by its Fafnir identifier.
+// GetDidByID resolves a DID by its identifier string.
 func (a *Adapter) GetDidByID(ctx context.Context, didID string) (wallet.Did, error) {
 	path := fmt.Sprintf("/dids/%s", didID)
+
 	var out didResp
 
 	// call
@@ -388,8 +411,8 @@ func (a *Adapter) GetDidByID(ctx context.Context, didID string) (wallet.Did, err
 	return out.ToDomain()
 }
 
-// AddKeyToDid binds a key into the verification methods of a DID.
-func (a *Adapter) AddKeyToDid(ctx context.Context, didID string, keyID string) error {
+// AddKeyToDid binds a key into the verification methods of a DID and returns the updated DID.
+func (a *Adapter) AddKeyToDid(ctx context.Context, didID string, keyID string) (wallet.Did, error) {
 	path := fmt.Sprintf("/dids/%s/key/%s", didID, keyID)
 
 	// call
@@ -402,7 +425,7 @@ func (a *Adapter) AddKeyToDid(ctx context.Context, didID string, keyID string) e
 			"method", http.MethodPost, "path", path,
 			"duration_ms", time.Since(started).Milliseconds(), "err", err)
 
-		return fmt.Errorf("fafnir: calling %s: %w", path, err)
+		return wallet.Did{}, fmt.Errorf("fafnir: calling %s: %w", path, err)
 	}
 	defer func() { _ = res.Body.Close() }()
 
@@ -412,14 +435,14 @@ func (a *Adapter) AddKeyToDid(ctx context.Context, didID string, keyID string) e
 
 	// validate
 	if res.IsStatusFailure() {
-		return statusError(res.StatusCode(), path, res.Bytes())
+		return wallet.Did{}, statusError(res.StatusCode(), path, res.Bytes())
 	}
 
-	return nil
+	return a.GetDidByID(ctx, didID)
 }
 
-// RemoveKeyFromDid unbinds a key from the verification methods of a DID.
-func (a *Adapter) RemoveKeyFromDid(ctx context.Context, didID string, keyID string) error {
+// RemoveKeyFromDid unbinds a key from the verification methods of a DID and returns the updated DID.
+func (a *Adapter) RemoveKeyFromDid(ctx context.Context, didID string, keyID string) (wallet.Did, error) {
 	path := fmt.Sprintf("/dids/%s/key/%s", didID, keyID)
 
 	// call
@@ -432,7 +455,7 @@ func (a *Adapter) RemoveKeyFromDid(ctx context.Context, didID string, keyID stri
 			"method", http.MethodDelete, "path", path,
 			"duration_ms", time.Since(started).Milliseconds(), "err", err)
 
-		return fmt.Errorf("fafnir: calling %s: %w", path, err)
+		return wallet.Did{}, fmt.Errorf("fafnir: calling %s: %w", path, err)
 	}
 	defer func() { _ = res.Body.Close() }()
 
@@ -442,14 +465,14 @@ func (a *Adapter) RemoveKeyFromDid(ctx context.Context, didID string, keyID stri
 
 	// validate
 	if res.IsStatusFailure() {
-		return statusError(res.StatusCode(), path, res.Bytes())
+		return wallet.Did{}, statusError(res.StatusCode(), path, res.Bytes())
 	}
 
-	return nil
+	return a.GetDidByID(ctx, didID)
 }
 
-// SetDefaultKey promotes a key to be the default verification method of a DID.
-func (a *Adapter) SetDefaultKey(ctx context.Context, didID string, keyID string) error {
+// SetDefaultKey promotes a key to be the default verification method of a DID and returns the updated DID.
+func (a *Adapter) SetDefaultKey(ctx context.Context, didID string, keyID string) (wallet.Did, error) {
 	path := fmt.Sprintf("/dids/%s/key/default/%s", didID, keyID)
 
 	// call
@@ -462,7 +485,7 @@ func (a *Adapter) SetDefaultKey(ctx context.Context, didID string, keyID string)
 			"method", http.MethodPost, "path", path,
 			"duration_ms", time.Since(started).Milliseconds(), "err", err)
 
-		return fmt.Errorf("fafnir: calling %s: %w", path, err)
+		return wallet.Did{}, fmt.Errorf("fafnir: calling %s: %w", path, err)
 	}
 	defer func() { _ = res.Body.Close() }()
 
@@ -472,10 +495,10 @@ func (a *Adapter) SetDefaultKey(ctx context.Context, didID string, keyID string)
 
 	// validate
 	if res.IsStatusFailure() {
-		return statusError(res.StatusCode(), path, res.Bytes())
+		return wallet.Did{}, statusError(res.StatusCode(), path, res.Bytes())
 	}
 
-	return nil
+	return a.GetDidByID(ctx, didID)
 }
 
 // WalletInfo returns metadata about the Fafnir wallet instance.
@@ -513,7 +536,7 @@ func (a *Adapter) GetAllCredentials(ctx context.Context) ([]wallet.Credential, e
 			"method", http.MethodGet, "path", path,
 			"duration_ms", time.Since(started).Milliseconds(), "err", err)
 
-		return []wallet.Credential{}, fmt.Errorf("fafnir: calling %s: %w", path, err)
+		return nil, fmt.Errorf("fafnir: calling %s: %w", path, err)
 	}
 	defer func() { _ = res.Body.Close() }()
 
@@ -523,7 +546,7 @@ func (a *Adapter) GetAllCredentials(ctx context.Context) ([]wallet.Credential, e
 
 	// validate
 	if res.IsStatusFailure() {
-		return []wallet.Credential{}, statusError(res.StatusCode(), path, res.Bytes())
+		return nil, statusError(res.StatusCode(), path, res.Bytes())
 	}
 
 	// send back to domain
@@ -654,5 +677,5 @@ func statusError(status int, path string, body []byte) error {
 		sentinel = errors.New("unexpected status")
 	}
 
-	return fmt.Errorf("fafnir: %s returned %d: %s: %w", path, status, body, sentinel)
+	return common.NewUpstreamError("Fafnir", status, path, body, sentinel)
 }
