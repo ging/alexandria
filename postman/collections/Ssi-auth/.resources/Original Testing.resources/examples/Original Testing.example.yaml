@@ -1,0 +1,192 @@
+$kind: http-example
+request:
+  url: http://localhost:8182/api/identity/v1/participants/super-user/dids/query
+  method: POST
+  headers:
+    - key: Content-Type
+      value: application-json
+      disabled: true
+    - key: x-api-key
+      value: c3VwZXItdXNlcg==.c3VwZXItdXNlci1zZWNyZXQta2V5LTEyMzQ1Njc4OTA=
+      disabled: false
+  body:
+    type: json
+    content: "{}"
+response:
+  statusCode: 200
+  statusText: OK
+  headers:
+    date: Tue, 08 Sep 2026 19:54:28 GMT
+    content-type: application/json
+    content-length: "6109"
+  body:
+    type: json
+    content: |-
+      [
+        {
+          "id": "did:web:super-user",
+          "service": [],
+          "verificationMethod": [
+            {
+              "id": "super-user-key",
+              "type": "JsonWebKey2020",
+              "controller": "did:web:super-user",
+              "publicKeyMultibase": null,
+              "publicKeyJwk": {
+                "kty": "OKP",
+                "crv": "Ed25519",
+                "kid": "super-user-key",
+                "x": "A3xPgplaUBuhjG2DZGSEVvVBUvyLkm4PAWKqk47aEEw"
+              }
+            },
+            {
+              "id": "test-key-1788863313329151000",
+              "type": "JsonWebKey2020",
+              "controller": "did:web:super-user",
+              "publicKeyMultibase": null,
+              "publicKeyJwk": {
+                "kty": "RSA",
+                "e": "AQAB",
+                "use": "sig",
+                "n": "6__8mLbtRNp4ApgmdM6c77hOw-1xI-tBK4U8_WzmLpacUAzSOsMtLbeV3rIJKfkRrPysKM4Dp-ivRQF7mA8j3FC_P4WaxXjGNfLnY4Ag68spMsFTcIH_cwwsBLv-fZgcwhodA0CxAvqkb-64AHreAmSkdqzbsjbmJqlwZMfD3we6X51r6R6q_Y9-AKKZrV6Y3Os2KfcjUnppZNuj9XWa7xlJFX4zQM71JJMJI06tU8jyEBn_5ObXjuei0wyI4ANggaWrxj_80JbPNdZA4faq1RSJTcd921kWBtHdLcU7GM29hS5JS-pkEw9ge-n0CSlQek1jHuqSr3qArQryb2dQOQ"
+              }
+            },
+            {
+              "id": "key-1",
+              "type": "JsonWebKey2020",
+              "controller": "did:web:super-user",
+              "publicKeyMultibase": null,
+              "publicKeyJwk": {
+                "kty": "RSA",
+                "e": "AQAB",
+                "use": "sig",
+                "n": "6__8mLbtRNp4ApgmdM6c77hOw-1xI-tBK4U8_WzmLpacUAzSOsMtLbeV3rIJKfkRrPysKM4Dp-ivRQF7mA8j3FC_P4WaxXjGNfLnY4Ag68spMsFTcIH_cwwsBLv-fZgcwhodA0CxAvqkb-64AHreAmSkdqzbsjbmJqlwZMfD3we6X51r6R6q_Y9-AKKZrV6Y3Os2KfcjUnppZNuj9XWa7xlJFX4zQM71JJMJI06tU8jyEBn_5ObXjuei0wyI4ANggaWrxj_80JbPNdZA4faq1RSJTcd921kWBtHdLcU7GM29hS5JS-pkEw9ge-n0CSlQek1jHuqSr3qArQryb2dQOQ"
+              }
+            },
+            {
+              "id": "test-key-1788866005779605000",
+              "type": "JsonWebKey2020",
+              "controller": "did:web:super-user",
+              "publicKeyMultibase": null,
+              "publicKeyJwk": {
+                "kty": "RSA",
+                "e": "AQAB",
+                "use": "sig",
+                "n": "6__8mLbtRNp4ApgmdM6c77hOw-1xI-tBK4U8_WzmLpacUAzSOsMtLbeV3rIJKfkRrPysKM4Dp-ivRQF7mA8j3FC_P4WaxXjGNfLnY4Ag68spMsFTcIH_cwwsBLv-fZgcwhodA0CxAvqkb-64AHreAmSkdqzbsjbmJqlwZMfD3we6X51r6R6q_Y9-AKKZrV6Y3Os2KfcjUnppZNuj9XWa7xlJFX4zQM71JJMJI06tU8jyEBn_5ObXjuei0wyI4ANggaWrxj_80JbPNdZA4faq1RSJTcd921kWBtHdLcU7GM29hS5JS-pkEw9ge-n0CSlQek1jHuqSr3qArQryb2dQOQ"
+              }
+            },
+            {
+              "id": "test-key-1788866023433109000",
+              "type": "JsonWebKey2020",
+              "controller": "did:web:super-user",
+              "publicKeyMultibase": null,
+              "publicKeyJwk": {
+                "kty": "RSA",
+                "e": "AQAB",
+                "use": "sig",
+                "n": "6__8mLbtRNp4ApgmdM6c77hOw-1xI-tBK4U8_WzmLpacUAzSOsMtLbeV3rIJKfkRrPysKM4Dp-ivRQF7mA8j3FC_P4WaxXjGNfLnY4Ag68spMsFTcIH_cwwsBLv-fZgcwhodA0CxAvqkb-64AHreAmSkdqzbsjbmJqlwZMfD3we6X51r6R6q_Y9-AKKZrV6Y3Os2KfcjUnppZNuj9XWa7xlJFX4zQM71JJMJI06tU8jyEBn_5ObXjuei0wyI4ANggaWrxj_80JbPNdZA4faq1RSJTcd921kWBtHdLcU7GM29hS5JS-pkEw9ge-n0CSlQek1jHuqSr3qArQryb2dQOQ"
+              }
+            },
+            {
+              "id": "test-key-1788867492654019000",
+              "type": "JsonWebKey2020",
+              "controller": "did:web:super-user",
+              "publicKeyMultibase": null,
+              "publicKeyJwk": {
+                "kty": "RSA",
+                "e": "AQAB",
+                "use": "sig",
+                "n": "6__8mLbtRNp4ApgmdM6c77hOw-1xI-tBK4U8_WzmLpacUAzSOsMtLbeV3rIJKfkRrPysKM4Dp-ivRQF7mA8j3FC_P4WaxXjGNfLnY4Ag68spMsFTcIH_cwwsBLv-fZgcwhodA0CxAvqkb-64AHreAmSkdqzbsjbmJqlwZMfD3we6X51r6R6q_Y9-AKKZrV6Y3Os2KfcjUnppZNuj9XWa7xlJFX4zQM71JJMJI06tU8jyEBn_5ObXjuei0wyI4ANggaWrxj_80JbPNdZA4faq1RSJTcd921kWBtHdLcU7GM29hS5JS-pkEw9ge-n0CSlQek1jHuqSr3qArQryb2dQOQ"
+              }
+            },
+            {
+              "id": "test-key-1788867508644582000",
+              "type": "JsonWebKey2020",
+              "controller": "did:web:super-user",
+              "publicKeyMultibase": null,
+              "publicKeyJwk": {
+                "kty": "RSA",
+                "e": "AQAB",
+                "use": "sig",
+                "n": "6__8mLbtRNp4ApgmdM6c77hOw-1xI-tBK4U8_WzmLpacUAzSOsMtLbeV3rIJKfkRrPysKM4Dp-ivRQF7mA8j3FC_P4WaxXjGNfLnY4Ag68spMsFTcIH_cwwsBLv-fZgcwhodA0CxAvqkb-64AHreAmSkdqzbsjbmJqlwZMfD3we6X51r6R6q_Y9-AKKZrV6Y3Os2KfcjUnppZNuj9XWa7xlJFX4zQM71JJMJI06tU8jyEBn_5ObXjuei0wyI4ANggaWrxj_80JbPNdZA4faq1RSJTcd921kWBtHdLcU7GM29hS5JS-pkEw9ge-n0CSlQek1jHuqSr3qArQryb2dQOQ"
+              }
+            },
+            {
+              "id": "test-key-1788867568190679000",
+              "type": "JsonWebKey2020",
+              "controller": "did:web:super-user",
+              "publicKeyMultibase": null,
+              "publicKeyJwk": {
+                "kty": "RSA",
+                "e": "AQAB",
+                "use": "sig",
+                "n": "6__8mLbtRNp4ApgmdM6c77hOw-1xI-tBK4U8_WzmLpacUAzSOsMtLbeV3rIJKfkRrPysKM4Dp-ivRQF7mA8j3FC_P4WaxXjGNfLnY4Ag68spMsFTcIH_cwwsBLv-fZgcwhodA0CxAvqkb-64AHreAmSkdqzbsjbmJqlwZMfD3we6X51r6R6q_Y9-AKKZrV6Y3Os2KfcjUnppZNuj9XWa7xlJFX4zQM71JJMJI06tU8jyEBn_5ObXjuei0wyI4ANggaWrxj_80JbPNdZA4faq1RSJTcd921kWBtHdLcU7GM29hS5JS-pkEw9ge-n0CSlQek1jHuqSr3qArQryb2dQOQ"
+              }
+            },
+            {
+              "id": "key-1",
+              "type": "JsonWebKey2020",
+              "controller": "did:web:super-user",
+              "publicKeyMultibase": null,
+              "publicKeyJwk": {
+                "kty": "RSA",
+                "e": "AQAB",
+                "use": "sig",
+                "n": "6__8mLbtRNp4ApgmdM6c77hOw-1xI-tBK4U8_WzmLpacUAzSOsMtLbeV3rIJKfkRrPysKM4Dp-ivRQF7mA8j3FC_P4WaxXjGNfLnY4Ag68spMsFTcIH_cwwsBLv-fZgcwhodA0CxAvqkb-64AHreAmSkdqzbsjbmJqlwZMfD3we6X51r6R6q_Y9-AKKZrV6Y3Os2KfcjUnppZNuj9XWa7xlJFX4zQM71JJMJI06tU8jyEBn_5ObXjuei0wyI4ANggaWrxj_80JbPNdZA4faq1RSJTcd921kWBtHdLcU7GM29hS5JS-pkEw9ge-n0CSlQek1jHuqSr3qArQryb2dQOQ"
+              }
+            },
+            {
+              "id": "test-key-1788871429802507000",
+              "type": "JsonWebKey2020",
+              "controller": "did:web:super-user",
+              "publicKeyMultibase": null,
+              "publicKeyJwk": {
+                "kty": "RSA",
+                "e": "AQAB",
+                "use": "sig",
+                "n": "6__8mLbtRNp4ApgmdM6c77hOw-1xI-tBK4U8_WzmLpacUAzSOsMtLbeV3rIJKfkRrPysKM4Dp-ivRQF7mA8j3FC_P4WaxXjGNfLnY4Ag68spMsFTcIH_cwwsBLv-fZgcwhodA0CxAvqkb-64AHreAmSkdqzbsjbmJqlwZMfD3we6X51r6R6q_Y9-AKKZrV6Y3Os2KfcjUnppZNuj9XWa7xlJFX4zQM71JJMJI06tU8jyEBn_5ObXjuei0wyI4ANggaWrxj_80JbPNdZA4faq1RSJTcd921kWBtHdLcU7GM29hS5JS-pkEw9ge-n0CSlQek1jHuqSr3qArQryb2dQOQ"
+              }
+            },
+            {
+              "id": "test-key-1788871479168100000",
+              "type": "JsonWebKey2020",
+              "controller": "did:web:super-user",
+              "publicKeyMultibase": null,
+              "publicKeyJwk": {
+                "kty": "RSA",
+                "e": "AQAB",
+                "use": "sig",
+                "n": "6__8mLbtRNp4ApgmdM6c77hOw-1xI-tBK4U8_WzmLpacUAzSOsMtLbeV3rIJKfkRrPysKM4Dp-ivRQF7mA8j3FC_P4WaxXjGNfLnY4Ag68spMsFTcIH_cwwsBLv-fZgcwhodA0CxAvqkb-64AHreAmSkdqzbsjbmJqlwZMfD3we6X51r6R6q_Y9-AKKZrV6Y3Os2KfcjUnppZNuj9XWa7xlJFX4zQM71JJMJI06tU8jyEBn_5ObXjuei0wyI4ANggaWrxj_80JbPNdZA4faq1RSJTcd921kWBtHdLcU7GM29hS5JS-pkEw9ge-n0CSlQek1jHuqSr3qArQryb2dQOQ"
+              }
+            }
+          ],
+          "authentication": [
+            "super-user-key",
+            "test-key-1788863313329151000",
+            "key-1",
+            "test-key-1788866005779605000",
+            "test-key-1788866023433109000",
+            "test-key-1788867492654019000",
+            "test-key-1788867508644582000",
+            "test-key-1788867568190679000",
+            "test-key-1788871429802507000",
+            "test-key-1788871479168100000"
+          ],
+          "capabilityInvocation": [
+            "super-user-key",
+            "test-key-1788863313329151000",
+            "key-1",
+            "test-key-1788866005779605000",
+            "test-key-1788866023433109000",
+            "test-key-1788867492654019000",
+            "test-key-1788867508644582000",
+            "test-key-1788867568190679000",
+            "test-key-1788871429802507000",
+            "test-key-1788871479168100000"
+          ],
+          "@context": [
+            "https://www.w3.org/ns/did/v1"
+          ]
+        }
+      ]
+order: 1788897298188

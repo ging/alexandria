@@ -1,0 +1,18 @@
+$kind: http-request
+description: ""
+url: http://localhost:8182/api/identity/v1/participants/super-user/dids/query
+method: POST
+headers:
+  - key: Content-Type
+    value: application-json
+    disabled: true
+  - key: x-api-key
+    value: c3VwZXItdXNlcg==.c3VwZXItdXNlci1zZWNyZXQta2V5LTEyMzQ1Njc4OTA=
+    disabled: false
+body:
+  type: json
+  content: "{}"
+auth:
+  type: noauth
+examples: .resources/Original Testing.resources/examples
+order: 2617803198694213

@@ -1,0 +1,153 @@
+# Local development deployment using Eclipse EDC IdentityHub as the delegated wallet.
+#
+# To run Alexandria with this configuration:
+#
+#   1. Start the IdentityHub container:
+#      task identityhub:up
+#
+#   2. Launch Alexandria with the config flag:
+#      go run ./cmd/alexandria --config config/config-ih.yaml
+#
+#      Or via Task / environment variable:
+#      ALEXANDRIA_CONFIG=config/config-ih.yaml task dev
+#
+# Any setting can be overridden from the environment without editing the file:
+# the variable is ALEXANDRIA_ plus the dotted path, upper-cased. For example:
+#
+#   ALEXANDRIA_WALLET_CONFIG_IDENTITYHUB_PARTICIPANT_ID=custom-user task dev
+
+common_config:
+  hosts:
+    http:
+      # As the outside world sees this node: through Caddy, over TLS. The
+      # process itself listens on internal_port, in the clear, behind it.
+      protocol: "https"
+      url: "alexandria.127.0.0.1.nip.io"
+      port: "8443"
+      internal_port: "1234"
+    grpc: null
+    graphql: null
+  db:
+    db_type: Postgres
+    url: "127.0.0.1"
+    port: "1500"
+    # Development credentials, and nothing more: this file is committed. A
+    # deployment renders its own — with Helm, or by mounting one into the
+    # container — so the production password is generated there and never
+    # exists in the repository. Any of these can also be overridden from the
+    # environment: ALEXANDRIA_COMMON_CONFIG_DB_PASSWORD.
+    user: "alexandria"
+    password: "alexandria"
+    name: "alexandria"
+  api:
+    version: "v1"
+    openapi_path: "./static/specs/openapi/merged_openapi.json"
+  connection:
+    is_local: true
+    is_prod: false
+    is_vault_real: false
+    has_tls_proxy: true
+
+wallet_config:
+  wallet: IdentityHub
+  api:
+    http:
+      protocol: "http"
+      url: "127.0.0.1"
+      # Port 8182 exposes the Identity API (WEB_HTTP_IDENTITY_PORT) on the container
+      # started by `task identityhub:up`. Port 8181 exposes the management/health API.
+      port: "8182"
+    grpc: null
+    graphql: null
+  # How long startup blocks waiting for the wallet. Past it the node comes up
+  # anyway and reports itself not ready, while it keeps retrying.
+  startup_link_timeout: "10s"
+  identityhub:
+    identity_api_url: "http://127.0.0.1:8182/api/identity/v1"
+    issuer_api_url: "http://127.0.0.1:8182/api/issuer"
+    sts_api_url: "http://127.0.0.1:8182/api/sts"
+    credentials_api_url: "http://127.0.0.1:8182/api/credentials"
+    api_key: "c3VwZXItdXNlcg==.c3VwZXItdXNlci1zZWNyZXQta2V5LTEyMzQ1Njc4OTA="
+    participant_id: "super-user"
+
+# The authentication boundary. Everything under /api/v1 is refused without a
+# credential once this is on, and the browser never addresses Zitadel directly:
+# it goes to /api/v1/auth/login, comes back through /api/v1/auth/callback, and
+# carries a sealed HttpOnly cookie from then on.
+#
+# `task auth:bootstrap` sets it up: it starts Zitadel, registers this node as an
+# application, and writes the credentials to .env, which Task loads. The
+# settings live here; the secrets live there, because this file is committed.
+auth_config:
+  enabled: true
+  # The issuer every token names. It must be exactly what Zitadel's discovery
+  # document reports, or the handshake is refused rather than trusted.
+  issuer: "https://auth.127.0.0.1.nip.io:8443"
+  # Where this process reaches Zitadel, when that differs from the address the
+  # browser uses — "http://zitadel:8080" from inside the compose network. Empty
+  # means they are the same, which is the case for a loopback run.
+  internal_issuer: ""
+  # Zitadel generates the client id — it looks like "340710279344259073", it
+  # cannot be chosen, and it differs on every instance — so there is no value
+  # here that works out of the box. `task auth:bootstrap` creates the
+  # application and writes both of these into .env, which Task loads; leaving
+  # them empty here is the normal state.
+  client_id: ""
+  client_secret: ""
+  # The "aud" values an access token must carry. Empty accepts any audience,
+  # which is only safe while this node is the sole relying party. In Zitadel
+  # the value to put here is the project id.
+  audiences: []
+  scopes: [ "openid", "profile", "email", "offline_access" ]
+  redirect_url: "https://alexandria.127.0.0.1.nip.io:8443/api/v1/auth/callback"
+  # Where the browser lands once a login completes, and after a logout.
+  app_url: "https://alexandria.127.0.0.1.nip.io:8443/"
+  post_logout_url: ""
+  # never | fallback | always. Zitadel issues opaque access tokens unless the
+  # application asks for JWTs; fallback verifies a JWT locally and introspects
+  # anything else, so both kinds work without a setting to get wrong.
+  introspect: "fallback"
+  roles_claim: "urn:zitadel:iam:org:project:roles"
+  # Roles every caller must hold, whatever route they are asking for. Empty
+  # means authentication alone is the bar.
+  required_roles: []
+  jwks_refresh: "15m"
+  http_timeout: "10s"
+  # How long startup blocks waiting for Zitadel. Past it the node comes up
+  # anyway, reports itself not ready, and answers 503 — not 401 — until the
+  # provider is reachable.
+  startup_discovery_timeout: "10s"
+  session:
+    name: "alexandria_session"
+    domain: ""
+    path: "/"
+    # TLS is terminated by Caddy in front, so the cookie never travels in the
+    # clear and can say so.
+    secure: true
+    same_site: "lax"
+    ttl: "12h"
+    # 32 bytes of hex or base64, written to .env by `task auth:bootstrap`.
+    # Empty is tolerated here and refused in production: the node then seals
+    # with a random key, and every restart ends every session.
+    key: ""
+
+observability:
+  log_level: "info" # debug | info | warn | error
+  log_format: "auto" # auto (text on a terminal, JSON otherwise) | text | json
+  metrics: true # /metrics on the internal port below
+  pprof: false # /debug/pprof, off by default: a heap dump says a lot
+  port: "2112" # internal listener; empty switches it off
+
+client_config:
+  class_id: "Provider"
+  display: null
+
+verify_req_config:
+  is_cert_allowed: false
+  auto_approve_cert: false
+  vcs_requested: [ DataSpaceParticipant ]
+
+did_config:
+  type: Jwk
+
+gaia_config: null

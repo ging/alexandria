@@ -46,3 +46,41 @@ func (e ValidationError) Is(target error) bool { return target == ErrInvalidInpu
 func Invalid(field, reason string) error {
 	return ValidationError{Field: field, Reason: reason}
 }
+
+// UpstreamError represents an error returned by an external wallet provider (e.g. IdentityHub or Fafnir).
+type UpstreamError struct {
+	Provider   string `json:"provider"`
+	StatusCode int    `json:"statusCode"`
+	Path       string `json:"path,omitempty"`
+	RawBody    []byte `json:"body,omitempty"`
+	Sentinel   error  `json:"-"`
+}
+
+// Error implements error.
+func (e *UpstreamError) Error() string {
+	if len(e.RawBody) > 0 {
+		return fmt.Sprintf("%s: %s returned %d: %s: %v", e.Provider, e.Path, e.StatusCode, string(e.RawBody), e.Sentinel)
+	}
+	return fmt.Sprintf("%s: %s returned %d: %v", e.Provider, e.Path, e.StatusCode, e.Sentinel)
+}
+
+// Unwrap exposes the underlying domain sentinel to errors.Is and errors.As.
+func (e *UpstreamError) Unwrap() error {
+	return e.Sentinel
+}
+
+// Is allows errors.Is(err, sentinel) to match against e.Sentinel.
+func (e *UpstreamError) Is(target error) bool {
+	return errors.Is(e.Sentinel, target)
+}
+
+// NewUpstreamError creates an UpstreamError with a matching domain sentinel.
+func NewUpstreamError(provider string, statusCode int, path string, body []byte, sentinel error) *UpstreamError {
+	return &UpstreamError{
+		Provider:   provider,
+		StatusCode: statusCode,
+		Path:       path,
+		RawBody:    body,
+		Sentinel:   sentinel,
+	}
+}

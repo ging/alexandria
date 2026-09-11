@@ -4,6 +4,7 @@ package identityhub
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/caparicio-esd/alexandria/internal/common"
@@ -19,15 +21,16 @@ import (
 
 const defaultTimeout = 10 * time.Second
 
-// Client handles HTTP interactions with IdentityHub endpoints.
-type Client struct {
+// EdcClient handles HTTP interactions with IdentityHub endpoints.
+type EdcClient struct {
 	http   *resty.Client
 	apiKey string
+	mu     sync.RWMutex
 	logger *slog.Logger
 }
 
-// NewClient constructs a Client targeting the IdentityHub Identity API base URL.
-func NewClient(baseURL string, apiKey string, logger *slog.Logger) (*Client, error) {
+// NewEdcClient constructs an EdcClient targeting the IdentityHub Identity API base URL.
+func NewEdcClient(baseURL string, apiKey string, logger *slog.Logger) (*EdcClient, error) {
 	parsed, err := url.Parse(baseURL)
 	if err != nil {
 		return nil, fmt.Errorf("identityhub: parsing base url %q: %w", baseURL, err)
@@ -51,20 +54,35 @@ func NewClient(baseURL string, apiKey string, logger *slog.Logger) (*Client, err
 		client.SetHeader("x-api-key", apiKey)
 	}
 
-	return &Client{
+	return &EdcClient{
 		http:   client,
 		apiKey: apiKey,
 		logger: logger,
 	}, nil
 }
 
+// SetAPIKey updates the API key header used for future HTTP requests.
+func (c *EdcClient) SetAPIKey(apiKey string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.apiKey = apiKey
+	c.http.SetHeader("x-api-key", apiKey)
+}
+
+// APIKey returns the currently active API key.
+func (c *EdcClient) APIKey() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.apiKey
+}
+
 // Close terminates any idle network connections.
-func (c *Client) Close() error {
+func (c *EdcClient) Close() error {
 	return c.http.Close()
 }
 
 // GetParticipant fetches participant metadata.
-func (c *Client) GetParticipant(ctx context.Context, pid string) (*ParticipantContextDto, error) {
+func (c *EdcClient) GetParticipant(ctx context.Context, pid string) (*ParticipantContextDto, error) {
 	path := fmt.Sprintf("/participants/%s", url.PathEscape(pid))
 	var out ParticipantContextDto
 
@@ -82,7 +100,7 @@ func (c *Client) GetParticipant(ctx context.Context, pid string) (*ParticipantCo
 }
 
 // CreateParticipant provisions a new participant context.
-func (c *Client) CreateParticipant(ctx context.Context, req *CreateParticipantDto) error {
+func (c *EdcClient) CreateParticipant(ctx context.Context, req *CreateParticipantDto) error {
 	const path = "/participants"
 
 	res, err := c.http.R().SetContext(ctx).SetBody(req).Post(path)
@@ -99,7 +117,7 @@ func (c *Client) CreateParticipant(ctx context.Context, req *CreateParticipantDt
 }
 
 // SetParticipantState activates or deactivates a participant context.
-func (c *Client) SetParticipantState(ctx context.Context, pid string, active bool) error {
+func (c *EdcClient) SetParticipantState(ctx context.Context, pid string, active bool) error {
 	path := fmt.Sprintf("/participants/%s/state?isActive=%t", url.PathEscape(pid), active)
 
 	res, err := c.http.R().SetContext(ctx).Post(path)
@@ -116,7 +134,7 @@ func (c *Client) SetParticipantState(ctx context.Context, pid string, active boo
 }
 
 // RegenerateParticipantToken rotates the participant API token.
-func (c *Client) RegenerateParticipantToken(ctx context.Context, pid string) (string, error) {
+func (c *EdcClient) RegenerateParticipantToken(ctx context.Context, pid string) (string, error) {
 	path := fmt.Sprintf("/participants/%s/token", url.PathEscape(pid))
 
 	res, err := c.http.R().SetContext(ctx).Post(path)
@@ -139,8 +157,25 @@ func (c *Client) RegenerateParticipantToken(ctx context.Context, pid string) (st
 	return token, nil
 }
 
+// DeleteParticipant deletes a participant context from IdentityHub.
+func (c *EdcClient) DeleteParticipant(ctx context.Context, pid string) error {
+	path := fmt.Sprintf("/participants/%s", url.PathEscape(pid))
+
+	res, err := c.http.R().SetContext(ctx).Delete(path)
+	if err != nil {
+		return fmt.Errorf("identityhub: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.IsStatusFailure() {
+		return statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	return nil
+}
+
 // ListKeys lists all keypairs for a participant.
-func (c *Client) ListKeys(ctx context.Context, pid string) ([]KeyPairDto, error) {
+func (c *EdcClient) ListKeys(ctx context.Context, pid string) ([]KeyPairDto, error) {
 	path := fmt.Sprintf("/participants/%s/keypairs", url.PathEscape(pid))
 	var out []KeyPairDto
 
@@ -158,7 +193,7 @@ func (c *Client) ListKeys(ctx context.Context, pid string) ([]KeyPairDto, error)
 }
 
 // AddKey registers a key descriptor with the participant.
-func (c *Client) AddKey(ctx context.Context, pid string, desc *KeyDescriptorDto) error {
+func (c *EdcClient) AddKey(ctx context.Context, pid string, desc *KeyDescriptorDto) error {
 	path := fmt.Sprintf("/participants/%s/keypairs", url.PathEscape(pid))
 
 	res, err := c.http.R().SetContext(ctx).SetBody(desc).Put(path)
@@ -175,9 +210,12 @@ func (c *Client) AddKey(ctx context.Context, pid string, desc *KeyDescriptorDto)
 }
 
 // RotateKey triggers a key rotation with an active overlap duration.
-func (c *Client) RotateKey(ctx context.Context, pid string, keyID string, duration time.Duration) error {
-	path := fmt.Sprintf("/participants/%s/keypairs/%s/rotate?duration=%s",
-		url.PathEscape(pid), url.PathEscape(keyID), duration.String())
+func (c *EdcClient) RotateKey(ctx context.Context, pid string, keyID string, duration time.Duration) error {
+	path := fmt.Sprintf("/participants/%s/keypairs/%s/rotate",
+		url.PathEscape(pid), url.PathEscape(keyID))
+	if duration > 0 {
+		path = fmt.Sprintf("%s?duration=%d", path, duration.Milliseconds())
+	}
 
 	res, err := c.http.R().SetContext(ctx).Post(path)
 	if err != nil {
@@ -193,7 +231,7 @@ func (c *Client) RotateKey(ctx context.Context, pid string, keyID string, durati
 }
 
 // RevokeKey immediately revokes a keypair.
-func (c *Client) RevokeKey(ctx context.Context, pid string, keyID string) error {
+func (c *EdcClient) RevokeKey(ctx context.Context, pid string, keyID string) error {
 	path := fmt.Sprintf("/participants/%s/keypairs/%s/revoke",
 		url.PathEscape(pid), url.PathEscape(keyID))
 
@@ -211,7 +249,7 @@ func (c *Client) RevokeKey(ctx context.Context, pid string, keyID string) error 
 }
 
 // PublishDid publishes a DID document to the resolver.
-func (c *Client) PublishDid(ctx context.Context, pid string, did string) error {
+func (c *EdcClient) PublishDid(ctx context.Context, pid string, did string) error {
 	path := fmt.Sprintf("/participants/%s/dids/publish", url.PathEscape(pid))
 	req := DidDocumentPublishDto{Did: did}
 
@@ -229,7 +267,7 @@ func (c *Client) PublishDid(ctx context.Context, pid string, did string) error {
 }
 
 // UnpublishDid removes a published DID document.
-func (c *Client) UnpublishDid(ctx context.Context, pid string, did string) error {
+func (c *EdcClient) UnpublishDid(ctx context.Context, pid string, did string) error {
 	path := fmt.Sprintf("/participants/%s/dids/unpublish", url.PathEscape(pid))
 	req := DidDocumentPublishDto{Did: did}
 
@@ -247,11 +285,11 @@ func (c *Client) UnpublishDid(ctx context.Context, pid string, did string) error
 }
 
 // GetDidState queries the publication state for a DID.
-func (c *Client) GetDidState(ctx context.Context, pid string, did string) (*DidStateDto, error) {
-	path := fmt.Sprintf("/participants/%s/dids/state?did=%s", url.PathEscape(pid), url.QueryEscape(did))
-	var out DidStateDto
+func (c *EdcClient) GetDidState(ctx context.Context, pid string, did string) (*DidStateDto, error) {
+	path := fmt.Sprintf("/participants/%s/dids/state", url.PathEscape(pid))
+	req := DidDocumentPublishDto{Did: did}
 
-	res, err := c.http.R().SetContext(ctx).SetResult(&out).Get(path)
+	res, err := c.http.R().SetContext(ctx).SetBody(req).Post(path)
 	if err != nil {
 		return nil, fmt.Errorf("identityhub: calling %s: %w", path, err)
 	}
@@ -261,12 +299,44 @@ func (c *Client) GetDidState(ctx context.Context, pid string, did string) (*DidS
 		return nil, statusError(res.StatusCode(), path, res.Bytes())
 	}
 
-	return &out, nil
+	var out DidStateDto
+	if err := json.Unmarshal(res.Bytes(), &out); err == nil && out.State != "" {
+		if out.Did == "" {
+			out.Did = did
+		}
+		return &out, nil
+	}
+
+	stateStr := strings.Trim(strings.TrimSpace(string(res.Bytes())), "\"")
+
+	return &DidStateDto{
+		Did:   did,
+		State: DidStateString(stateStr),
+	}, nil
+}
+
+// QueryDids queries all DID documents for a participant context.
+func (c *EdcClient) QueryDids(ctx context.Context, pid string) ([]json.RawMessage, error) {
+	path := fmt.Sprintf("/participants/%s/dids/query", url.PathEscape(pid))
+	var out []json.RawMessage
+
+	res, err := c.http.R().SetContext(ctx).SetBody(map[string]any{}).SetResult(&out).Post(path)
+	if err != nil {
+		return nil, fmt.Errorf("identityhub: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.IsStatusFailure() {
+		return nil, statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	return out, nil
 }
 
 // AddServiceEndpoint binds a service endpoint to a participant's DID.
-func (c *Client) AddServiceEndpoint(ctx context.Context, pid string, endpoint *ServiceEndpointDto) error {
-	path := fmt.Sprintf("/participants/%s/dids/endpoints", url.PathEscape(pid))
+func (c *EdcClient) AddServiceEndpoint(ctx context.Context, pid string, did string, endpoint *ServiceEndpointDto) error {
+	encodedDid := base64.RawURLEncoding.EncodeToString([]byte(did))
+	path := fmt.Sprintf("/participants/%s/dids/%s/endpoints", url.PathEscape(pid), encodedDid)
 
 	res, err := c.http.R().SetContext(ctx).SetBody(endpoint).Post(path)
 	if err != nil {
@@ -282,8 +352,9 @@ func (c *Client) AddServiceEndpoint(ctx context.Context, pid string, endpoint *S
 }
 
 // RemoveServiceEndpoint deletes a service endpoint from a participant's DID.
-func (c *Client) RemoveServiceEndpoint(ctx context.Context, pid string, endpointID string) error {
-	path := fmt.Sprintf("/participants/%s/dids/endpoints/%s", url.PathEscape(pid), url.PathEscape(endpointID))
+func (c *EdcClient) RemoveServiceEndpoint(ctx context.Context, pid string, did string, endpointID string) error {
+	encodedDid := base64.RawURLEncoding.EncodeToString([]byte(did))
+	path := fmt.Sprintf("/participants/%s/dids/%s/endpoints?serviceId=%s", url.PathEscape(pid), encodedDid, url.QueryEscape(endpointID))
 
 	res, err := c.http.R().SetContext(ctx).Delete(path)
 	if err != nil {
@@ -299,7 +370,7 @@ func (c *Client) RemoveServiceEndpoint(ctx context.Context, pid string, endpoint
 }
 
 // ListCredentials lists stored verifiable credentials, optionally filtering by type.
-func (c *Client) ListCredentials(ctx context.Context, pid string, vcType string) ([]VerifiableCredentialResourceDto, error) {
+func (c *EdcClient) ListCredentials(ctx context.Context, pid string, vcType string) ([]VerifiableCredentialResourceDto, error) {
 	path := fmt.Sprintf("/participants/%s/credentials", url.PathEscape(pid))
 	if vcType != "" {
 		path = fmt.Sprintf("%s?type=%s", path, url.QueryEscape(vcType))
@@ -320,7 +391,7 @@ func (c *Client) ListCredentials(ctx context.Context, pid string, vcType string)
 }
 
 // DeleteCredential deletes a stored credential by its identifier.
-func (c *Client) DeleteCredential(ctx context.Context, pid string, credID string) error {
+func (c *EdcClient) DeleteCredential(ctx context.Context, pid string, credID string) error {
 	path := fmt.Sprintf("/participants/%s/credentials/%s", url.PathEscape(pid), url.PathEscape(credID))
 
 	res, err := c.http.R().SetContext(ctx).Delete(path)
@@ -337,7 +408,7 @@ func (c *Client) DeleteCredential(ctx context.Context, pid string, credID string
 }
 
 // StoreCredential saves a verifiable credential directly into the participant's storage.
-func (c *Client) StoreCredential(ctx context.Context, pid string, cred *StoreCredentialDto) error {
+func (c *EdcClient) StoreCredential(ctx context.Context, pid string, cred *StoreCredentialDto) error {
 	path := fmt.Sprintf("/participants/%s/credentials", url.PathEscape(pid))
 
 	res, err := c.http.R().SetContext(ctx).SetBody(cred).Post(path)
@@ -354,7 +425,7 @@ func (c *Client) StoreCredential(ctx context.Context, pid string, cred *StoreCre
 }
 
 // RequestDcpCredential initiates an asynchronous DCP credential request.
-func (c *Client) RequestDcpCredential(ctx context.Context, pid string, req *DcpCredentialRequestDto) (string, error) {
+func (c *EdcClient) RequestDcpCredential(ctx context.Context, pid string, req *DcpCredentialRequestDto) (string, error) {
 	path := fmt.Sprintf("/participants/%s/credentials/request", url.PathEscape(pid))
 	var out struct {
 		RequestID string `json:"requestId"`
@@ -370,11 +441,22 @@ func (c *Client) RequestDcpCredential(ctx context.Context, pid string, req *DcpC
 		return "", statusError(res.StatusCode(), path, res.Bytes())
 	}
 
-	return out.RequestID, nil
+	reqID := out.RequestID
+	if reqID == "" {
+		if loc := res.Header().Get("Location"); loc != "" {
+			parts := strings.Split(loc, "/")
+			reqID = parts[len(parts)-1]
+		}
+	}
+	if reqID == "" {
+		reqID = pid
+	}
+
+	return reqID, nil
 }
 
 // GetDcpRequestStatus checks the progress of an asynchronous DCP credential request.
-func (c *Client) GetDcpRequestStatus(ctx context.Context, pid string, reqID string) (*DcpRequestStatusDto, error) {
+func (c *EdcClient) GetDcpRequestStatus(ctx context.Context, pid string, reqID string) (*DcpRequestStatusDto, error) {
 	path := fmt.Sprintf("/participants/%s/credentials/request/%s", url.PathEscape(pid), url.PathEscape(reqID))
 	var out DcpRequestStatusDto
 
@@ -386,6 +468,10 @@ func (c *Client) GetDcpRequestStatus(ctx context.Context, pid string, reqID stri
 
 	if res.IsStatusFailure() {
 		return nil, statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	if out.RequestID == "" {
+		out.RequestID = reqID
 	}
 
 	return &out, nil
@@ -405,5 +491,5 @@ func statusError(status int, path string, body []byte) error {
 		sentinel = errors.New("unexpected status")
 	}
 
-	return fmt.Errorf("identityhub: %s returned %d: %s: %w", path, status, body, sentinel)
+	return common.NewUpstreamError("IdentityHub", status, path, body, sentinel)
 }

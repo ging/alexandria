@@ -146,8 +146,16 @@ type KeyPairDto struct {
 	ParticipantContextID string            `json:"participantContextId"`
 	State                StateString       `json:"state"`
 	Timestamp            EpochMillis       `json:"timestamp"`
+	CreatedAt            EpochMillis       `json:"createdAt,omitempty"`
 	KeyContext           *string           `json:"keyContext,omitempty"`
 	Descriptor           *KeyDescriptorDto `json:"descriptor,omitempty"`
+	SerializedPublicKey  string            `json:"serializedPublicKey,omitempty"`
+	PrivateKeyAlias      string            `json:"privateKeyAlias,omitempty"`
+	DefaultPair          bool              `json:"defaultPair,omitempty"`
+	Usage                []string          `json:"usage,omitempty"`
+	GroupName            *string           `json:"groupName,omitempty"`
+	UseDuration          int64             `json:"useDuration,omitempty"`
+	RotationDuration     int64             `json:"rotationDuration,omitempty"`
 }
 
 // DidDocumentPublishDto contains DID document details for publication.
@@ -178,24 +186,40 @@ type VerifiableCredentialResourceDto struct {
 	VerifiableCredential VerifiableCredentialBody `json:"verifiableCredential"`
 }
 
-// VerifiableCredentialBody contains format and raw content of a stored credential.
+// VerifiableCredentialBody contains format, raw content, and parsed credential object.
 type VerifiableCredentialBody struct {
-	Format string `json:"format"`
-	RawVc  string `json:"rawVc"`
+	Format     string          `json:"format"`
+	RawVc      string          `json:"rawVc"`
+	Credential json.RawMessage `json:"credential,omitempty"`
+}
+
+// VerifiableCredentialContainerDto wraps the raw credential content and format for storage.
+type VerifiableCredentialContainerDto struct {
+	RawVc      string          `json:"rawVc"`
+	Format     string          `json:"format"`
+	Credential json.RawMessage `json:"credential,omitempty"`
 }
 
 // StoreCredentialDto is the wire payload to store a verifiable credential manually.
 type StoreCredentialDto struct {
-	ID    string `json:"id"`
-	RawVc string `json:"rawVc"`
+	ID                            string                           `json:"id"`
+	ParticipantContextID          string                           `json:"participantContextId"`
+	VerifiableCredentialContainer VerifiableCredentialContainerDto `json:"verifiableCredentialContainer"`
+}
+
+// CredentialDescriptorDto describes a requested credential in a DCP request.
+type CredentialDescriptorDto struct {
+	ID     string `json:"id,omitempty"`
+	Format string `json:"format"`
+	Type   string `json:"type"`
 }
 
 // DcpCredentialRequestDto is the wire payload to request credentials via DCP.
 type DcpCredentialRequestDto struct {
-	IssuerURL string   `json:"issuerUrl"`
-	HolderPid string   `json:"holderPid"`
-	Types     []string `json:"types"`
-	Format    string   `json:"format"`
+	IssuerURL   string                    `json:"issuerUrl,omitempty"`
+	IssuerDid   string                    `json:"issuerDid"`
+	HolderPid   string                    `json:"holderPid"`
+	Credentials []CredentialDescriptorDto `json:"credentials"`
 }
 
 // DcpRequestStatusDto reports the status of an asynchronous DCP request.

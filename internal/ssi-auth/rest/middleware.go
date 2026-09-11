@@ -4,6 +4,7 @@
 package rest
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -136,7 +137,7 @@ func Recovery(logger *slog.Logger) gin.HandlerFunc {
 			"panic", recovered,
 		)
 
-		c.AbortWithStatusJSON(http.StatusInternalServerError, errorBody{Error: "internal error"})
+		c.AbortWithStatusJSON(http.StatusInternalServerError, errorBody{Error: fmt.Sprintf("panic recovered: %v", recovered)})
 	})
 }
 

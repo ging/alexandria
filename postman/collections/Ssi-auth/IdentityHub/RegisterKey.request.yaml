@@ -1,0 +1,17 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/ssi-auth/wallet/keys"
+method: POST
+body:
+  type: json
+  content: |-
+    {
+        "id": "key-jose-1",
+        "alias": "key-jose-alias",
+        "pem": "{\"kty\":\"OKP\",\"crv\":\"Ed25519\",\"kid\":\"key-jose-1\",\"x\":\"9nhnpQlR-MdqxM6qmqftTdCmCphBkJTzwP6855UXoSk\"}"
+    }
+auth:
+  type: inherit
+  credentials:
+    id: 0812cb1e-4ea1-4bd8-b892-0d22d8d0b103
+settings: {}
+order: 7000

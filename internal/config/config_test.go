@@ -301,3 +301,36 @@ func TestEnvOverride(t *testing.T) {
 		t.Errorf("Wallet.APIURL() = %q, want %q", got, want)
 	}
 }
+
+func TestLoadIdentityHubConfig(t *testing.T) {
+	t.Setenv("ALEXANDRIA_AUTH_CONFIG_CLIENT_ID", "test-client-id")
+
+	cfg, err := config.Load("../../config/config-ih.yaml")
+	if err != nil {
+		t.Fatalf("Load(config/config-ih.yaml) = %v", err)
+	}
+
+	if cfg.Wallet.Kind != config.KindIdentityHub {
+		t.Errorf("Wallet.Kind = %q, want %q", cfg.Wallet.Kind, config.KindIdentityHub)
+	}
+
+	if cfg.Wallet.IdentityHub == nil {
+		t.Fatal("Wallet.IdentityHub is nil")
+	}
+
+	if got, want := cfg.Wallet.IdentityHub.IdentityAPIURL, "http://127.0.0.1:8182/api/identity/v1"; got != want {
+		t.Errorf("IdentityAPIURL = %q, want %q", got, want)
+	}
+
+	if got, want := cfg.Wallet.IdentityHub.ParticipantID, "super-user"; got != want {
+		t.Errorf("ParticipantID = %q, want %q", got, want)
+	}
+
+	walletURL, err := cfg.Wallet.APIURL(config.HostHTTP)
+	if err != nil {
+		t.Fatalf("Wallet.APIURL() = %v", err)
+	}
+	if got, want := walletURL, "http://127.0.0.1:8182"; got != want {
+		t.Errorf("Wallet.APIURL() = %q, want %q", got, want)
+	}
+}

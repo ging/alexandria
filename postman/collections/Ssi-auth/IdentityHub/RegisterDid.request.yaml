@@ -1,0 +1,20 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/ssi-auth/wallet/did"
+method: POST
+body:
+  type: json
+  content: |-
+    {
+        "builder": {
+            "method": "web",
+            "domain": "super-user"
+        },
+        "keys": ["key-1"],
+        "alias": "did:web:super-user"
+    }
+auth:
+  type: inherit
+  credentials:
+    id: 0812cb1e-4ea1-4bd8-b892-0d22d8d0b103
+settings: {}
+order: 13000

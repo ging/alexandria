@@ -6,6 +6,7 @@ package rest
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/caparicio-esd/alexandria/internal/common"
@@ -66,21 +67,31 @@ func newDidResps(dids []wallet.Did) []didResp {
 
 // keyResp is the public representation of a wallet key.
 type keyResp struct {
-	ID        string    `json:"id"`
-	Alias     string    `json:"alias,omitempty"`
-	Kty       string    `json:"kty"`
-	Crv       *string   `json:"crv,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID                  string    `json:"id"`
+	Alias               string    `json:"alias,omitempty"`
+	Kty                 string    `json:"kty"`
+	Crv                 *string   `json:"crv,omitempty"`
+	State               string    `json:"state,omitempty"`
+	CreatedAt           time.Time `json:"createdAt"`
+	SerializedPublicKey *string   `json:"serializedPublicKey,omitempty"`
+	KeyContext          *string   `json:"keyContext,omitempty"`
+	DefaultPair         *bool     `json:"defaultPair,omitempty"`
+	PrivateKeyAlias     *string   `json:"privateKeyAlias,omitempty"`
 }
 
 // newKeyResp projects a domain key onto the wire.
 func newKeyResp(k wallet.Key) keyResp {
 	return keyResp{
-		ID:        k.ID,
-		Alias:     k.Alias,
-		Kty:       k.Kty,
-		Crv:       k.Crv,
-		CreatedAt: k.CreatedAt,
+		ID:                  k.ID,
+		Alias:               k.Alias,
+		Kty:                 k.Kty,
+		Crv:                 k.Crv,
+		State:               k.State,
+		CreatedAt:           k.CreatedAt,
+		SerializedPublicKey: k.SerializedPublicKey,
+		KeyContext:          k.KeyContext,
+		DefaultPair:         k.DefaultPair,
+		PrivateKeyAlias:     k.PrivateKeyAlias,
 	}
 }
 
@@ -95,10 +106,27 @@ func newKeyResps(keys []wallet.Key) []keyResp {
 	return out
 }
 
+// registerKeyReq carries parameters for importing a keypair.
 type registerKeyReq struct {
-	ID    *string `json:"id,omitempty"`
-	Pem   string  `json:"pem"`
-	Alias string  `json:"alias,omitempty"`
+	ID    *string         `json:"id,omitempty"`
+	Pem   string          `json:"pem,omitempty"`
+	Jwk   json.RawMessage `json:"jwk,omitempty"`
+	Alias string          `json:"alias,omitempty"`
+}
+
+// rawKey resolves key material from Pem or Jwk fields.
+func (r registerKeyReq) rawKey() string {
+	if r.Pem != "" {
+		return strings.TrimSpace(r.Pem)
+	}
+	if len(r.Jwk) > 0 {
+		var s string
+		if err := json.Unmarshal(r.Jwk, &s); err == nil {
+			return strings.TrimSpace(s)
+		}
+		return strings.TrimSpace(string(r.Jwk))
+	}
+	return ""
 }
 
 // ===== DID Registering rest DTOs =========================================================
@@ -159,29 +187,70 @@ func (b *didBuilderReq) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("reading did builder: %w", err)
 	}
 
-	method, err := common.ParseMethod(peek.Method)
-	if err != nil {
-		return err
-	}
-
-	switch method {
-	case common.MethodJwk:
-		var v jwkBuilderReq
-		if err := json.Unmarshal(data, &v); err != nil {
-			return fmt.Errorf("reading did:jwk builder: %w", err)
+	if peek.Method != "" {
+		method, err := common.ParseMethod(peek.Method)
+		if err != nil {
+			return err
 		}
 
-		b.builder = common.JwkDidBuilder{Pem: v.Pem}
-	case common.MethodWeb:
-		var v webBuilderReq
-		if err := json.Unmarshal(data, &v); err != nil {
-			return fmt.Errorf("reading did:web builder: %w", err)
+		switch method {
+		case common.MethodJwk:
+			var v jwkBuilderReq
+			if err := json.Unmarshal(data, &v); err != nil {
+				return fmt.Errorf("reading did:jwk builder: %w", err)
+			}
+
+			b.builder = common.JwkDidBuilder{Pem: v.Pem}
+		case common.MethodWeb:
+			var v webBuilderReq
+			if err := json.Unmarshal(data, &v); err != nil {
+				return fmt.Errorf("reading did:web builder: %w", err)
+			}
+
+			domain := cleanDomain(v.Domain)
+			b.builder = common.WebDidBuilder{Domain: domain, Port: v.Port, Path: v.Path}
 		}
 
-		b.builder = common.WebDidBuilder{Domain: v.Domain, Port: v.Port, Path: v.Path}
+		return nil
 	}
 
-	return nil
+	// Support external tagging: {"Web": {...}} or {"Jwk": {...}} (commonly used in Fafnir / Serde)
+	var ext struct {
+		Web      *webBuilderReq `json:"Web"`
+		WebLower *webBuilderReq `json:"web"`
+		Jwk      *jwkBuilderReq `json:"Jwk"`
+		JwkLower *jwkBuilderReq `json:"jwk"`
+	}
+	if err := json.Unmarshal(data, &ext); err == nil {
+		webReq := ext.Web
+		if webReq == nil {
+			webReq = ext.WebLower
+		}
+		if webReq != nil {
+			domain := cleanDomain(webReq.Domain)
+			b.builder = common.WebDidBuilder{Domain: domain, Port: webReq.Port, Path: webReq.Path}
+			return nil
+		}
+
+		jwkReq := ext.Jwk
+		if jwkReq == nil {
+			jwkReq = ext.JwkLower
+		}
+		if jwkReq != nil {
+			b.builder = common.JwkDidBuilder{Pem: jwkReq.Pem}
+			return nil
+		}
+	}
+
+	return fmt.Errorf("did method %q: %w", peek.Method, common.ErrUnsupported)
+}
+
+func cleanDomain(domain string) string {
+	d := strings.TrimSpace(domain)
+	d = strings.TrimPrefix(d, "did:web:")
+	d = strings.TrimPrefix(d, "https://")
+	d = strings.TrimPrefix(d, "http://")
+	return d
 }
 
 func (b didBuilderReq) toDomain() (common.DidBuilder, error) {
@@ -198,24 +267,21 @@ func (b didBuilderReq) toDomain() (common.DidBuilder, error) {
 
 // ===== Wallet Info DTO =========================================================
 
+// walletInfoRest is the public representation of the wallet's metadata.
 type walletInfoRest struct {
-	ID         string    `json:"id"`
-	Name       string    `json:"name"`
-	CreatedAt  time.Time `json:"createdAt"`
-	AddedAt    time.Time `json:"addedAt"`
-	Permission string    `json:"permission"`
-	Dids       []didResp `json:"dids"`
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"createdAt"`
+	Dids      []didResp `json:"dids"`
 }
 
-// newKeyResp projects a domain key onto the wire.
+// newWalletInfoRest projects domain wallet info onto the wire.
 func newWalletInfoRest(i wallet.WalletInfo) walletInfoRest {
 	return walletInfoRest{
-		ID:         i.ID,
-		Name:       i.Name,
-		CreatedAt:  i.CreatedAt,
-		AddedAt:    i.AddedAt,
-		Permission: i.Permission,
-		Dids:       newDidResps(i.Dids),
+		ID:        i.ID,
+		Name:      i.Name,
+		CreatedAt: i.CreatedAt,
+		Dids:      newDidResps(i.Dids),
 	}
 }
 
@@ -223,29 +289,85 @@ func newWalletInfoRest(i wallet.WalletInfo) walletInfoRest {
 
 // credentialResp is the public representation of a stored Verifiable Credential.
 type credentialResp struct {
-	ID             string          `json:"id"`
-	VcBody         json.RawMessage `json:"vcBody"`
-	VcType         string          `json:"vcType"`
-	VcFormat       string          `json:"vcFormat"`
-	HolderDid      string          `json:"holderDid"`
-	IssuerDid      string          `json:"issuerDid"`
-	ParsedDocument json.RawMessage `json:"parsedDocument"`
-	ValidUntil     *time.Time      `json:"validUntil,omitempty"`
-	AddedOn        time.Time       `json:"addedOn"`
+	ID                   string          `json:"id"`
+	RawVc                string          `json:"rawVc"`
+	Format               string          `json:"format"`
+	Credential           json.RawMessage `json:"credential,omitempty"`
+	VcBody               json.RawMessage `json:"vcBody"`
+	VcType               string          `json:"vcType"`
+	VcFormat             string          `json:"vcFormat"`
+	Types                []string        `json:"types,omitempty"`
+	HolderDid            string          `json:"holderDid"`
+	IssuerDid            string          `json:"issuerDid"`
+	ParticipantContextID *string         `json:"participantContextId,omitempty"`
+	ParsedDocument       json.RawMessage `json:"parsedDocument"`
+	ValidUntil           *time.Time      `json:"validUntil,omitempty"`
+	IssuanceDate         *time.Time      `json:"issuanceDate,omitempty"`
+	AddedOn              time.Time       `json:"addedOn"`
 }
 
 // newCredentialResp projects a domain credential onto the wire.
 func newCredentialResp(c wallet.Credential) credentialResp {
+	rawVc := c.RawVc
+	if rawVc == "" && len(c.VcBody) > 0 {
+		var unquoted string
+		if err := json.Unmarshal(c.VcBody, &unquoted); err == nil && unquoted != "" {
+			rawVc = unquoted
+		} else {
+			rawVc = string(c.VcBody)
+		}
+	}
+
+	format := c.Format
+	if format == "" {
+		format = c.VcFormat
+	}
+	if format == "" {
+		format = "VC1_0_JWT"
+	}
+
+	credDoc := c.Credential
+	if len(credDoc) == 0 {
+		credDoc = c.ParsedDocument
+	}
+	if len(credDoc) == 0 {
+		credDoc = c.VcBody
+	}
+	if len(credDoc) == 0 || !json.Valid(credDoc) {
+		credDoc = json.RawMessage("{}")
+	}
+
+	vcBody := c.VcBody
+	if len(vcBody) == 0 {
+		if b, err := json.Marshal(rawVc); err == nil {
+			vcBody = json.RawMessage(b)
+		} else {
+			vcBody = json.RawMessage(`""`)
+		}
+	} else if !json.Valid(vcBody) {
+		if b, err := json.Marshal(string(vcBody)); err == nil {
+			vcBody = json.RawMessage(b)
+		} else {
+			vcBody = json.RawMessage(`""`)
+		}
+	}
+
 	return credentialResp{
-		ID:             c.ID,
-		VcBody:         c.VcBody,
-		VcType:         c.VcType,
-		VcFormat:       c.VcFormat,
-		HolderDid:      c.HolderDid,
-		IssuerDid:      c.IssuerDid,
-		ParsedDocument: c.ParsedDocument,
-		ValidUntil:     c.ValidUntil,
-		AddedOn:        c.AddedOn,
+		ID:                   c.ID,
+		RawVc:                rawVc,
+		Format:               format,
+		Credential:           credDoc,
+		VcBody:               vcBody,
+		VcType:               c.VcType,
+		VcFormat:             format,
+		Types:                c.Types,
+		HolderDid:            c.HolderDid,
+		IssuerDid:            c.IssuerDid,
+		ParticipantContextID: c.ParticipantContextID,
+		ParsedDocument:       credDoc,
+		ValidUntil:           c.ValidUntil,
+		IssuanceDate:         c.IssuanceDate,
+		AddedOn:              c.AddedOn,
 	}
 }
 
@@ -283,17 +405,39 @@ type serviceEndpointReq struct {
 	URL  string `json:"url"`
 }
 
-type storeCredentialReq struct {
-	ID      string          `json:"id"`
-	Format  string          `json:"format"`
-	Payload json.RawMessage `json:"payload"`
+// storeCredentialContainerReq wraps raw VC payload and metadata inside container request.
+type storeCredentialContainerReq struct {
+	RawVc      string          `json:"rawVc"`
+	Format     string          `json:"format,omitempty"`
+	Credential json.RawMessage `json:"credential,omitempty"`
 }
 
+// storeCredentialReq represents the HTTP payload for importing a verifiable credential.
+type storeCredentialReq struct {
+	ID                            string                       `json:"id"`
+	ParticipantContextID          string                       `json:"participantContextId,omitempty"`
+	Format                        string                       `json:"format,omitempty"`
+	RawVc                         string                       `json:"rawVc,omitempty"`
+	Credential                    json.RawMessage              `json:"credential,omitempty"`
+	VerifiableCredentialContainer *storeCredentialContainerReq `json:"verifiableCredentialContainer,omitempty"`
+	Payload                       json.RawMessage              `json:"payload,omitempty"`
+}
+
+// credentialDescriptorReq specifies format and type for a requested DCP credential.
+type credentialDescriptorReq struct {
+	ID     string `json:"id,omitempty"`
+	Format string `json:"format"`
+	Type   string `json:"type"`
+}
+
+// dcpCredentialRequestReq represents the HTTP payload to request credentials via DCP protocol.
 type dcpCredentialRequestReq struct {
-	IssuerURL string   `json:"issuerUrl"`
-	HolderPid string   `json:"holderPid"`
-	Types     []string `json:"types"`
-	Format    string   `json:"format"`
+	IssuerURL   string                    `json:"issuerUrl,omitempty"`
+	IssuerDid   string                    `json:"issuerDid"`
+	HolderPid   string                    `json:"holderPid,omitempty"`
+	Types       []string                  `json:"types,omitempty"`
+	Format      string                    `json:"format,omitempty"`
+	Credentials []credentialDescriptorReq `json:"credentials,omitempty"`
 }
 
 type dcpRequestResp struct {
@@ -306,10 +450,23 @@ type dcpStatusResp struct {
 	Error     string `json:"error,omitempty"`
 }
 
+// keyDescriptorReq specifies key generator parameters or public key material during participant creation.
+type keyDescriptorReq struct {
+	KeyID              string         `json:"keyId,omitempty"`
+	Type               string         `json:"type,omitempty"`
+	PrivateKeyAlias    string         `json:"privateKeyAlias,omitempty"`
+	KeyGeneratorParams map[string]any `json:"keyGeneratorParams,omitempty"`
+	PublicKeyJwk       map[string]any `json:"publicKeyJwk,omitempty"`
+	PublicKeyPem       string         `json:"publicKeyPem,omitempty"`
+	Properties         map[string]any `json:"properties,omitempty"`
+}
+
+// createParticipantReq represents the HTTP payload for provisioning a participant context.
 type createParticipantReq struct {
-	ID     string `json:"id"`
-	Did    string `json:"did"`
-	Active bool   `json:"active"`
+	ID            string            `json:"id"`
+	Did           string            `json:"did"`
+	Active        bool              `json:"active"`
+	KeyDescriptor *keyDescriptorReq `json:"key,omitempty"`
 }
 
 type participantResp struct {

@@ -1,0 +1,25 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/ssi-auth/wallet/participants"
+method: POST
+body:
+  type: json
+  content: |-
+    {
+        "id": "participant-1",
+        "did": "did:web:participant-1",
+        "active": true,
+        "key": {
+            "keyId": "participant-1-key-1",
+            "privateKeyAlias": "participant-1-key-1-alias",
+            "keyGeneratorParams": {
+                "algorithm": "EdDSA",
+                "curve": "ed25519"
+            }
+        }
+    }
+auth:
+  type: inherit
+  credentials:
+    id: 0812cb1e-4ea1-4bd8-b892-0d22d8d0b103
+settings: {}
+order: 25000

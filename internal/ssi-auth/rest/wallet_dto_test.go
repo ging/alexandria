@@ -151,3 +151,45 @@ func TestDidServiceRejectsEntryWithoutEndpoint(t *testing.T) {
 		t.Fatalf("got %v, want wallet.ErrInvalidInput", err)
 	}
 }
+
+func TestDidBuilderReqExternalTagging(t *testing.T) {
+	t.Parallel()
+
+	// External tagging: {"Web": {"domain": "alexandria.upm.es"}}
+	var reqWeb registerDidReq
+	if err := json.Unmarshal([]byte(`{
+		"builder": {"Web": {"domain": "did:web:alexandria.upm.es"}}
+	}`), &reqWeb); err != nil {
+		t.Fatalf("decoding Web external tag: %v", err)
+	}
+	bWeb, err := reqWeb.Builder.toDomain()
+	if err != nil {
+		t.Fatalf("toDomain Web: %v", err)
+	}
+	webBuilder, ok := bWeb.(common.WebDidBuilder)
+	if !ok {
+		t.Fatalf("got %T, want WebDidBuilder", bWeb)
+	}
+	if webBuilder.Domain != "alexandria.upm.es" {
+		t.Errorf("got domain %q, want alexandria.upm.es", webBuilder.Domain)
+	}
+
+	// External tagging: {"Jwk": {"pem": "-----BEGIN PRIVATE KEY-----"}}
+	var reqJwk registerDidReq
+	if err := json.Unmarshal([]byte(`{
+		"builder": {"Jwk": {"pem": "-----BEGIN PRIVATE KEY-----"}}
+	}`), &reqJwk); err != nil {
+		t.Fatalf("decoding Jwk external tag: %v", err)
+	}
+	bJwk, err := reqJwk.Builder.toDomain()
+	if err != nil {
+		t.Fatalf("toDomain Jwk: %v", err)
+	}
+	jwkBuilder, ok := bJwk.(common.JwkDidBuilder)
+	if !ok {
+		t.Fatalf("got %T, want JwkDidBuilder", bJwk)
+	}
+	if jwkBuilder.Pem != "-----BEGIN PRIVATE KEY-----" {
+		t.Errorf("got pem %q, want expected pem", jwkBuilder.Pem)
+	}
+}
