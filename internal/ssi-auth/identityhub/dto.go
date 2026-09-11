@@ -192,18 +192,33 @@ type VerifiableCredentialBody struct {
 	RawVc  string `json:"rawVc"`
 }
 
+// VerifiableCredentialContainerDto wraps the raw credential content and format for storage.
+type VerifiableCredentialContainerDto struct {
+	RawVc      string          `json:"rawVc"`
+	Format     string          `json:"format"`
+	Credential json.RawMessage `json:"credential,omitempty"`
+}
+
 // StoreCredentialDto is the wire payload to store a verifiable credential manually.
 type StoreCredentialDto struct {
-	ID    string `json:"id"`
-	RawVc string `json:"rawVc"`
+	ID                            string                           `json:"id"`
+	ParticipantContextID          string                           `json:"participantContextId"`
+	VerifiableCredentialContainer VerifiableCredentialContainerDto `json:"verifiableCredentialContainer"`
+}
+
+// CredentialDescriptorDto describes a requested credential in a DCP request.
+type CredentialDescriptorDto struct {
+	ID     string `json:"id,omitempty"`
+	Format string `json:"format"`
+	Type   string `json:"type"`
 }
 
 // DcpCredentialRequestDto is the wire payload to request credentials via DCP.
 type DcpCredentialRequestDto struct {
-	IssuerURL string   `json:"issuerUrl"`
-	HolderPid string   `json:"holderPid"`
-	Types     []string `json:"types"`
-	Format    string   `json:"format"`
+	IssuerURL   string                    `json:"issuerUrl,omitempty"`
+	IssuerDid   string                    `json:"issuerDid"`
+	HolderPid   string                    `json:"holderPid"`
+	Credentials []CredentialDescriptorDto `json:"credentials"`
 }
 
 // DcpRequestStatusDto reports the status of an asynchronous DCP request.

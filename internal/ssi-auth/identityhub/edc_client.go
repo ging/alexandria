@@ -157,6 +157,23 @@ func (c *EdcClient) RegenerateParticipantToken(ctx context.Context, pid string) 
 	return token, nil
 }
 
+// DeleteParticipant deletes a participant context from IdentityHub.
+func (c *EdcClient) DeleteParticipant(ctx context.Context, pid string) error {
+	path := fmt.Sprintf("/participants/%s", url.PathEscape(pid))
+
+	res, err := c.http.R().SetContext(ctx).Delete(path)
+	if err != nil {
+		return fmt.Errorf("identityhub: calling %s: %w", path, err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.IsStatusFailure() {
+		return statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	return nil
+}
+
 // ListKeys lists all keypairs for a participant.
 func (c *EdcClient) ListKeys(ctx context.Context, pid string) ([]KeyPairDto, error) {
 	path := fmt.Sprintf("/participants/%s/keypairs", url.PathEscape(pid))
@@ -337,7 +354,7 @@ func (c *EdcClient) AddServiceEndpoint(ctx context.Context, pid string, did stri
 // RemoveServiceEndpoint deletes a service endpoint from a participant's DID.
 func (c *EdcClient) RemoveServiceEndpoint(ctx context.Context, pid string, did string, endpointID string) error {
 	encodedDid := base64.RawURLEncoding.EncodeToString([]byte(did))
-	path := fmt.Sprintf("/participants/%s/dids/%s/endpoints/%s", url.PathEscape(pid), encodedDid, url.PathEscape(endpointID))
+	path := fmt.Sprintf("/participants/%s/dids/%s/endpoints?serviceId=%s", url.PathEscape(pid), encodedDid, url.QueryEscape(endpointID))
 
 	res, err := c.http.R().SetContext(ctx).Delete(path)
 	if err != nil {
@@ -424,7 +441,18 @@ func (c *EdcClient) RequestDcpCredential(ctx context.Context, pid string, req *D
 		return "", statusError(res.StatusCode(), path, res.Bytes())
 	}
 
-	return out.RequestID, nil
+	reqID := out.RequestID
+	if reqID == "" {
+		if loc := res.Header().Get("Location"); loc != "" {
+			parts := strings.Split(loc, "/")
+			reqID = parts[len(parts)-1]
+		}
+	}
+	if reqID == "" {
+		reqID = pid
+	}
+
+	return reqID, nil
 }
 
 // GetDcpRequestStatus checks the progress of an asynchronous DCP credential request.
@@ -440,6 +468,10 @@ func (c *EdcClient) GetDcpRequestStatus(ctx context.Context, pid string, reqID s
 
 	if res.IsStatusFailure() {
 		return nil, statusError(res.StatusCode(), path, res.Bytes())
+	}
+
+	if out.RequestID == "" {
+		out.RequestID = reqID
 	}
 
 	return &out, nil

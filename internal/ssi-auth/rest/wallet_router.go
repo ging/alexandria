@@ -472,11 +472,23 @@ func (r *WalletRouter) storeCredential(c *gin.Context) {
 		return
 	}
 
-	cred, err := r.holder.StoreCredential(c.Request.Context(), &wallet.CredentialImportPlan{
-		ID:      req.ID,
-		Format:  req.Format,
-		Payload: req.Payload,
-	})
+	plan := &wallet.CredentialImportPlan{
+		ID:                   req.ID,
+		ParticipantContextID: req.ParticipantContextID,
+		Format:               req.Format,
+		RawVc:                req.RawVc,
+		Credential:           req.Credential,
+		Payload:              req.Payload,
+	}
+	if req.VerifiableCredentialContainer != nil {
+		plan.VerifiableCredentialContainer = &wallet.CredentialContainerPlan{
+			RawVc:      req.VerifiableCredentialContainer.RawVc,
+			Format:     req.VerifiableCredentialContainer.Format,
+			Credential: req.VerifiableCredentialContainer.Credential,
+		}
+	}
+
+	cred, err := r.holder.StoreCredential(c.Request.Context(), plan)
 	if err != nil {
 		respondError(c, err)
 		return
@@ -492,11 +504,22 @@ func (r *WalletRouter) requestDcpCredential(c *gin.Context) {
 		return
 	}
 
+	var creds []wallet.CredentialDescriptor
+	for _, cd := range req.Credentials {
+		creds = append(creds, wallet.CredentialDescriptor{
+			ID:     cd.ID,
+			Format: cd.Format,
+			Type:   cd.Type,
+		})
+	}
+
 	reqID, err := r.holder.RequestDcpCredential(c.Request.Context(), &wallet.DcpCredentialRequestPlan{
-		IssuerURL: req.IssuerURL,
-		HolderPid: req.HolderPid,
-		Types:     req.Types,
-		Format:    req.Format,
+		IssuerURL:   req.IssuerURL,
+		IssuerDid:   req.IssuerDid,
+		HolderPid:   req.HolderPid,
+		Types:       req.Types,
+		Format:      req.Format,
+		Credentials: creds,
 	})
 	if err != nil {
 		respondError(c, err)
@@ -528,11 +551,24 @@ func (r *WalletRouter) createParticipant(c *gin.Context) {
 		return
 	}
 
-	p, err := r.holder.CreateParticipant(c.Request.Context(), &wallet.ParticipantPlan{
+	plan := &wallet.ParticipantPlan{
 		ID:     req.ID,
 		Did:    req.Did,
 		Active: req.Active,
-	})
+	}
+	if req.KeyDescriptor != nil {
+		plan.KeyDescriptor = &wallet.KeyDescriptor{
+			KeyID:              req.KeyDescriptor.KeyID,
+			Type:               req.KeyDescriptor.Type,
+			PrivateKeyAlias:    req.KeyDescriptor.PrivateKeyAlias,
+			KeyGeneratorParams: req.KeyDescriptor.KeyGeneratorParams,
+			PublicKeyJwk:       req.KeyDescriptor.PublicKeyJwk,
+			PublicKeyPem:       req.KeyDescriptor.PublicKeyPem,
+			Properties:         req.KeyDescriptor.Properties,
+		}
+	}
+
+	p, err := r.holder.CreateParticipant(c.Request.Context(), plan)
 	if err != nil {
 		respondError(c, err)
 		return

@@ -23,6 +23,11 @@ type mockWallet struct {
 	keys                []wallet.Key
 	info                wallet.WalletInfo
 	gotDeleteCredential string
+	lastImportPlan      *wallet.CredentialImportPlan
+	lastDcpPlan         *wallet.DcpCredentialRequestPlan
+	lastParticipantPlan *wallet.ParticipantPlan
+	lastDidID           string
+	lastEndpointID      string
 	err                 error
 }
 
@@ -109,19 +114,23 @@ func (m *mockWallet) AddServiceEndpoint(context.Context, string, wallet.ServiceE
 	return wallet.Did{}, m.err
 }
 
-func (m *mockWallet) RemoveServiceEndpoint(context.Context, string, string) (wallet.Did, error) {
+func (m *mockWallet) RemoveServiceEndpoint(_ context.Context, didID, endpointID string) (wallet.Did, error) {
+	m.lastDidID = didID
+	m.lastEndpointID = endpointID
 	return wallet.Did{}, m.err
 }
 
-func (m *mockWallet) StoreCredential(context.Context, *wallet.CredentialImportPlan) (wallet.Credential, error) {
-	return wallet.Credential{ID: "c1"}, m.err
+func (m *mockWallet) StoreCredential(_ context.Context, plan *wallet.CredentialImportPlan) (wallet.Credential, error) {
+	m.lastImportPlan = plan
+	return wallet.Credential{ID: plan.ID}, m.err
 }
 
 func (m *mockWallet) GetCredentialsByType(context.Context, string) ([]wallet.Credential, error) {
 	return m.credentials, m.err
 }
 
-func (m *mockWallet) RequestDcpCredential(context.Context, *wallet.DcpCredentialRequestPlan) (string, error) {
+func (m *mockWallet) RequestDcpCredential(_ context.Context, plan *wallet.DcpCredentialRequestPlan) (string, error) {
+	m.lastDcpPlan = plan
 	return "req-1", m.err
 }
 
@@ -129,8 +138,9 @@ func (m *mockWallet) GetDcpRequestStatus(context.Context, string) (wallet.DcpReq
 	return wallet.DcpRequestStatus{Status: "COMPLETED"}, m.err
 }
 
-func (m *mockWallet) CreateParticipant(context.Context, *wallet.ParticipantPlan) (wallet.Participant, error) {
-	return wallet.Participant{ID: "pid1"}, m.err
+func (m *mockWallet) CreateParticipant(_ context.Context, plan *wallet.ParticipantPlan) (wallet.Participant, error) {
+	m.lastParticipantPlan = plan
+	return wallet.Participant{ID: plan.ID, Did: plan.Did, Active: plan.Active}, m.err
 }
 
 func (m *mockWallet) GetParticipant(context.Context, string) (wallet.Participant, error) {
@@ -555,5 +565,93 @@ func TestGetKeysExcludesUsage(t *testing.T) {
 
 	if _, exists := raw[0]["usage"]; exists {
 		t.Error("expected 'usage' to be absent from key response")
+	}
+}
+
+// TestStoreCredential_ContainerAndFlatFields verifies router accepts both container and flat credential requests.
+func TestStoreCredential_ContainerAndFlatFields(t *testing.T) {
+	t.Parallel()
+
+	mock := &mockWallet{}
+	engine := setupWalletRouter(mock)
+
+	body := `{"id":"cred-1","participantContextId":"p-1","verifiableCredentialContainer":{"rawVc":"jwt-data","format":"VC1_0_JWT"}}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/wallet/credential", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+	if mock.lastImportPlan == nil || mock.lastImportPlan.ID != "cred-1" {
+		t.Fatalf("expected lastImportPlan with ID cred-1, got %v", mock.lastImportPlan)
+	}
+	if mock.lastImportPlan.VerifiableCredentialContainer == nil || mock.lastImportPlan.VerifiableCredentialContainer.RawVc != "jwt-data" {
+		t.Errorf("expected container rawVc 'jwt-data', got %v", mock.lastImportPlan.VerifiableCredentialContainer)
+	}
+}
+
+// TestRequestDcpCredential_IssuerDid verifies issuerDid is mapped from REST request to the domain plan.
+func TestRequestDcpCredential_IssuerDid(t *testing.T) {
+	t.Parallel()
+
+	mock := &mockWallet{}
+	engine := setupWalletRouter(mock)
+
+	body := `{"issuerUrl":"https://issuer","issuerDid":"did:web:issuer","holderPid":"super-user","types":["MembershipCredential"],"format":"jwt"}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/wallet/dcp/request", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusAccepted)
+	}
+	if mock.lastDcpPlan == nil || mock.lastDcpPlan.IssuerDid != "did:web:issuer" {
+		t.Fatalf("expected IssuerDid 'did:web:issuer', got %v", mock.lastDcpPlan)
+	}
+}
+
+// TestCreateParticipant_WithKeyDescriptor verifies KeyDescriptor is passed through to the domain plan.
+func TestCreateParticipant_WithKeyDescriptor(t *testing.T) {
+	t.Parallel()
+
+	mock := &mockWallet{}
+	engine := setupWalletRouter(mock)
+
+	body := `{"id":"p-1","did":"did:web:p1","active":true,"key":{"keyId":"k1","privateKeyAlias":"k1-alias","keyGeneratorParams":{"algorithm":"EdDSA","curve":"ed25519"}}}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/wallet/participants", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+	if mock.lastParticipantPlan == nil || mock.lastParticipantPlan.KeyDescriptor == nil {
+		t.Fatalf("expected KeyDescriptor on participant plan, got %v", mock.lastParticipantPlan)
+	}
+	if mock.lastParticipantPlan.KeyDescriptor.KeyID != "k1" || mock.lastParticipantPlan.KeyDescriptor.PrivateKeyAlias != "k1-alias" {
+		t.Errorf("unexpected KeyDescriptor fields: %+v", mock.lastParticipantPlan.KeyDescriptor)
+	}
+}
+
+// TestRemoveServiceEndpoint_RouteMapping verifies endpoint ID and DID ID URL parameters are captured.
+func TestRemoveServiceEndpoint_RouteMapping(t *testing.T) {
+	t.Parallel()
+
+	mock := &mockWallet{}
+	engine := setupWalletRouter(mock)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodDelete, "/wallet/did/did:web:super-user/endpoints/ep-1", nil)
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if mock.lastDidID != "did:web:super-user" || mock.lastEndpointID != "ep-1" {
+		t.Errorf("expected did:web:super-user and ep-1, got did=%s, ep=%s", mock.lastDidID, mock.lastEndpointID)
 	}
 }

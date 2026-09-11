@@ -6,8 +6,16 @@ body:
   content: |-
     {
         "id": "participant-1",
-        "did": "did:web:example.com",
-        "active": true
+        "did": "did:web:participant-1",
+        "active": true,
+        "key": {
+            "keyId": "participant-1-key-1",
+            "privateKeyAlias": "participant-1-key-1-alias",
+            "keyGeneratorParams": {
+                "algorithm": "EdDSA",
+                "curve": "ed25519"
+            }
+        }
     }
 auth:
   type: inherit

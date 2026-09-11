@@ -71,11 +71,15 @@ type Key struct {
 
 // KeyDescriptor describes an external or structured key reference.
 type KeyDescriptor struct {
-	KeyID       string
-	Type        string
-	KeyContext  *string
-	Properties  map[string]any
-	ResourceURL *string
+	KeyID              string
+	Type               string
+	PrivateKeyAlias    string
+	KeyGeneratorParams map[string]any
+	PublicKeyJwk       map[string]any
+	PublicKeyPem       string
+	KeyContext         *string
+	Properties         map[string]any
+	ResourceURL        *string
 }
 
 // PemDescriptor is what the domain needs to know about a piece of key material
@@ -165,21 +169,41 @@ type ServiceEndpointPlan struct {
 
 // ==== CREDENTIAL EXTENSIONS =================================================
 
+// CredentialContainerPlan encapsulates the credential details inside an import plan.
+type CredentialContainerPlan struct {
+	RawVc      string
+	Format     string
+	Credential json.RawMessage
+}
+
 // CredentialImportPlan contains a pre-formed verifiable credential for manual import.
 type CredentialImportPlan struct {
-	ID      string
-	Format  string
-	Payload json.RawMessage
+	ID                            string
+	ParticipantContextID          string
+	Format                        string
+	RawVc                         string
+	Credential                    json.RawMessage
+	VerifiableCredentialContainer *CredentialContainerPlan
+	Payload                       json.RawMessage
 }
 
 // ==== DCP TYPES =============================================================
 
+// CredentialDescriptor specifies a credential format and type requested via DCP.
+type CredentialDescriptor struct {
+	ID     string
+	Format string
+	Type   string
+}
+
 // DcpCredentialRequestPlan specifies an asynchronous DCP credential request.
 type DcpCredentialRequestPlan struct {
-	IssuerURL string
-	HolderPid string
-	Types     []string
-	Format    string
+	IssuerURL   string
+	IssuerDid   string
+	HolderPid   string
+	Types       []string
+	Format      string
+	Credentials []CredentialDescriptor
 }
 
 // DcpRequestStatus reports the lifecycle state of a DCP request.

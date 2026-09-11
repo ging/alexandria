@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -53,6 +54,11 @@ func New(cfg *config.IdentityHubConfig, logger *slog.Logger) (*Adapter, error) {
 		pid:    pid,
 		logger: logger,
 	}, nil
+}
+
+// Client returns the underlying EdcClient for administrative operations.
+func (a *Adapter) Client() *EdcClient {
+	return a.client
 }
 
 // Close releases the underlying HTTP connection pool.
@@ -370,12 +376,8 @@ func (a *Adapter) GetDidByID(ctx context.Context, didID string) (wallet.Did, err
 
 // DeleteDid unpublishes a DID document from the resolver.
 func (a *Adapter) DeleteDid(ctx context.Context, didID string) error {
-	targetDid, err := a.resolveDid(ctx, didID)
-	if err != nil {
-		return err
-	}
-
-	return a.client.UnpublishDid(ctx, a.pid, targetDid)
+	_, err := a.UnpublishDid(ctx, didID)
+	return err
 }
 
 // GetAllCredentials collects all verifiable credentials held by the participant.
@@ -438,6 +440,11 @@ func (a *Adapter) PublishDid(ctx context.Context, didID string) (wallet.DidState
 		return wallet.DidState{}, err
 	}
 
+	p, err := a.client.GetParticipant(ctx, a.pid)
+	if err == nil && p.State != "ACTIVATED" {
+		_ = a.client.SetParticipantState(ctx, a.pid, true)
+	}
+
 	if err := a.client.PublishDid(ctx, a.pid, targetDid); err != nil {
 		return wallet.DidState{}, err
 	}
@@ -452,11 +459,23 @@ func (a *Adapter) UnpublishDid(ctx context.Context, didID string) (wallet.DidSta
 		return wallet.DidState{}, err
 	}
 
+	p, err := a.client.GetParticipant(ctx, a.pid)
+	if err == nil && p.State == "ACTIVATED" {
+		_ = a.client.SetParticipantState(ctx, a.pid, false)
+	}
+
 	if err := a.client.UnpublishDid(ctx, a.pid, targetDid); err != nil {
 		return wallet.DidState{}, err
 	}
 
-	return a.GetDidState(ctx, didID)
+	st, err := a.GetDidState(ctx, didID)
+	if err != nil {
+		return wallet.DidState{
+			Did:   targetDid,
+			State: "UNPUBLISHED",
+		}, nil
+	}
+	return st, nil
 }
 
 // GetDidState inspects DID publication state in the resolver.
@@ -468,6 +487,12 @@ func (a *Adapter) GetDidState(ctx context.Context, didID string) (wallet.DidStat
 
 	st, err := a.client.GetDidState(ctx, a.pid, targetDid)
 	if err != nil {
+		if errors.Is(err, common.ErrNotFound) {
+			return wallet.DidState{
+				Did:   targetDid,
+				State: "UNPUBLISHED",
+			}, nil
+		}
 		return wallet.DidState{}, err
 	}
 
@@ -511,15 +536,68 @@ func (a *Adapter) RemoveServiceEndpoint(ctx context.Context, didID string, endpo
 	return a.GetDidByID(ctx, didID)
 }
 
+// defaultVerifiableCredentialJSON constructs a minimal valid EDC VerifiableCredential payload.
+func defaultVerifiableCredentialJSON(credID, pid string) json.RawMessage {
+	return json.RawMessage(fmt.Sprintf(`{"id":%q,"type":["VerifiableCredential"],"issuer":%q,"issuanceDate":%q,"credentialSubject":{"id":%q}}`,
+		credID, "did:web:"+pid, time.Now().UTC().Format(time.RFC3339), "did:web:"+pid))
+}
+
 // StoreCredential imports an already issued verifiable credential into storage and returns it.
 func (a *Adapter) StoreCredential(ctx context.Context, cred *wallet.CredentialImportPlan) (wallet.Credential, error) {
 	if cred == nil {
 		return wallet.Credential{}, fmt.Errorf("identityhub: credential plan required: %w", common.ErrInvalidInput)
 	}
 
+	pid := cred.ParticipantContextID
+	if pid == "" {
+		pid = a.pid
+	}
+
+	rawVc := cred.RawVc
+	format := cred.Format
+	credObj := cred.Credential
+
+	if cred.VerifiableCredentialContainer != nil {
+		if cred.VerifiableCredentialContainer.RawVc != "" {
+			rawVc = cred.VerifiableCredentialContainer.RawVc
+		}
+		if cred.VerifiableCredentialContainer.Format != "" {
+			format = cred.VerifiableCredentialContainer.Format
+		}
+		if len(cred.VerifiableCredentialContainer.Credential) > 0 {
+			credObj = cred.VerifiableCredentialContainer.Credential
+		}
+	}
+
+	if rawVc == "" && len(cred.Payload) > 0 {
+		var s string
+		if err := json.Unmarshal(cred.Payload, &s); err == nil {
+			rawVc = s
+		} else {
+			rawVc = string(cred.Payload)
+		}
+	}
+
+	if format == "" {
+		format = "VC1_0_JWT"
+	}
+
+	if len(credObj) == 0 {
+		if json.Valid([]byte(rawVc)) {
+			credObj = json.RawMessage(rawVc)
+		} else {
+			credObj = defaultVerifiableCredentialJSON(cred.ID, pid)
+		}
+	}
+
 	dto := StoreCredentialDto{
-		ID:    cred.ID,
-		RawVc: string(cred.Payload),
+		ID:                   cred.ID,
+		ParticipantContextID: pid,
+		VerifiableCredentialContainer: VerifiableCredentialContainerDto{
+			RawVc:      rawVc,
+			Format:     format,
+			Credential: credObj,
+		},
 	}
 
 	if err := a.client.StoreCredential(ctx, a.pid, &dto); err != nil {
@@ -539,8 +617,8 @@ func (a *Adapter) StoreCredential(ctx context.Context, cred *wallet.CredentialIm
 		ID:                   cred.ID,
 		ParticipantContextID: a.pid,
 		VerifiableCredential: VerifiableCredentialBody{
-			Format: cred.Format,
-			RawVc:  string(cred.Payload),
+			Format: format,
+			RawVc:  rawVc,
 		},
 	}), nil
 }
@@ -561,11 +639,44 @@ func (a *Adapter) RequestDcpCredential(ctx context.Context, req *wallet.DcpCrede
 		return "", fmt.Errorf("identityhub: dcp request required: %w", common.ErrInvalidInput)
 	}
 
+	holderPid := req.HolderPid
+	if holderPid == "" {
+		holderPid = a.pid
+	}
+
+	issuerDid := req.IssuerDid
+	if issuerDid == "" {
+		issuerDid = req.IssuerURL
+	}
+
+	var creds []CredentialDescriptorDto
+	if len(req.Credentials) > 0 {
+		for _, c := range req.Credentials {
+			creds = append(creds, CredentialDescriptorDto{
+				ID:     c.ID,
+				Format: c.Format,
+				Type:   c.Type,
+			})
+		}
+	} else if len(req.Types) > 0 {
+		fmtStr := req.Format
+		if fmtStr == "" || strings.EqualFold(fmtStr, "jwt") {
+			fmtStr = "VC1_0_JWT"
+		}
+		for i, t := range req.Types {
+			creds = append(creds, CredentialDescriptorDto{
+				ID:     fmt.Sprintf("req-%d", i+1),
+				Format: fmtStr,
+				Type:   t,
+			})
+		}
+	}
+
 	dto := DcpCredentialRequestDto{
-		IssuerURL: req.IssuerURL,
-		HolderPid: req.HolderPid,
-		Types:     req.Types,
-		Format:    req.Format,
+		IssuerURL:   req.IssuerURL,
+		IssuerDid:   issuerDid,
+		HolderPid:   holderPid,
+		Credentials: creds,
 	}
 
 	return a.client.RequestDcpCredential(ctx, a.pid, &dto)
@@ -593,15 +704,25 @@ func (a *Adapter) CreateParticipant(ctx context.Context, plan *wallet.Participan
 
 	var keyDesc *KeyDescriptorDto
 	if plan.KeyDescriptor != nil {
-		alias := plan.KeyDescriptor.KeyID + "-alias"
+		keyID := plan.KeyDescriptor.KeyID
+		if keyID == "" {
+			keyID = fmt.Sprintf("%s-key-1", plan.ID)
+		}
+		alias := plan.KeyDescriptor.PrivateKeyAlias
+		if alias == "" {
+			alias = keyID + "-alias"
+		}
 		keyDesc = &KeyDescriptorDto{
-			KeyID:           plan.KeyDescriptor.KeyID,
-			Type:            plan.KeyDescriptor.Type,
-			PrivateKeyAlias: alias,
-			Active:          true,
-			Usage:           []string{"sign_presentation"},
-			KeyContext:      plan.KeyDescriptor.KeyContext,
-			ResourceURL:     plan.KeyDescriptor.ResourceURL,
+			KeyID:              keyID,
+			Type:               plan.KeyDescriptor.Type,
+			PrivateKeyAlias:    alias,
+			Active:             true,
+			Usage:              []string{"sign_presentation"},
+			KeyContext:         plan.KeyDescriptor.KeyContext,
+			ResourceURL:        plan.KeyDescriptor.ResourceURL,
+			PublicKeyPem:       plan.KeyDescriptor.PublicKeyPem,
+			PublicKeyJwk:       plan.KeyDescriptor.PublicKeyJwk,
+			KeyGeneratorParams: plan.KeyDescriptor.KeyGeneratorParams,
 		}
 		if plan.KeyDescriptor.Properties != nil {
 			if params, ok := plan.KeyDescriptor.Properties["keyGeneratorParams"].(map[string]any); ok {
@@ -611,6 +732,23 @@ func (a *Adapter) CreateParticipant(ctx context.Context, plan *wallet.Participan
 			} else {
 				keyDesc.Properties = plan.KeyDescriptor.Properties
 			}
+		}
+		if keyDesc.KeyGeneratorParams == nil && keyDesc.PublicKeyPem == "" && keyDesc.PublicKeyJwk == nil {
+			keyDesc.KeyGeneratorParams = map[string]any{
+				"algorithm": "EdDSA",
+				"curve":     "ed25519",
+			}
+		}
+	} else {
+		keyID := fmt.Sprintf("%s-key-1", plan.ID)
+		keyDesc = &KeyDescriptorDto{
+			KeyID:           keyID,
+			PrivateKeyAlias: keyID + "-alias",
+			Active:          true,
+			KeyGeneratorParams: map[string]any{
+				"algorithm": "EdDSA",
+				"curve":     "ed25519",
+			},
 		}
 	}
 

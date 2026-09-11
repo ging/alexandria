@@ -332,3 +332,103 @@ func TestIdentityHubLive_UnsupportedOperations(t *testing.T) {
 		t.Errorf("expected ErrNotImplementedInIdentityHub for RemoveKeyFromDid, got %v", err)
 	}
 }
+
+func TestIdentityHubLive_CredentialLifecycle(t *testing.T) {
+	adapter, ctx := setupLiveIntegration(t)
+
+	credID := fmt.Sprintf("cred-live-%d", time.Now().UnixNano())
+	plan := &wallet.CredentialImportPlan{
+		ID:     credID,
+		Format: "VC1_0_JWT",
+		RawVc:  "eyJhbGciOiJSUzI1NiJ9.e30.c2ln",
+	}
+
+	cred, err := adapter.StoreCredential(ctx, plan)
+	if err != nil {
+		t.Fatalf("StoreCredential failed: %v", err)
+	}
+	t.Logf("Successfully stored credential %s in IdentityHub", cred.ID)
+
+	creds, err := adapter.GetAllCredentials(ctx)
+	if err != nil {
+		t.Fatalf("GetAllCredentials failed: %v", err)
+	}
+	t.Logf("Live IdentityHub credentials count: %d", len(creds))
+
+	if err := adapter.DeleteCredential(ctx, credID); err != nil {
+		t.Errorf("DeleteCredential failed: %v", err)
+	}
+}
+
+func TestIdentityHubLive_DcpRequest(t *testing.T) {
+	adapter, ctx := setupLiveIntegration(t)
+
+	testPid := fmt.Sprintf("dcp-part-%d", time.Now().UnixNano())
+	if _, err := adapter.CreateParticipant(ctx, &wallet.ParticipantPlan{
+		ID:     testPid,
+		Did:    fmt.Sprintf("did:web:%s", testPid),
+		Active: true,
+	}); err != nil {
+		t.Fatalf("CreateParticipant for DCP test failed: %v", err)
+	}
+	defer func() {
+		if ih, ok := adapter.(*identityhub.Adapter); ok {
+			_ = ih.Client().DeleteParticipant(ctx, testPid)
+		}
+	}()
+
+	plan := &wallet.DcpCredentialRequestPlan{
+		HolderPid: testPid,
+		IssuerDid: "did:web:issuer",
+		Types:     []string{"MembershipCredential"},
+		Format:    "VC1_0_JWT",
+	}
+
+	reqID, err := adapter.RequestDcpCredential(ctx, plan)
+	if err != nil {
+		t.Fatalf("RequestDcpCredential failed: %v", err)
+	}
+	t.Logf("Successfully initiated DCP request: %s", reqID)
+
+	status, err := adapter.GetDcpRequestStatus(ctx, reqID)
+	if err != nil {
+		t.Fatalf("GetDcpRequestStatus failed: %v", err)
+	}
+	t.Logf("DCP request status for %s: %s", status.RequestID, status.Status)
+}
+
+func TestIdentityHubLive_UnpublishAndPublishDid(t *testing.T) {
+	adapter, ctx := setupLiveIntegration(t)
+
+	unpubState, err := adapter.UnpublishDid(ctx, "did:web:super-user")
+	if err != nil {
+		t.Fatalf("UnpublishDid failed: %v", err)
+	}
+	t.Logf("UnpublishDid state: %s", unpubState.State)
+
+	pubState, err := adapter.PublishDid(ctx, "did:web:super-user")
+	if err != nil {
+		t.Fatalf("PublishDid restore failed: %v", err)
+	}
+	t.Logf("PublishDid restore state: %s", pubState.State)
+}
+
+func TestIdentityHubLive_CreateParticipantDefaultKey(t *testing.T) {
+	adapter, ctx := setupLiveIntegration(t)
+
+	testPid := fmt.Sprintf("test-auto-%d", time.Now().UnixNano())
+	plan := &wallet.ParticipantPlan{
+		ID:     testPid,
+		Did:    fmt.Sprintf("did:web:%s", testPid),
+		Active: true,
+	}
+
+	part, err := adapter.CreateParticipant(ctx, plan)
+	if err != nil {
+		t.Fatalf("CreateParticipant with default key failed: %v", err)
+	}
+	t.Logf("Successfully provisioned participant %s with default key", part.ID)
+	if ih, ok := adapter.(*identityhub.Adapter); ok {
+		_ = ih.Client().DeleteParticipant(ctx, testPid)
+	}
+}

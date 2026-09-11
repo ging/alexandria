@@ -387,17 +387,39 @@ type serviceEndpointReq struct {
 	URL  string `json:"url"`
 }
 
-type storeCredentialReq struct {
-	ID      string          `json:"id"`
-	Format  string          `json:"format"`
-	Payload json.RawMessage `json:"payload"`
+// storeCredentialContainerReq wraps raw VC payload and metadata inside container request.
+type storeCredentialContainerReq struct {
+	RawVc      string          `json:"rawVc"`
+	Format     string          `json:"format,omitempty"`
+	Credential json.RawMessage `json:"credential,omitempty"`
 }
 
+// storeCredentialReq represents the HTTP payload for importing a verifiable credential.
+type storeCredentialReq struct {
+	ID                            string                       `json:"id"`
+	ParticipantContextID          string                       `json:"participantContextId,omitempty"`
+	Format                        string                       `json:"format,omitempty"`
+	RawVc                         string                       `json:"rawVc,omitempty"`
+	Credential                    json.RawMessage              `json:"credential,omitempty"`
+	VerifiableCredentialContainer *storeCredentialContainerReq `json:"verifiableCredentialContainer,omitempty"`
+	Payload                       json.RawMessage              `json:"payload,omitempty"`
+}
+
+// credentialDescriptorReq specifies format and type for a requested DCP credential.
+type credentialDescriptorReq struct {
+	ID     string `json:"id,omitempty"`
+	Format string `json:"format"`
+	Type   string `json:"type"`
+}
+
+// dcpCredentialRequestReq represents the HTTP payload to request credentials via DCP protocol.
 type dcpCredentialRequestReq struct {
-	IssuerURL string   `json:"issuerUrl"`
-	HolderPid string   `json:"holderPid"`
-	Types     []string `json:"types"`
-	Format    string   `json:"format"`
+	IssuerURL   string                    `json:"issuerUrl,omitempty"`
+	IssuerDid   string                    `json:"issuerDid"`
+	HolderPid   string                    `json:"holderPid,omitempty"`
+	Types       []string                  `json:"types,omitempty"`
+	Format      string                    `json:"format,omitempty"`
+	Credentials []credentialDescriptorReq `json:"credentials,omitempty"`
 }
 
 type dcpRequestResp struct {
@@ -410,10 +432,23 @@ type dcpStatusResp struct {
 	Error     string `json:"error,omitempty"`
 }
 
+// keyDescriptorReq specifies key generator parameters or public key material during participant creation.
+type keyDescriptorReq struct {
+	KeyID              string         `json:"keyId,omitempty"`
+	Type               string         `json:"type,omitempty"`
+	PrivateKeyAlias    string         `json:"privateKeyAlias,omitempty"`
+	KeyGeneratorParams map[string]any `json:"keyGeneratorParams,omitempty"`
+	PublicKeyJwk       map[string]any `json:"publicKeyJwk,omitempty"`
+	PublicKeyPem       string         `json:"publicKeyPem,omitempty"`
+	Properties         map[string]any `json:"properties,omitempty"`
+}
+
+// createParticipantReq represents the HTTP payload for provisioning a participant context.
 type createParticipantReq struct {
-	ID     string `json:"id"`
-	Did    string `json:"did"`
-	Active bool   `json:"active"`
+	ID            string            `json:"id"`
+	Did           string            `json:"did"`
+	Active        bool              `json:"active"`
+	KeyDescriptor *keyDescriptorReq `json:"key,omitempty"`
 }
 
 type participantResp struct {
