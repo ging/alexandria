@@ -1,14 +1,18 @@
 components:
     schemas:
         CreateParticipantRequest:
+            description: Payload for provisioning a new participant context in IdentityHub.
             properties:
                 active:
+                    description: Whether participant is active immediately
                     example: true
                     type: boolean
                 did:
+                    description: DID associated with participant
                     example: did:web:acme.org
                     type: string
                 id:
+                    description: Unique participant context ID
                     example: participant-acme
                     type: string
                 key:
@@ -19,46 +23,59 @@ components:
                 - active
             type: object
         CredentialResponse:
+            description: Public representation of a stored Verifiable Credential.
             properties:
                 addedOn:
+                    description: Storage timestamp
                     format: date-time
                     type: string
                 credential:
+                    description: Parsed W3C Verifiable Credential structure
                     type: object
                 format:
+                    description: Credential format
                     example: VC1_0_JWT
                     type: string
                 holderDid:
-                    example: did:web:holder.org
+                    example: did:web:alexandria.example.org
                     type: string
                 id:
-                    example: vc-membership-1
+                    description: Credential ID
+                    example: vc-membership-01
                     type: string
                 issuanceDate:
+                    description: Issuance date
                     format: date-time
                     type: string
                 issuerDid:
-                    example: did:web:issuer.org
+                    example: did:web:trust-anchor.dataspace.org
                     type: string
                 parsedDocument:
                     type: object
                 participantContextId:
+                    example: default
                     type: string
                 rawVc:
+                    description: Raw JWT or JSON string
                     type: string
                 types:
+                    example:
+                        - VerifiableCredential
+                        - DataSpaceParticipant
                     items:
                         type: string
                     type: array
                 validUntil:
+                    description: Expiration date
                     format: date-time
                     type: string
                 vcBody:
-                    description: Raw or deserialized VC body
+                    description: Raw or structured VC claims body
                 vcFormat:
                     example: VC1_0_JWT
                     type: string
                 vcType:
+                    description: Primary credential type name
                     example: DataSpaceParticipant
                     type: string
             required:
@@ -71,6 +88,7 @@ components:
                 - addedOn
             type: object
         DcpCredentialDescriptorRequest:
+            description: Specific credential format and type requested via DCP.
             properties:
                 format:
                     example: VC1_0_JWT
@@ -86,6 +104,7 @@ components:
                 - type
             type: object
         DcpCredentialRequest:
+            description: Dataspace Credential Protocol issuance request payload.
             properties:
                 credentials:
                     items:
@@ -95,16 +114,21 @@ components:
                     example: VC1_0_JWT
                     type: string
                 holderPid:
+                    description: Holder participant identifier
                     example: holder-pid-123
                     type: string
                 issuerDid:
+                    description: Issuer DID
                     example: did:web:issuer.dataspace.org
                     type: string
                 issuerUrl:
+                    description: Issuer service endpoint
                     example: https://issuer.dataspace.org
                     format: uri
                     type: string
                 types:
+                    example:
+                        - DataSpaceParticipant
                     items:
                         type: string
                     type: array
@@ -112,21 +136,26 @@ components:
                 - issuerDid
             type: object
         DcpRequestResponse:
+            description: Receipt response acknowledging an accepted DCP request.
             properties:
                 requestId:
-                    example: dcp-req-923847
+                    description: Asynchronous request tracking ID
+                    example: dcp-req-923847293
                     type: string
             required:
                 - requestId
             type: object
         DcpStatusResponse:
+            description: Status and execution result of an asynchronous DCP request.
             properties:
                 error:
+                    description: Error diagnostic if failed
                     type: string
                 requestId:
-                    example: dcp-req-923847
+                    example: dcp-req-923847293
                     type: string
                 status:
+                    description: Processing status (e.g. REQUESTED, PROCESSING, ISSUED, FAILED)
                     example: ISSUED
                     type: string
             required:
@@ -134,57 +163,94 @@ components:
                 - status
             type: object
         DidBuilderRequest:
+            description: Method configuration for provisioning a new DID.
             properties:
                 domain:
-                    description: For did:web method
-                    example: example.com
+                    description: Domain name for did:web builder
+                    example: alexandria.127.0.0.1.nip.io
                     type: string
                 method:
+                    description: Target DID method
                     enum:
                         - jwk
                         - web
                     example: web
                     type: string
                 path:
+                    description: Optional path component for did:web
                     example: identity
                     type: string
                 pem:
-                    description: For did:jwk method
+                    description: PEM key material for did:jwk builder
                     type: string
                 port:
+                    description: Optional port for did:web
                     example: "8443"
                     type: string
             type: object
+        DidDocument:
+            description: W3C compliant Decentralized Identifier Document.
+            properties:
+                assertionMethod:
+                    items:
+                        type: string
+                    type: array
+                authentication:
+                    items:
+                        type: string
+                    type: array
+                id:
+                    example: did:web:alexandria.127.0.0.1.nip.io:8443
+                    type: string
+                service:
+                    items:
+                        type: object
+                    type: array
+                verificationMethod:
+                    items:
+                        type: object
+                    type: array
+            required:
+                - id
+            type: object
         DidIdResponse:
+            description: DID identifier string wrapper.
             properties:
                 did:
-                    example: did:jwk:eyJjcnYiOi...
+                    description: Decentralized Identifier URI
+                    example: did:jwk:eyJjcnYiOiJzZWNwMjU2azEi...
                     type: string
             required:
                 - did
             type: object
         DidResponse:
+            description: Public representation of a wallet-managed DID record.
             properties:
                 alias:
-                    example: main-identity
+                    description: Friendly local alias
+                    example: default-did
                     type: string
                 default:
+                    description: Whether this DID is the primary wallet identity
                     example: true
                     type: boolean
                 defaultKeyFragment:
+                    description: Primary verification method fragment
                     example: '#key-1'
                     type: string
                 didDocument:
-                    description: W3C compliant DID document
-                    type: object
+                    $ref: '#/components/schemas/DidDocument'
                 id:
-                    example: did:web:alexandria.example.com
+                    description: DID identifier string
+                    example: did:web:alexandria.127.0.0.1.nip.io:8443
                     type: string
                 keys:
+                    description: Bound verification keys
                     items:
                         $ref: '#/components/schemas/KeyBinding'
                     type: array
                 method:
+                    description: DID method (e.g. web, jwk)
                     example: web
                     type: string
             required:
@@ -194,15 +260,19 @@ components:
                 - keys
             type: object
         DidServiceRequest:
+            description: Service endpoint definition to embed in a DID document.
             properties:
                 id:
+                    description: Service endpoint fragment identifier
                     example: '#credential-service'
                     type: string
                 serviceEndpoint:
-                    example: https://example.com/credentials
+                    description: Target service URI
+                    example: https://alexandria.example.org/credentials
                     format: uri
                     type: string
                 type:
+                    description: Service type (e.g. CredentialService, LinkedDomains)
                     example: CredentialService
                     type: string
             required:
@@ -210,11 +280,14 @@ components:
                 - serviceEndpoint
             type: object
         DidStateResponse:
+            description: DID publication state report.
             properties:
                 did:
-                    example: did:web:example.com
+                    description: DID identifier
+                    example: did:web:alexandria.example.org
                     type: string
                 state:
+                    description: Publication state (published, unpublished, draft)
                     example: published
                     type: string
             required:
@@ -222,11 +295,14 @@ components:
                 - state
             type: object
         ErrorResponse:
+            description: Standard RFC 7807 problem detail response emitted on HTTP errors.
             properties:
                 error:
-                    example: not found
+                    description: Human-readable error explanation
+                    example: entity not found
                     type: string
                 field:
+                    description: Offending request field when invalid
                     example: alias
                     type: string
                 originalResponse:
@@ -235,21 +311,26 @@ components:
                 - error
             type: object
         HealthResponse:
+            description: System health and readiness status payload.
             properties:
                 checks:
                     additionalProperties:
                         type: string
+                    description: Subsystem readiness breakdown by name
                     example:
                         database: ok
+                        openapi: ok
                         wallet: ok
                     type: object
                 status:
+                    description: Overall service health status ('ok' or 'not_ready')
                     example: ok
                     type: string
             required:
                 - status
             type: object
         KeyBinding:
+            description: Fragment identifier referencing a key binding in a DID document.
             properties:
                 fragment:
                     example: '#key-1'
@@ -258,11 +339,12 @@ components:
                 - fragment
             type: object
         KeyDescriptorRequest:
+            description: Key generation or public key binding options during participant provisioning.
             properties:
                 keyGeneratorParams:
                     type: object
                 keyId:
-                    example: key-id-1
+                    example: key-tenant-1
                     type: string
                 privateKeyAlias:
                     type: string
@@ -277,31 +359,42 @@ components:
                     type: string
             type: object
         KeyResponse:
+            description: Public metadata of a cryptographic keypair held in the wallet.
             properties:
                 alias:
-                    example: signing-key
+                    description: Optional alias
+                    example: primary-signing-key
                     type: string
                 createdAt:
+                    description: Key registration timestamp
                     format: date-time
                     type: string
                 crv:
-                    example: P-256
+                    description: Cryptographic curve (e.g. secp256k1, P-256, Ed25519)
+                    example: secp256k1
                     type: string
                 defaultPair:
+                    description: Whether this is the default keypair
                     type: boolean
                 id:
-                    example: key-2026-01
+                    description: Key identifier
+                    example: key-secp256k1-1
                     type: string
                 keyContext:
+                    description: Internal context reference
                     type: string
                 kty:
+                    description: Key type (e.g. EC, OKP, RSA)
                     example: EC
                     type: string
                 privateKeyAlias:
+                    description: Custody reference alias in external HSM or Vault
                     type: string
                 serializedPublicKey:
+                    description: Public key serialization in PEM or base64
                     type: string
                 state:
+                    description: Key lifecycle state (Active, Rotated, Revoked)
                     example: Active
                     type: string
             required:
@@ -310,58 +403,70 @@ components:
                 - createdAt
             type: object
         LoginResponse:
+            description: Payload returned when login is requested as JSON instead of browser redirect.
             properties:
                 authorization_url:
-                    description: Provider authorization URL
-                    example: https://idp.example.com/oauth/v2/authorize?...
+                    description: Zitadel OIDC authorization URL with PKCE parameters
+                    example: https://auth.127.0.0.1.nip.io:8443/oauth/v2/authorize?client_id=alexandria&...
                     format: uri
                     type: string
             required:
                 - authorization_url
             type: object
         LogoutResponse:
+            description: Payload returned when logout is requested as JSON instead of browser redirect.
             properties:
                 end_session_url:
-                    description: Provider logout redirect URL
-                    example: https://idp.example.com/oidc/v1/end_session?...
+                    description: Zitadel end-session URL for client redirection
+                    example: https://auth.127.0.0.1.nip.io:8443/oidc/v1/end_session?post_logout_redirect_uri=...
                     format: uri
                     type: string
             type: object
         MachineTokenRequest:
+            description: Client credentials payload for machine-to-machine OAuth2 token minting.
             properties:
                 client_id:
-                    example: service-worker-1
+                    description: Registered service account client ID
+                    example: connector-client-01
                     type: string
                 client_secret:
-                    example: secret123
+                    description: Service account client secret
+                    example: secret-value-xyz
                     format: password
                     type: string
                 scope:
-                    example: openid profile
+                    description: Requested OAuth2 scopes
+                    example: openid profile dataspace:read
                     type: string
             required:
                 - client_id
                 - client_secret
             type: object
         OidcUriRequest:
+            description: Protocol request URI payload for OID4VCI or OID4VP exchanges.
             properties:
                 uri:
-                    example: openid-credential-offer://?credential_offer_uri=...
+                    description: Decentralized protocol offer or presentation request URI
+                    example: openid-credential-offer://?credential_offer_uri=https%3A%2F%2Fissuer.org%2Foffer%2F123
                     type: string
             required:
                 - uri
             type: object
         OriginalResponse:
+            description: Diagnostic details forwarded from external wallet providers (Fafnir or IdentityHub).
             properties:
                 body:
-                    description: Raw response payload from upstream
+                    description: Raw payload response from upstream
                 path:
+                    description: Upstream request path
                     example: /api/identity/v1
                     type: string
                 provider:
+                    description: Upstream wallet provider name
                     example: identityhub
                     type: string
                 statusCode:
+                    description: HTTP status received from upstream
                     example: 502
                     type: integer
             required:
@@ -369,6 +474,7 @@ components:
                 - statusCode
             type: object
         ParticipantResponse:
+            description: Participant context metadata in IdentityHub.
             properties:
                 active:
                     example: true
@@ -383,6 +489,8 @@ components:
                     example: participant-acme
                     type: string
                 roles:
+                    example:
+                        - admin
                     items:
                         type: string
                     type: array
@@ -393,29 +501,37 @@ components:
                 - createdAt
             type: object
         ParticipantStateRequest:
+            description: Payload for toggling active state of a participant context.
             properties:
                 active:
+                    description: Active state flag
                     example: true
                     type: boolean
             required:
                 - active
             type: object
         ParticipantTokenResponse:
+            description: Minted API authorization token for a participant context.
             properties:
                 token:
+                    description: API authorization token
                     example: apiKey_398472938472394
                     type: string
             required:
                 - token
             type: object
         RegisterDidRequest:
+            description: Payload for creating and provisioning a new DID in the wallet.
             properties:
                 alias:
-                    example: my-company-did
+                    example: dataspace-node-identity
                     type: string
                 builder:
                     $ref: '#/components/schemas/DidBuilderRequest'
                 keys:
+                    description: List of key IDs to bind as verification methods
+                    example:
+                        - key-secp256k1-1
                     items:
                         type: string
                     type: array
@@ -427,26 +543,31 @@ components:
                 - builder
             type: object
         RegisterKeyRequest:
+            description: Payload for importing or registering an asymmetric keypair in the wallet.
             properties:
                 alias:
-                    example: vault-primary-key
+                    example: identityhub-signing-key
                     type: string
                 id:
-                    example: my-key-1
+                    description: Optional assigned key ID
+                    example: key-2026-09
                     type: string
                 jwk:
-                    description: JWK representation of the key
+                    description: JWK representation of key material
                 pem:
-                    description: PEM-encoded private or public key
+                    description: PEM-encoded private key (with public key) to import
                     type: string
             type: object
         RotateKeyRequest:
+            description: Parameters for cryptographic key rotation.
             properties:
                 duration:
+                    description: Overlap validity duration before prior key is retired (e.g. 24h, 720h)
                     example: 720h
                     type: string
             type: object
         ServiceEndpointRequest:
+            description: Payload for adding a service endpoint to a DID document.
             properties:
                 id:
                     example: '#service-endpoint-1'
@@ -455,7 +576,7 @@ components:
                     example: LinkedDomains
                     type: string
                 url:
-                    example: https://example.com
+                    example: https://alexandria.example.org
                     format: uri
                     type: string
             required:
@@ -464,36 +585,53 @@ components:
                 - url
             type: object
         SessionResponse:
+            description: Public projection of the caller identity as established by the verified token or cookie.
             properties:
                 email:
-                    example: alice@example.com
+                    description: Email address
+                    example: admin@example.com
                     format: email
                     type: string
                 expires_at:
+                    description: Timestamp when session or token expires
                     format: date-time
                     type: string
                 machine:
+                    description: True if authenticated via client credentials grant
                     example: false
                     type: boolean
                 name:
-                    example: Alice Cooper
+                    description: Display name
+                    example: Alexandria Admin
                     type: string
                 organization:
-                    example: org_456
+                    description: Organization context
+                    example: org_alexandria
                     type: string
                 roles:
+                    description: Assigned project roles
+                    example:
+                        - admin
+                        - editor
                     items:
                         type: string
                     type: array
                 scopes:
+                    description: Token scopes
+                    example:
+                        - openid
+                        - profile
+                        - email
                     items:
                         type: string
                     type: array
                 subject:
-                    example: user_2139482
+                    description: Zitadel user subject ID
+                    example: "213948293847293"
                     type: string
                 username:
-                    example: alice
+                    description: Username
+                    example: admin@alexandria.auth.127.0.0.1.nip.io
                     type: string
             required:
                 - subject
@@ -502,33 +640,43 @@ components:
                 - machine
             type: object
         StoreCredentialContainerRequest:
+            description: Wrapper container for raw Verifiable Credential data.
             properties:
                 credential:
+                    description: Parsed credential JSON document
                     type: object
                 format:
+                    description: VC format descriptor
                     example: VC1_0_JWT
                     type: string
                 rawVc:
+                    description: Encoded JWT or JSON string of the VC
                     type: string
             required:
                 - rawVc
             type: object
         StoreCredentialRequest:
+            description: Payload for storing a Verifiable Credential in the wallet.
             properties:
                 credential:
+                    description: Decoded credential payload
                     type: object
                 format:
+                    description: Credential format
                     example: VC1_0_JWT
                     type: string
                 id:
-                    example: vc-membership-1
+                    description: Unique credential identifier
+                    example: vc-membership-01
                     type: string
                 participantContextId:
+                    description: Participant context ID in IdentityHub
                     example: default
                     type: string
                 payload:
                     type: object
                 rawVc:
+                    description: Raw string representation of the credential
                     type: string
                 verifiableCredentialContainer:
                     $ref: '#/components/schemas/StoreCredentialContainerRequest'
@@ -536,17 +684,22 @@ components:
                 - id
             type: object
         TokenResponse:
+            description: Minted OAuth 2.0 access token response.
             properties:
                 access_token:
-                    example: eyJhbGciOi...
+                    description: Signed JWT access token
+                    example: eyJhbGciOiJSUzI1NiIs...
                     type: string
                 expires_in:
+                    description: Token lifetime in seconds
                     example: 3600
                     type: integer
                 scope:
+                    description: Granted scopes
                     example: openid profile
                     type: string
                 token_type:
+                    description: Token type (Bearer)
                     example: Bearer
                     type: string
             required:
@@ -555,14 +708,17 @@ components:
                 - expires_in
             type: object
         UpdateTokenRequest:
+            description: Payload for overriding a participant context API token in memory.
             properties:
                 token:
+                    description: New in-memory API token
                     example: apiKey_custom_override
                     type: string
             required:
                 - token
             type: object
         WalletInfoResponse:
+            description: High-level metadata and identities from the delegated wallet backend.
             properties:
                 createdAt:
                     format: date-time
@@ -586,41 +742,48 @@ components:
     securitySchemes:
         BearerAuth:
             bearerFormat: JWT
-            description: OAuth 2.0 Bearer access token
+            description: OAuth 2.0 Bearer access token issued by Zitadel or machine credentials grant.
             scheme: bearer
             type: http
         SessionCookie:
-            description: Sealed HTTP session cookie
+            description: Sealed HttpOnly session cookie (encrypted, SameSite=Lax, Secure - ADR 0004 & ADR 0005).
             in: cookie
             name: alexandria_session
             type: apiKey
 info:
     contact:
         name: Alexandria Team
-    description: Decentralized identity, wallet management, and authentication proxy for Gaia-X and sovereign dataspaces.
+        url: https://ging.github.io/alexandria
+    description: |-
+        Alexandria is a Vocabulary Hub engineered for sovereign dataspaces. It provides the single source of semantic truth to host, publish, and version domain ontologies, dereference semantic terms in real-time for dataspace connectors, and execute automated remote conformance tests.
+
+        Key architectural pillars:
+        - **Node-Terminated Authentication (ADR 0004)**: OIDC with PKCE via Zitadel issuing encrypted, HttpOnly session cookies.
+        - **External Key Custody & Delegated Wallets (ADR 0003 & ADR 0007)**: Cryptographic private keys and signing operations reside in external wallets (supporting both Fafnir and Eclipse EDC IdentityHub).
+        - **Unified Wallet Port**: Agnostic abstractions over DIDs, Verifiable Credentials, and keypairs.
     license:
         name: Apache 2.0
         url: https://www.apache.org/licenses/LICENSE-2.0.html
-    title: Alexandria API
+    title: Alexandria Vocabulary Hub API
     version: 1.0.0
 openapi: 3.0.3
 paths:
     /.well-known/did.json:
         get:
-            description: Resolves the public DID document of this node for the did:web method.
+            description: Public W3C DID Document resolving the node's decentralized identifier for did:web resolution without version prefixes.
             responses:
                 "200":
                     content:
                         application/json:
                             schema:
-                                type: object
-                    description: DID document resolved
+                                $ref: '#/components/schemas/DidDocument'
+                    description: Public W3C DID Document
                 "404":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorResponse'
-                    description: No DID document established
+                    description: No DID document established or wallet not linked
                 "500":
                     content:
                         application/json:
@@ -629,12 +792,12 @@ paths:
                     description: Internal error
             summary: W3C DID Document
             tags:
-                - Well-Known
+                - Root & Probes
     /api/v1/auth/callback:
         get:
-            description: Receives the authorization code from the identity provider, validates state and PKCE verifier, exchanges code for tokens, and seals the session cookie.
+            description: Handles OAuth2 redirect callback from Zitadel, verifies state, exchanges authorization code for tokens using PKCE verifier, validates ID token nonce, and seals the HttpOnly session cookie.
             parameters:
-                - description: Authorization code issued by provider
+                - description: Authorization code issued by Zitadel
                   in: query
                   name: code
                   required: true
@@ -646,12 +809,12 @@ paths:
                   required: true
                   schema:
                     type: string
-                - description: Error code from the identity provider if refused
+                - description: Error code from Zitadel if authorization was denied
                   in: query
                   name: error
                   schema:
                     type: string
-                - description: Set to 'json' to return session document instead of redirecting
+                - description: Set to 'json' to return session payload instead of 302 redirect
                   in: query
                   name: response
                   schema:
@@ -664,60 +827,60 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/SessionResponse'
-                    description: Session details when requested via JSON
+                    description: Authenticated session payload
                 "302":
-                    description: Redirects browser to return_to destination with session cookie set
+                    description: Redirects browser to return destination with sealed session cookie
                 "400":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorResponse'
-                    description: Missing or mismatched state/code
+                    description: Missing code/state or state mismatch
                 "401":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorResponse'
-                    description: Provider refused or token verification failed
+                    description: Identity provider refused or token verification failed
                 "500":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorResponse'
                     description: Internal error
-            summary: OIDC callback
+            summary: OIDC authorization callback
             tags:
-                - Auth
+                - Authentication & Sessions
     /api/v1/auth/login:
         get:
-            description: Starts the OIDC authorization code flow with PKCE, saving the flow state in a temporary cookie.
+            description: Initiates OpenID Connect authorization code flow with PKCE via Zitadel (ADR 0004). Generates cryptographic state and nonce, sets encrypted flow cookie, and redirects browser or returns JSON authorization URL.
             parameters:
                 - description: OIDC prompt parameter (e.g. login, consent)
                   in: query
                   name: prompt
                   schema:
                     type: string
-                - description: Hint about the login identifier
+                - description: Username or email hint for the identity provider
                   in: query
                   name: login_hint
                   schema:
                     type: string
-                - description: Target organization identifier
+                - description: Target organization identifier in Zitadel
                   in: query
                   name: organization
                   schema:
                     type: string
-                - description: Identity provider selection hint
+                - description: Specific identity provider hint
                   in: query
                   name: idp
                   schema:
                     type: string
-                - description: URL to redirect to after successful authentication
+                - description: Safe relative path to redirect to after successful authentication
                   in: query
                   name: return_to
                   schema:
                     type: string
-                - description: Set to 'json' to receive the authorization URL instead of 302 redirect
+                - description: Set to 'json' to receive the authorization URL in a JSON payload instead of a 302 redirect
                   in: query
                   name: response
                   schema:
@@ -730,29 +893,29 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/LoginResponse'
-                    description: Authorization URL payload for programmatic callers
+                    description: Authorization URL for programmatic callers
                 "302":
-                    description: Redirects browser to the OIDC provider authorization page
+                    description: Redirects browser to Zitadel authorization endpoint
                 "400":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorResponse'
-                    description: Invalid login parameters
+                    description: Invalid login parameters or unsafe return URL
                 "500":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorResponse'
                     description: Internal error
-            summary: Initiate OIDC login
+            summary: Initiate OIDC authorization flow
             tags:
-                - Auth
+                - Authentication & Sessions
     /api/v1/auth/logout:
         post:
-            description: Clears the local session cookie and revokes the refresh token at the identity provider.
+            description: Clears the encrypted session cookie on the node and revokes the refresh token at Zitadel. If supported, returns or redirects to provider end-session endpoint.
             parameters:
-                - description: Set to 'json' to return end session URL instead of redirect
+                - description: Set to 'json' to return end session URL payload instead of 302 redirect
                   in: query
                   name: response
                   schema:
@@ -765,9 +928,9 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/LogoutResponse'
-                    description: End session URL for single-page applications
+                    description: End-session URL for client redirection
                 "302":
-                    description: Redirects to provider end session endpoint
+                    description: Redirects browser to Zitadel end-session URL
                 "500":
                     content:
                         application/json:
@@ -776,25 +939,25 @@ paths:
                     description: Internal error
             security:
                 - SessionCookie: []
-            summary: Log out
+            summary: Terminate user session
             tags:
-                - Auth
+                - Authentication & Sessions
     /api/v1/auth/refresh:
         post:
-            description: Renews the access token using the refresh token stored inside the sealed session cookie.
+            description: Renews the access token and rotates the refresh token stored in the sealed session cookie via Zitadel's token endpoint.
             responses:
                 "200":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/SessionResponse'
-                    description: Session successfully renewed
+                    description: Session renewed with new expiry
                 "401":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorResponse'
-                    description: No active session or refresh token rejected
+                    description: No active session or refresh token rejected by provider
                 "500":
                     content:
                         application/json:
@@ -803,19 +966,19 @@ paths:
                     description: Internal error
             security:
                 - SessionCookie: []
-            summary: Refresh session
+            summary: Refresh session token
             tags:
-                - Auth
+                - Authentication & Sessions
     /api/v1/auth/session:
         get:
-            description: Returns details of the caller established by the verified token or session cookie.
+            description: Returns subject, username, roles, and expiry of the caller as recognized by the node guard.
             responses:
                 "200":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/SessionResponse'
-                    description: Current caller identity
+                    description: Active caller identity details
                 "401":
                     content:
                         application/json:
@@ -825,12 +988,12 @@ paths:
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: Current session
+            summary: Current authenticated session
             tags:
-                - Auth
+                - Authentication & Sessions
     /api/v1/auth/token:
         post:
-            description: Proxies client_credentials grant to the identity provider, minting a bearer token for machine-to-machine callers.
+            description: Proxies client_credentials grant to Zitadel, minting a scoped access token for dataspace connector or machine-to-machine interactions.
             requestBody:
                 content:
                     application/json:
@@ -846,13 +1009,13 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/TokenResponse'
-                    description: Minted access token
+                    description: Minted machine access token
                 "400":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorResponse'
-                    description: Missing client credentials
+                    description: Missing client_id or client_secret
                 "401":
                     content:
                         application/json:
@@ -867,23 +1030,23 @@ paths:
                     description: Internal error
             summary: OAuth 2.0 machine token grant
             tags:
-                - Auth
+                - Authentication & Sessions
     /api/v1/auth/userinfo:
         get:
-            description: Proxies UserInfo claims from the identity provider using the caller's access token.
+            description: Proxies UserInfo claims directly from Zitadel using the caller's access token.
             responses:
                 "200":
                     content:
                         application/json:
                             schema:
                                 type: object
-                    description: Raw OIDC UserInfo claims
+                    description: Raw OIDC UserInfo claims object
                 "401":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorResponse'
-                    description: Unauthenticated caller or upstream refused
+                    description: Unauthenticated caller or provider refused access token
                 "500":
                     content:
                         application/json:
@@ -893,12 +1056,12 @@ paths:
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: OIDC UserInfo
+            summary: OIDC UserInfo claims
             tags:
-                - Auth
+                - Authentication & Sessions
     /api/v1/ssi-auth/wallet/credential:
         post:
-            description: Imports and stores a Verifiable Credential into the wallet repository.
+            description: Imports a Verifiable Credential (e.g. Gaia-X participant credential) into the wallet.
             requestBody:
                 content:
                     application/json:
@@ -917,7 +1080,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorResponse'
-                    description: Invalid credential data
+                    description: Invalid credential payload
                 "500":
                     content:
                         application/json:
@@ -929,12 +1092,12 @@ paths:
                 - SessionCookie: []
             summary: Store Verifiable Credential
             tags:
-                - Credentials
+                - Verifiable Credentials & Exchanges
     /api/v1/ssi-auth/wallet/credential/{id}:
         delete:
             description: Removes a Verifiable Credential from the wallet storage by ID.
             parameters:
-                - description: Credential ID
+                - description: Credential identifier
                   in: path
                   name: id
                   required: true
@@ -942,7 +1105,7 @@ paths:
                     type: string
             responses:
                 "202":
-                    description: Credential deletion accepted
+                    description: Credential purge accepted
                 "404":
                     content:
                         application/json:
@@ -958,12 +1121,12 @@ paths:
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: Delete Verifiable Credential
+            summary: Purge Verifiable Credential
             tags:
-                - Credentials
+                - Verifiable Credentials & Exchanges
     /api/v1/ssi-auth/wallet/dcp/request:
         post:
-            description: Sends a Dataspace Credential Protocol issuance request to an external issuer.
+            description: Submits an asynchronous credential request to a dataspace issuer using the Dataspace Credential Protocol.
             requestBody:
                 content:
                     application/json:
@@ -976,7 +1139,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/DcpRequestResponse'
-                    description: DCP request accepted
+                    description: DCP request accepted with tracking ID
                 "400":
                     content:
                         application/json:
@@ -992,14 +1155,14 @@ paths:
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: Request credential via DCP
+            summary: Initiate DCP credential request
             tags:
-                - DCP
+                - Dataspace Credential Protocol (DCP)
     /api/v1/ssi-auth/wallet/dcp/request/{id}:
         get:
-            description: Checks the processing status and results of a pending DCP credential request.
+            description: Checks the processing status and retrieved credentials of a pending DCP credential request.
             parameters:
-                - description: DCP Request ID
+                - description: DCP request tracking identifier
                   in: path
                   name: id
                   required: true
@@ -1011,7 +1174,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/DcpStatusResponse'
-                    description: DCP request status
+                    description: DCP request processing status
                 "404":
                     content:
                         application/json:
@@ -1029,10 +1192,10 @@ paths:
                 - SessionCookie: []
             summary: Get DCP request status
             tags:
-                - DCP
+                - Dataspace Credential Protocol (DCP)
     /api/v1/ssi-auth/wallet/did:
         get:
-            description: Returns the identifier string of the wallet's default DID.
+            description: Returns the identifier of the primary DID used by this node for signing and presentation operations.
             responses:
                 "200":
                     content:
@@ -1045,7 +1208,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorResponse'
-                    description: No default DID set
+                    description: No active DID established
                 "500":
                     content:
                         application/json:
@@ -1055,11 +1218,11 @@ paths:
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: Get default DID
+            summary: Get default active DID
             tags:
-                - DID
+                - Decentralized Identifiers (DIDs)
         post:
-            description: Registers or generates a new DID document (e.g. did:jwk, did:web).
+            description: Provisions a new Decentralized Identifier using supported method builders (did:jwk or did:web).
             requestBody:
                 content:
                     application/json:
@@ -1072,19 +1235,19 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/DidResponse'
-                    description: DID created
+                    description: DID provisioned successfully
                 "400":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorResponse'
-                    description: Invalid builder parameters
+                    description: Invalid DID builder parameters
                 "409":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorResponse'
-                    description: DID already exists
+                    description: DID identifier collision
                 "422":
                     content:
                         application/json:
@@ -1100,12 +1263,12 @@ paths:
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: Register DID
+            summary: Register new DID
             tags:
-                - DID
+                - Decentralized Identifiers (DIDs)
     /api/v1/ssi-auth/wallet/did/{id}:
         delete:
-            description: Deletes a DID record from the wallet.
+            description: Purges a Decentralized Identifier record from the wallet.
             parameters:
                 - description: DID identifier
                   in: path
@@ -1133,11 +1296,11 @@ paths:
                 - SessionCookie: []
             summary: Delete DID
             tags:
-                - DID
+                - Decentralized Identifiers (DIDs)
         get:
-            description: Retrieves a single DID record by identifier or alias.
+            description: Retrieves the W3C DID document and binding metadata for a specific DID.
             parameters:
-                - description: DID identifier or alias
+                - description: DID identifier string or local alias
                   in: path
                   name: id
                   required: true
@@ -1149,7 +1312,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/DidResponse'
-                    description: DID details
+                    description: DID record and document
                 "404":
                     content:
                         application/json:
@@ -1165,12 +1328,12 @@ paths:
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: Get DID by ID
+            summary: Get DID by ID or alias
             tags:
-                - DID
+                - Decentralized Identifiers (DIDs)
     /api/v1/ssi-auth/wallet/did/{id}/default:
         post:
-            description: Promotes a DID to be the wallet's default active identity.
+            description: Sets the designated DID as the primary identity of this Alexandria node.
             parameters:
                 - description: DID identifier
                   in: path
@@ -1184,7 +1347,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/DidResponse'
-                    description: Default DID updated
+                    description: Updated DID promoted to default
                 "404":
                     content:
                         application/json:
@@ -1200,12 +1363,12 @@ paths:
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: Set default DID
+            summary: Promote DID to default active identity
             tags:
-                - DID
+                - Decentralized Identifiers (DIDs)
     /api/v1/ssi-auth/wallet/did/{id}/endpoints:
         post:
-            description: Appends a new service endpoint definition into the DID document.
+            description: Appends a service endpoint definition (e.g. CredentialService or LinkedDomains) into the DID document.
             parameters:
                 - description: DID identifier
                   in: path
@@ -1225,13 +1388,13 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/DidResponse'
-                    description: Service endpoint added
+                    description: DID document updated with new service endpoint
                 "400":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorResponse'
-                    description: Invalid endpoint payload
+                    description: Invalid endpoint definition
                 "404":
                     content:
                         application/json:
@@ -1247,12 +1410,12 @@ paths:
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: Add service endpoint
+            summary: Add service endpoint to DID
             tags:
-                - DID
+                - Decentralized Identifiers (DIDs)
     /api/v1/ssi-auth/wallet/did/{id}/endpoints/{endpoint_id}:
         delete:
-            description: Deletes a service endpoint from the DID document.
+            description: Removes a service endpoint from the DID document.
             parameters:
                 - description: DID identifier
                   in: path
@@ -1272,7 +1435,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/DidResponse'
-                    description: Service endpoint removed
+                    description: DID document updated
                 "404":
                     content:
                         application/json:
@@ -1288,12 +1451,12 @@ paths:
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: Remove service endpoint
+            summary: Remove service endpoint from DID
             tags:
-                - DID
+                - Decentralized Identifiers (DIDs)
     /api/v1/ssi-auth/wallet/did/{id}/key/{key_id}:
         delete:
-            description: Unbinds a key from the verification methods of a DID.
+            description: Removes a key binding from the verification methods of a DID document.
             parameters:
                 - description: DID identifier
                   in: path
@@ -1313,7 +1476,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/DidResponse'
-                    description: Key removed from DID
+                    description: DID updated with key removed
                 "404":
                     content:
                         application/json:
@@ -1329,11 +1492,11 @@ paths:
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: Remove key from DID
+            summary: Unbind key from DID verification methods
             tags:
-                - DID
+                - Decentralized Identifiers (DIDs)
         post:
-            description: Binds a key into the verification methods of a DID.
+            description: Binds an existing cryptographic keypair into the verification methods of a DID document.
             parameters:
                 - description: DID identifier
                   in: path
@@ -1353,7 +1516,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/DidResponse'
-                    description: Key added to DID
+                    description: DID updated with new verification method
                 "404":
                     content:
                         application/json:
@@ -1369,12 +1532,12 @@ paths:
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: Add key to DID
+            summary: Bind key to DID verification methods
             tags:
-                - DID
+                - Decentralized Identifiers (DIDs)
     /api/v1/ssi-auth/wallet/did/{id}/key/{key_id}/default:
         post:
-            description: Promotes a verification method to be the primary key for the DID.
+            description: Designates a verification method as the primary signing key for a DID document.
             parameters:
                 - description: DID identifier
                   in: path
@@ -1394,7 +1557,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/DidResponse'
-                    description: Default key set
+                    description: Default verification method set
                 "404":
                     content:
                         application/json:
@@ -1412,10 +1575,10 @@ paths:
                 - SessionCookie: []
             summary: Set default key for DID
             tags:
-                - DID
+                - Decentralized Identifiers (DIDs)
     /api/v1/ssi-auth/wallet/did/{id}/publish:
         post:
-            description: Publishes the DID document to its designated registry or endpoint.
+            description: Publishes the DID document to the public resolver or dataspace registry.
             parameters:
                 - description: DID identifier
                   in: path
@@ -1429,7 +1592,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/DidStateResponse'
-                    description: DID published
+                    description: DID publication state
                 "404":
                     content:
                         application/json:
@@ -1445,12 +1608,12 @@ paths:
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: Publish DID
+            summary: Publish DID document
             tags:
-                - DID
+                - Decentralized Identifiers (DIDs)
     /api/v1/ssi-auth/wallet/did/{id}/state:
         get:
-            description: Returns the current state (published, unpublished, draft) of the DID.
+            description: Queries the publication status (published, unpublished, draft) of a DID.
             parameters:
                 - description: DID identifier
                   in: path
@@ -1464,7 +1627,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/DidStateResponse'
-                    description: DID state
+                    description: DID state details
                 "404":
                     content:
                         application/json:
@@ -1482,10 +1645,10 @@ paths:
                 - SessionCookie: []
             summary: Get DID publication state
             tags:
-                - DID
+                - Decentralized Identifiers (DIDs)
     /api/v1/ssi-auth/wallet/did/{id}/unpublish:
         post:
-            description: Unpublishes or revokes publication of a DID document.
+            description: Unpublishes or withdraws the DID document from public resolution.
             parameters:
                 - description: DID identifier
                   in: path
@@ -1499,7 +1662,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/DidStateResponse'
-                    description: DID unpublished
+                    description: DID unpublished state
                 "404":
                     content:
                         application/json:
@@ -1515,12 +1678,12 @@ paths:
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: Unpublish DID
+            summary: Unpublish DID document
             tags:
-                - DID
+                - Decentralized Identifiers (DIDs)
     /api/v1/ssi-auth/wallet/did/all:
         get:
-            description: Renders every DID document currently held by the wallet.
+            description: Renders every DID document and associated verification keys managed by the wallet.
             responses:
                 "200":
                     content:
@@ -1529,7 +1692,7 @@ paths:
                                 items:
                                     $ref: '#/components/schemas/DidResponse'
                                 type: array
-                    description: List of DIDs
+                    description: Array of managed DIDs
                 "500":
                     content:
                         application/json:
@@ -1539,19 +1702,19 @@ paths:
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: List all DIDs
+            summary: List all managed DIDs
             tags:
-                - DID
+                - Decentralized Identifiers (DIDs)
     /api/v1/ssi-auth/wallet/info:
         get:
-            description: Retrieves wallet metadata, creation timestamp, and managed DIDs.
+            description: Retrieves high-level metadata from the wallet backend, including its assigned name, creation timestamp, and managed DIDs.
             responses:
                 "200":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/WalletInfoResponse'
-                    description: Wallet metadata
+                    description: Wallet metadata and DIDs list
                 "500":
                     content:
                         application/json:
@@ -1561,26 +1724,26 @@ paths:
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: Wallet metadata
+            summary: Wallet metadata and managed identities
             tags:
-                - Wallet
+                - Wallet & Identity Lifecycle
     /api/v1/ssi-auth/wallet/is-linked:
         get:
-            description: Reports whether the node has completed the handshake with the delegated wallet provider.
+            description: Reports whether the Alexandria node has established an active link and default identity with the delegated wallet (Fafnir or IdentityHub).
             responses:
                 "200":
                     description: Wallet is linked and identity is established
                 "404":
-                    description: Wallet is not linked
+                    description: Wallet is not linked or unreachable
             security:
                 - BearerAuth: []
                 - SessionCookie: []
             summary: Check wallet link status
             tags:
-                - Wallet
+                - Wallet & Identity Lifecycle
     /api/v1/ssi-auth/wallet/keys:
         get:
-            description: Returns all public key records stored in the wallet.
+            description: Returns all public key records and metadata registered in the delegated wallet (ADR 0003). Private keys never leave the wallet.
             responses:
                 "200":
                     content:
@@ -1589,7 +1752,7 @@ paths:
                                 items:
                                     $ref: '#/components/schemas/KeyResponse'
                                 type: array
-                    description: List of keys
+                    description: List of registered keys
                 "500":
                     content:
                         application/json:
@@ -1599,11 +1762,11 @@ paths:
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: List wallet keys
+            summary: List cryptographic keys
             tags:
-                - Keys
+                - Key Custody & Rotation
         post:
-            description: Imports an existing private/public keypair into the wallet via PEM or JWK format.
+            description: Imports an asymmetric keypair into the wallet via PEM string or JWK structure.
             requestBody:
                 content:
                     application/json:
@@ -1616,19 +1779,19 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/KeyResponse'
-                    description: Key registered
+                    description: Keypair registered in wallet
                 "400":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorResponse'
-                    description: Invalid key format or missing key material
+                    description: Invalid key format or unparsable material
                 "409":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorResponse'
-                    description: Key ID conflict
+                    description: Key ID already exists
                 "500":
                     content:
                         application/json:
@@ -1638,12 +1801,12 @@ paths:
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: Import keypair
+            summary: Import keypair into wallet
             tags:
-                - Keys
+                - Key Custody & Rotation
     /api/v1/ssi-auth/wallet/keys/{id}:
         delete:
-            description: Removes a keypair from the wallet by key ID.
+            description: Permanently deletes a cryptographic keypair from the wallet backend.
             parameters:
                 - description: Key identifier
                   in: path
@@ -1669,12 +1832,12 @@ paths:
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: Delete key
+            summary: Purge keypair from wallet
             tags:
-                - Keys
+                - Key Custody & Rotation
     /api/v1/ssi-auth/wallet/keys/{id}/revoke:
         post:
-            description: Revokes a cryptographic keypair.
+            description: Marks a cryptographic keypair as revoked, preventing its future use for signatures.
             parameters:
                 - description: Key identifier
                   in: path
@@ -1684,7 +1847,7 @@ paths:
                     type: string
             responses:
                 "202":
-                    description: Revocation accepted
+                    description: Key revocation accepted
                 "404":
                     content:
                         application/json:
@@ -1700,14 +1863,14 @@ paths:
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: Revoke key
+            summary: Revoke keypair
             tags:
-                - Keys
+                - Key Custody & Rotation
     /api/v1/ssi-auth/wallet/keys/{id}/rotate:
         post:
-            description: Rotates the specified key, creating a successor keypair.
+            description: Executes cryptographic key rotation, generating a successor keypair with an optional duration overlap.
             parameters:
-                - description: Key identifier
+                - description: Key identifier to rotate
                   in: path
                   name: id
                   required: true
@@ -1724,13 +1887,13 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/KeyResponse'
-                    description: Key rotated
+                    description: Rotated key details
                 "400":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorResponse'
-                    description: Invalid duration
+                    description: Invalid rotation duration
                 "404":
                     content:
                         application/json:
@@ -1746,40 +1909,40 @@ paths:
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: Rotate key
+            summary: Rotate keypair
             tags:
-                - Keys
+                - Key Custody & Rotation
     /api/v1/ssi-auth/wallet/link:
         post:
-            description: Executes the link handshake with the wallet, creating or recovering the default identity.
+            description: Executes the initial connection handshake with the delegated wallet adapter, creating or returning the default active DID (ADR 0003).
             responses:
                 "200":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/DidResponse'
-                    description: Wallet linked successfully
+                    description: Wallet linked successfully with default DID
                 "400":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorResponse'
-                    description: Invalid handshake request
+                    description: Handshake failed
                 "500":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorResponse'
-                    description: Wallet communication failed
+                    description: Wallet communication error
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: Link wallet
+            summary: Link wallet and retrieve default identity
             tags:
-                - Wallet
+                - Wallet & Identity Lifecycle
     /api/v1/ssi-auth/wallet/oid4vci:
         post:
-            description: Processes an OpenID for Verifiable Credential Issuance request URI.
+            description: Processes an inbound OpenID for Verifiable Credential Issuance (OID4VCI) offer URI.
             requestBody:
                 content:
                     application/json:
@@ -1788,7 +1951,7 @@ paths:
                 required: true
             responses:
                 "200":
-                    description: OID4VCI request processed successfully
+                    description: OID4VCI credential offer processed successfully
                 "400":
                     content:
                         application/json:
@@ -1806,10 +1969,10 @@ paths:
                 - SessionCookie: []
             summary: Process OID4VCI credential offer
             tags:
-                - Protocols
+                - Verifiable Credentials & Exchanges
     /api/v1/ssi-auth/wallet/oid4vp:
         post:
-            description: Processes an OpenID for Verifiable Presentations request URI.
+            description: Handles an inbound OpenID for Verifiable Presentations (OID4VP) presentation request URI.
             requestBody:
                 content:
                     application/json:
@@ -1836,10 +1999,10 @@ paths:
                 - SessionCookie: []
             summary: Process OID4VP presentation request
             tags:
-                - Protocols
+                - Verifiable Credentials & Exchanges
     /api/v1/ssi-auth/wallet/participants:
         post:
-            description: Provisions a new tenant/participant context in IdentityHub.
+            description: Provisions a new tenant/participant context in IdentityHub for multi-tenant deployments.
             requestBody:
                 content:
                     application/json:
@@ -1852,19 +2015,19 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ParticipantResponse'
-                    description: Participant created
+                    description: Participant context created
                 "400":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorResponse'
-                    description: Invalid participant payload
+                    description: Invalid participant definition
                 "409":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorResponse'
-                    description: Participant context ID conflict
+                    description: Participant context ID collision
                 "500":
                     content:
                         application/json:
@@ -1874,14 +2037,14 @@ paths:
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: Create participant context
+            summary: Provision participant context
             tags:
-                - Participants
+                - Participant Contexts
     /api/v1/ssi-auth/wallet/participants/{id}:
         get:
-            description: Retrieves the participant configuration and status from IdentityHub.
+            description: Retrieves configuration, DID, and activation state for a participant context in IdentityHub.
             parameters:
-                - description: Participant Context ID
+                - description: Participant context ID
                   in: path
                   name: id
                   required: true
@@ -1893,7 +2056,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ParticipantResponse'
-                    description: Participant details
+                    description: Participant context details
                 "404":
                     content:
                         application/json:
@@ -1909,14 +2072,14 @@ paths:
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: Get participant by ID
+            summary: Get participant context
             tags:
-                - Participants
+                - Participant Contexts
     /api/v1/ssi-auth/wallet/participants/{id}/state:
         post:
-            description: Activates or deactivates a participant context.
+            description: Toggles active or suspended status for a participant context.
             parameters:
-                - description: Participant Context ID
+                - description: Participant context ID
                   in: path
                   name: id
                   required: true
@@ -1956,14 +2119,14 @@ paths:
             security:
                 - BearerAuth: []
                 - SessionCookie: []
-            summary: Set participant active state
+            summary: Update participant activation state
             tags:
-                - Participants
+                - Participant Contexts
     /api/v1/ssi-auth/wallet/participants/{id}/token:
         post:
-            description: Generates a fresh API key for the participant context.
+            description: Rotates and re-issues the API token for a participant context.
             parameters:
-                - description: Participant Context ID
+                - description: Participant context ID
                   in: path
                   name: id
                   required: true
@@ -1975,7 +2138,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ParticipantTokenResponse'
-                    description: New token minted
+                    description: Minted participant token
                 "404":
                     content:
                         application/json:
@@ -1993,11 +2156,11 @@ paths:
                 - SessionCookie: []
             summary: Regenerate participant API token
             tags:
-                - Participants
+                - Participant Contexts
         put:
-            description: Sets or overrides the in-memory authorization token for the participant context.
+            description: Updates or overrides the in-memory API token for a participant context.
             parameters:
-                - description: Participant Context ID
+                - description: Participant context ID
                   in: path
                   name: id
                   required: true
@@ -2016,11 +2179,13 @@ paths:
                             schema:
                                 properties:
                                     message:
+                                        example: token updated in memory
                                         type: string
                                     participantId:
+                                        example: participant-acme
                                         type: string
                                 type: object
-                    description: Token updated
+                    description: Token update confirmation
                 "400":
                     content:
                         application/json:
@@ -2038,10 +2203,10 @@ paths:
                 - SessionCookie: []
             summary: Update participant API token in memory
             tags:
-                - Participants
+                - Participant Contexts
     /api/v1/ssi-auth/wallet/vcs:
         get:
-            description: Retrieves credentials held in the wallet, optionally filtered by VC type.
+            description: Queries all Verifiable Credentials stored in the wallet, optionally filtering by credential type (e.g. DataSpaceParticipant).
             parameters:
                 - description: Filter by Verifiable Credential type name
                   in: query
@@ -2056,7 +2221,7 @@ paths:
                                 items:
                                     $ref: '#/components/schemas/CredentialResponse'
                                 type: array
-                    description: List of credentials
+                    description: Array of Verifiable Credentials
                 "500":
                     content:
                         application/json:
@@ -2068,23 +2233,23 @@ paths:
                 - SessionCookie: []
             summary: List Verifiable Credentials
             tags:
-                - Credentials
+                - Verifiable Credentials & Exchanges
     /docs:
         get:
-            description: Serves interactive Swagger UI documentation for browsing and testing the API.
+            description: Serves interactive Swagger UI documentation for browsing, testing, and exploring Alexandria's HTTP surface.
             responses:
                 "200":
                     content:
                         text/html:
                             schema:
                                 type: string
-                    description: Swagger UI HTML page
-            summary: Interactive API Documentation
+                    description: Swagger UI single-page interface
+            summary: Interactive API Documentation (Swagger UI)
             tags:
-                - OpenAPI
+                - OpenAPI & Documentation
     /healthz:
         get:
-            description: Confirms the HTTP server process is running and accepting requests.
+            description: Basic liveness probe confirming the Alexandria HTTP process is alive and responsive.
             responses:
                 "200":
                     content:
@@ -2094,7 +2259,7 @@ paths:
                     description: Process is live
             summary: Liveness probe
             tags:
-                - System
+                - Root & Probes
     /openapi.json:
         get:
             description: Returns the complete OpenAPI 3.0 specification in JSON format.
@@ -2104,69 +2269,65 @@ paths:
                         application/json:
                             schema:
                                 type: object
-                    description: OpenAPI specification in JSON
+                    description: OpenAPI 3.0 JSON specification
             summary: OpenAPI JSON Specification
             tags:
-                - OpenAPI
+                - OpenAPI & Documentation
     /openapi.yaml:
         get:
-            description: Returns the complete OpenAPI 3.0 specification in YAML format.
+            description: Returns the complete canonical OpenAPI 3.0 specification in YAML format.
             responses:
                 "200":
                     content:
                         application/yaml:
                             schema:
                                 type: string
-                    description: OpenAPI specification in YAML
+                    description: OpenAPI 3.0 YAML specification
             summary: OpenAPI YAML Specification
             tags:
-                - OpenAPI
+                - OpenAPI & Documentation
     /readyz:
         get:
-            description: Reports aggregate readiness of all configured subsystems (database, wallet, identity provider).
+            description: Kubernetes readiness probe reporting aggregated readiness of all configured subsystems (PostgreSQL database pool, delegated wallet link, and Zitadel OIDC verifier).
             responses:
                 "200":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/HealthResponse'
-                    description: All subsystems ready
+                    description: All subsystems ready to serve
                 "503":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/HealthResponse'
-                    description: One or more subsystems not ready
+                    description: One or more subsystems degraded or unavailable
             summary: Readiness probe
             tags:
-                - System
+                - Root & Probes
 servers:
     - description: Current Origin
       url: /
-    - description: Local TLS Proxy
+    - description: Local Development (Caddy TLS Proxy - ADR 0005)
       url: https://alexandria.127.0.0.1.nip.io:8443
-    - description: Internal Local HTTP
+    - description: Internal Cleartext Port
       url: http://127.0.0.1:1234
 tags:
-    - description: Liveness and readiness probes
-      name: System
-    - description: W3C decentralized identity discovery
-      name: Well-Known
-    - description: OpenAPI specifications and interactive documentation
-      name: OpenAPI
-    - description: OIDC login, OAuth tokens, and session management
-      name: Auth
-    - description: Wallet status, metadata, and link handshake
-      name: Wallet
-    - description: Cryptographic keypair lifecycle (import, rotate, revoke, delete)
-      name: Keys
-    - description: Decentralized Identifiers management and publication
-      name: DID
-    - description: Verifiable Credentials storage and retrieval
-      name: Credentials
-    - description: OID4VCI and OID4VP protocol exchanges
-      name: Protocols
-    - description: Dataspace Credential Protocol issuance requests and status
-      name: DCP
-    - description: Multi-tenant participant contexts and token management
-      name: Participants
+    - description: System health probes, readiness checks, and origin-level W3C discovery endpoints.
+      name: Root & Probes
+    - description: Machine-readable OpenAPI specifications and interactive Swagger UI documentation.
+      name: OpenAPI & Documentation
+    - description: Node-terminated OpenID Connect (OIDC) with Zitadel, PKCE flow, and encrypted session management (auth-proxy context, ADR 0004).
+      name: Authentication & Sessions
+    - description: Handshake, status verification, and metadata for delegated wallet backends (ssi-auth context, ADR 0007).
+      name: Wallet & Identity Lifecycle
+    - description: Asymmetric keypair lifecycle, import, rotation, and revocation delegated to external wallets (ADR 0003).
+      name: Key Custody & Rotation
+    - description: W3C DID resolution, creation (did:jwk, did:web), verification methods, service endpoints, and publication.
+      name: Decentralized Identifiers (DIDs)
+    - description: Verifiable Credentials storage, query, deletion, and protocol processing (OID4VCI offers and OID4VP presentation requests).
+      name: Verifiable Credentials & Exchanges
+    - description: Asynchronous credential issuance requests and polling via the Dataspace Credential Protocol.
+      name: Dataspace Credential Protocol (DCP)
+    - description: Multi-tenant participant contexts and API token management in Eclipse EDC IdentityHub.
+      name: Participant Contexts
