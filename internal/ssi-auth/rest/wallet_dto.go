@@ -310,7 +310,12 @@ type credentialResp struct {
 func newCredentialResp(c wallet.Credential) credentialResp {
 	rawVc := c.RawVc
 	if rawVc == "" && len(c.VcBody) > 0 {
-		rawVc = string(c.VcBody)
+		var unquoted string
+		if err := json.Unmarshal(c.VcBody, &unquoted); err == nil && unquoted != "" {
+			rawVc = unquoted
+		} else {
+			rawVc = string(c.VcBody)
+		}
 	}
 
 	format := c.Format
@@ -328,10 +333,23 @@ func newCredentialResp(c wallet.Credential) credentialResp {
 	if len(credDoc) == 0 {
 		credDoc = c.VcBody
 	}
+	if len(credDoc) == 0 || !json.Valid(credDoc) {
+		credDoc = json.RawMessage("{}")
+	}
 
 	vcBody := c.VcBody
 	if len(vcBody) == 0 {
-		vcBody = json.RawMessage(rawVc)
+		if b, err := json.Marshal(rawVc); err == nil {
+			vcBody = json.RawMessage(b)
+		} else {
+			vcBody = json.RawMessage(`""`)
+		}
+	} else if !json.Valid(vcBody) {
+		if b, err := json.Marshal(string(vcBody)); err == nil {
+			vcBody = json.RawMessage(b)
+		} else {
+			vcBody = json.RawMessage(`""`)
+		}
 	}
 
 	return credentialResp{

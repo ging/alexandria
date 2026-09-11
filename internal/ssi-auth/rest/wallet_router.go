@@ -303,7 +303,7 @@ func (r *WalletRouter) getWalletCredentials(c *gin.Context) {
 	if vcType != "" {
 		credentials, err = r.holder.GetCredentialsByType(c.Request.Context(), vcType)
 	} else {
-		credentials, err = r.holder.Credentials(c)
+		credentials, err = r.holder.Credentials(c.Request.Context())
 	}
 	if err != nil {
 		respondError(c, err)

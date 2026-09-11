@@ -186,10 +186,11 @@ type VerifiableCredentialResourceDto struct {
 	VerifiableCredential VerifiableCredentialBody `json:"verifiableCredential"`
 }
 
-// VerifiableCredentialBody contains format and raw content of a stored credential.
+// VerifiableCredentialBody contains format, raw content, and parsed credential object.
 type VerifiableCredentialBody struct {
-	Format string `json:"format"`
-	RawVc  string `json:"rawVc"`
+	Format     string          `json:"format"`
+	RawVc      string          `json:"rawVc"`
+	Credential json.RawMessage `json:"credential,omitempty"`
 }
 
 // VerifiableCredentialContainerDto wraps the raw credential content and format for storage.

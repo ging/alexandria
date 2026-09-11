@@ -1,3 +1,5 @@
+// Package identityhub tests internal normalization logic for keys, credentials, and participants.
+// It ensures compatibility with domain wallet entities and validates JSON constraints.
 package identityhub
 
 import (
@@ -6,6 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"testing"
 	"time"
@@ -106,5 +109,68 @@ func TestNormalizeKey_FallbackToDescriptor(t *testing.T) {
 	}
 	if descKey.Crv == nil || *descKey.Crv != "Ed25519" {
 		t.Errorf("expected crv Ed25519, got %v", descKey.Crv)
+	}
+}
+
+// TestNormalizeCredential_JwtRawVc verifies normalization of JWT credentials and ensures valid JSON fields.
+func TestNormalizeCredential_JwtRawVc(t *testing.T) {
+	t.Parallel()
+
+	rawJwt := "eyJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJkaWQ6d2ViOmlzc3VlciIsInN1YiI6ImRpZDp3ZWI6c3VwZXItdXNlciJ9.signature"
+	dto := VerifiableCredentialResourceDto{
+		ID:                   "cred-1",
+		ParticipantContextID: "super-user",
+		HolderID:             "did:web:super-user",
+		IssuerID:             "did:web:issuer",
+		VerifiableCredential: VerifiableCredentialBody{
+			Format:     "VC1_0_JWT",
+			RawVc:      rawJwt,
+			Credential: json.RawMessage(`{"id":"cred-1","type":["VerifiableCredential","CustomType"],"issuanceDate":"2026-09-11T08:00:00Z"}`),
+		},
+	}
+
+	cred := normalizeCredential(dto)
+	if cred.ID != "cred-1" {
+		t.Errorf("expected ID cred-1, got %s", cred.ID)
+	}
+	if !json.Valid(cred.VcBody) {
+		t.Errorf("expected valid JSON for VcBody, got %s", string(cred.VcBody))
+	}
+	if !json.Valid(cred.Credential) {
+		t.Errorf("expected valid JSON for Credential, got %s", string(cred.Credential))
+	}
+	if cred.VcType != "CustomType" {
+		t.Errorf("expected vcType CustomType, got %s", cred.VcType)
+	}
+	if cred.IssuanceDate == nil {
+		t.Error("expected non-nil IssuanceDate")
+	}
+}
+
+// TestNormalizeCredential_JsonRawVc verifies normalization of plain JSON credentials.
+func TestNormalizeCredential_JsonRawVc(t *testing.T) {
+	t.Parallel()
+
+	rawJSON := `{"id":"cred-2","type":["VerifiableCredential","TestType"],"issuanceDate":"2026-09-10T12:00:00Z"}`
+	dto := VerifiableCredentialResourceDto{
+		ID:                   "cred-2",
+		ParticipantContextID: "super-user",
+		HolderID:             "did:web:super-user",
+		IssuerID:             "did:web:issuer",
+		VerifiableCredential: VerifiableCredentialBody{
+			Format: "JSON_LD",
+			RawVc:  rawJSON,
+		},
+	}
+
+	cred := normalizeCredential(dto)
+	if cred.ID != "cred-2" {
+		t.Errorf("expected ID cred-2, got %s", cred.ID)
+	}
+	if !json.Valid(cred.VcBody) {
+		t.Errorf("expected valid JSON for VcBody, got %s", string(cred.VcBody))
+	}
+	if cred.VcType != "TestType" {
+		t.Errorf("expected vcType TestType, got %s", cred.VcType)
 	}
 }

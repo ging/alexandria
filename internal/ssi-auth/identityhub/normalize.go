@@ -256,13 +256,46 @@ func extractDate(candidates ...any) *time.Time {
 
 // normalizeCredential converts a VerifiableCredentialResourceDto to a domain wallet.Credential.
 func normalizeCredential(dto VerifiableCredentialResourceDto) wallet.Credential {
-	raw := json.RawMessage(dto.VerifiableCredential.RawVc)
 	rawVcStr := dto.VerifiableCredential.RawVc
 	format := dto.VerifiableCredential.Format
 
+	var raw json.RawMessage
+	if json.Valid([]byte(rawVcStr)) {
+		raw = json.RawMessage(rawVcStr)
+	} else if rawVcStr != "" {
+		if b, err := json.Marshal(rawVcStr); err == nil {
+			raw = json.RawMessage(b)
+		}
+	}
+	if len(raw) == 0 || !json.Valid(raw) {
+		raw = json.RawMessage(`""`)
+	}
+
 	credObj, types, issuanceDate, validUntil := parseVcToken(rawVcStr)
-	if len(credObj) == 0 {
-		credObj = raw
+	if len(dto.VerifiableCredential.Credential) > 0 && json.Valid(dto.VerifiableCredential.Credential) {
+		if len(credObj) == 0 || string(credObj) == "{}" {
+			credObj = dto.VerifiableCredential.Credential
+		}
+		var m map[string]any
+		if err := json.Unmarshal(dto.VerifiableCredential.Credential, &m); err == nil {
+			if len(types) == 0 {
+				types = extractTypes(m["type"])
+			}
+			if issuanceDate == nil {
+				issuanceDate = extractDate(m["issuanceDate"], m["validFrom"])
+			}
+			if validUntil == nil {
+				validUntil = extractDate(m["expirationDate"], m["validUntil"])
+			}
+		}
+	}
+
+	if len(credObj) == 0 || !json.Valid(credObj) {
+		if len(raw) > 0 && json.Valid(raw) && string(raw) != `""` {
+			credObj = raw
+		} else {
+			credObj = json.RawMessage("{}")
+		}
 	}
 
 	vcType := "VerifiableCredential"

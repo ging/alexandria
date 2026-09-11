@@ -259,6 +259,44 @@ func TestGetWalletCredentialsError(t *testing.T) {
 	}
 }
 
+// TestGetWalletCredentials_RawJwtVcBody verifies that raw JWT strings in VcBody serialize safely to JSON.
+func TestGetWalletCredentials_RawJwtVcBody(t *testing.T) {
+	t.Parallel()
+
+	rawJwt := "eyJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJkaWQ6d2ViOmlzc3VlciIsInN1YiI6ImRpZDp3ZWI6c3VwZXItdXNlciJ9.signature"
+	mock := &mockWallet{
+		credentials: []wallet.Credential{
+			{
+				ID:        "vc-jwt",
+				RawVc:     rawJwt,
+				VcBody:    json.RawMessage(rawJwt),
+				HolderDid: "did:web:holder",
+				IssuerDid: "did:web:issuer",
+			},
+		},
+	}
+	engine := setupWalletRouter(mock)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/wallet/vcs", nil)
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var resps []map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resps); err != nil {
+		t.Fatalf("decoding body: %v (body was %q)", err, rec.Body.String())
+	}
+	if len(resps) != 1 {
+		t.Fatalf("got %d credentials, want 1", len(resps))
+	}
+	if resps[0]["id"] != "vc-jwt" {
+		t.Errorf("id = %v, want vc-jwt", resps[0]["id"])
+	}
+}
+
 func TestDeleteCredential(t *testing.T) {
 	t.Parallel()
 
