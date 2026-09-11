@@ -15,6 +15,7 @@ import (
 	"github.com/ging/alexandria/internal/config"
 	"github.com/ging/alexandria/internal/httpapi"
 	"github.com/ging/alexandria/internal/observability"
+	"github.com/ging/alexandria/internal/openapi"
 	ssiauth "github.com/ging/alexandria/internal/ssi-auth"
 	"github.com/ging/alexandria/internal/storage/postgres"
 )
@@ -114,13 +115,21 @@ func newApp(ctx context.Context, cfg *config.Config, stdout io.Writer, environ [
 		return nil, err
 	}
 
+	openapiModule, err := openapi.New(openapi.Deps{
+		Config: cfg,
+		Logger: logger,
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	// The authentication boundary. It is a module like any other — it starts,
 	// reports readiness and closes — and additionally the guard the router puts
 	// in front of every route under the API prefix. Disabled, it is absent
 	// entirely and nothing is protected, which is a development posture.
 	var guard httpapi.Guard
 
-	app.modules = []Module{ssiAuthModule}
+	app.modules = []Module{ssiAuthModule, openapiModule}
 
 	if cfg.Auth.Enabled {
 		authModule, err := authproxy.New(authproxy.Deps{

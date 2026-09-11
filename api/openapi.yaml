@@ -1,0 +1,2172 @@
+components:
+    schemas:
+        CreateParticipantRequest:
+            properties:
+                active:
+                    example: true
+                    type: boolean
+                did:
+                    example: did:web:acme.org
+                    type: string
+                id:
+                    example: participant-acme
+                    type: string
+                key:
+                    $ref: '#/components/schemas/KeyDescriptorRequest'
+            required:
+                - id
+                - did
+                - active
+            type: object
+        CredentialResponse:
+            properties:
+                addedOn:
+                    format: date-time
+                    type: string
+                credential:
+                    type: object
+                format:
+                    example: VC1_0_JWT
+                    type: string
+                holderDid:
+                    example: did:web:holder.org
+                    type: string
+                id:
+                    example: vc-membership-1
+                    type: string
+                issuanceDate:
+                    format: date-time
+                    type: string
+                issuerDid:
+                    example: did:web:issuer.org
+                    type: string
+                parsedDocument:
+                    type: object
+                participantContextId:
+                    type: string
+                rawVc:
+                    type: string
+                types:
+                    items:
+                        type: string
+                    type: array
+                validUntil:
+                    format: date-time
+                    type: string
+                vcBody:
+                    description: Raw or deserialized VC body
+                vcFormat:
+                    example: VC1_0_JWT
+                    type: string
+                vcType:
+                    example: DataSpaceParticipant
+                    type: string
+            required:
+                - id
+                - rawVc
+                - format
+                - vcType
+                - holderDid
+                - issuerDid
+                - addedOn
+            type: object
+        DcpCredentialDescriptorRequest:
+            properties:
+                format:
+                    example: VC1_0_JWT
+                    type: string
+                id:
+                    example: desc-1
+                    type: string
+                type:
+                    example: DataSpaceParticipant
+                    type: string
+            required:
+                - format
+                - type
+            type: object
+        DcpCredentialRequest:
+            properties:
+                credentials:
+                    items:
+                        $ref: '#/components/schemas/DcpCredentialDescriptorRequest'
+                    type: array
+                format:
+                    example: VC1_0_JWT
+                    type: string
+                holderPid:
+                    example: holder-pid-123
+                    type: string
+                issuerDid:
+                    example: did:web:issuer.dataspace.org
+                    type: string
+                issuerUrl:
+                    example: https://issuer.dataspace.org
+                    format: uri
+                    type: string
+                types:
+                    items:
+                        type: string
+                    type: array
+            required:
+                - issuerDid
+            type: object
+        DcpRequestResponse:
+            properties:
+                requestId:
+                    example: dcp-req-923847
+                    type: string
+            required:
+                - requestId
+            type: object
+        DcpStatusResponse:
+            properties:
+                error:
+                    type: string
+                requestId:
+                    example: dcp-req-923847
+                    type: string
+                status:
+                    example: ISSUED
+                    type: string
+            required:
+                - requestId
+                - status
+            type: object
+        DidBuilderRequest:
+            properties:
+                domain:
+                    description: For did:web method
+                    example: example.com
+                    type: string
+                method:
+                    enum:
+                        - jwk
+                        - web
+                    example: web
+                    type: string
+                path:
+                    example: identity
+                    type: string
+                pem:
+                    description: For did:jwk method
+                    type: string
+                port:
+                    example: "8443"
+                    type: string
+            type: object
+        DidIdResponse:
+            properties:
+                did:
+                    example: did:jwk:eyJjcnYiOi...
+                    type: string
+            required:
+                - did
+            type: object
+        DidResponse:
+            properties:
+                alias:
+                    example: main-identity
+                    type: string
+                default:
+                    example: true
+                    type: boolean
+                defaultKeyFragment:
+                    example: '#key-1'
+                    type: string
+                didDocument:
+                    description: W3C compliant DID document
+                    type: object
+                id:
+                    example: did:web:alexandria.example.com
+                    type: string
+                keys:
+                    items:
+                        $ref: '#/components/schemas/KeyBinding'
+                    type: array
+                method:
+                    example: web
+                    type: string
+            required:
+                - id
+                - method
+                - default
+                - keys
+            type: object
+        DidServiceRequest:
+            properties:
+                id:
+                    example: '#credential-service'
+                    type: string
+                serviceEndpoint:
+                    example: https://example.com/credentials
+                    format: uri
+                    type: string
+                type:
+                    example: CredentialService
+                    type: string
+            required:
+                - type
+                - serviceEndpoint
+            type: object
+        DidStateResponse:
+            properties:
+                did:
+                    example: did:web:example.com
+                    type: string
+                state:
+                    example: published
+                    type: string
+            required:
+                - did
+                - state
+            type: object
+        ErrorResponse:
+            properties:
+                error:
+                    example: not found
+                    type: string
+                field:
+                    example: alias
+                    type: string
+                originalResponse:
+                    $ref: '#/components/schemas/OriginalResponse'
+            required:
+                - error
+            type: object
+        HealthResponse:
+            properties:
+                checks:
+                    additionalProperties:
+                        type: string
+                    example:
+                        database: ok
+                        wallet: ok
+                    type: object
+                status:
+                    example: ok
+                    type: string
+            required:
+                - status
+            type: object
+        KeyBinding:
+            properties:
+                fragment:
+                    example: '#key-1'
+                    type: string
+            required:
+                - fragment
+            type: object
+        KeyDescriptorRequest:
+            properties:
+                keyGeneratorParams:
+                    type: object
+                keyId:
+                    example: key-id-1
+                    type: string
+                privateKeyAlias:
+                    type: string
+                properties:
+                    type: object
+                publicKeyJwk:
+                    type: object
+                publicKeyPem:
+                    type: string
+                type:
+                    example: Ed25519
+                    type: string
+            type: object
+        KeyResponse:
+            properties:
+                alias:
+                    example: signing-key
+                    type: string
+                createdAt:
+                    format: date-time
+                    type: string
+                crv:
+                    example: P-256
+                    type: string
+                defaultPair:
+                    type: boolean
+                id:
+                    example: key-2026-01
+                    type: string
+                keyContext:
+                    type: string
+                kty:
+                    example: EC
+                    type: string
+                privateKeyAlias:
+                    type: string
+                serializedPublicKey:
+                    type: string
+                state:
+                    example: Active
+                    type: string
+            required:
+                - id
+                - kty
+                - createdAt
+            type: object
+        LoginResponse:
+            properties:
+                authorization_url:
+                    description: Provider authorization URL
+                    example: https://idp.example.com/oauth/v2/authorize?...
+                    format: uri
+                    type: string
+            required:
+                - authorization_url
+            type: object
+        LogoutResponse:
+            properties:
+                end_session_url:
+                    description: Provider logout redirect URL
+                    example: https://idp.example.com/oidc/v1/end_session?...
+                    format: uri
+                    type: string
+            type: object
+        MachineTokenRequest:
+            properties:
+                client_id:
+                    example: service-worker-1
+                    type: string
+                client_secret:
+                    example: secret123
+                    format: password
+                    type: string
+                scope:
+                    example: openid profile
+                    type: string
+            required:
+                - client_id
+                - client_secret
+            type: object
+        OidcUriRequest:
+            properties:
+                uri:
+                    example: openid-credential-offer://?credential_offer_uri=...
+                    type: string
+            required:
+                - uri
+            type: object
+        OriginalResponse:
+            properties:
+                body:
+                    description: Raw response payload from upstream
+                path:
+                    example: /api/identity/v1
+                    type: string
+                provider:
+                    example: identityhub
+                    type: string
+                statusCode:
+                    example: 502
+                    type: integer
+            required:
+                - provider
+                - statusCode
+            type: object
+        ParticipantResponse:
+            properties:
+                active:
+                    example: true
+                    type: boolean
+                createdAt:
+                    format: date-time
+                    type: string
+                did:
+                    example: did:web:acme.org
+                    type: string
+                id:
+                    example: participant-acme
+                    type: string
+                roles:
+                    items:
+                        type: string
+                    type: array
+            required:
+                - id
+                - did
+                - active
+                - createdAt
+            type: object
+        ParticipantStateRequest:
+            properties:
+                active:
+                    example: true
+                    type: boolean
+            required:
+                - active
+            type: object
+        ParticipantTokenResponse:
+            properties:
+                token:
+                    example: apiKey_398472938472394
+                    type: string
+            required:
+                - token
+            type: object
+        RegisterDidRequest:
+            properties:
+                alias:
+                    example: my-company-did
+                    type: string
+                builder:
+                    $ref: '#/components/schemas/DidBuilderRequest'
+                keys:
+                    items:
+                        type: string
+                    type: array
+                service:
+                    items:
+                        $ref: '#/components/schemas/DidServiceRequest'
+                    type: array
+            required:
+                - builder
+            type: object
+        RegisterKeyRequest:
+            properties:
+                alias:
+                    example: vault-primary-key
+                    type: string
+                id:
+                    example: my-key-1
+                    type: string
+                jwk:
+                    description: JWK representation of the key
+                pem:
+                    description: PEM-encoded private or public key
+                    type: string
+            type: object
+        RotateKeyRequest:
+            properties:
+                duration:
+                    example: 720h
+                    type: string
+            type: object
+        ServiceEndpointRequest:
+            properties:
+                id:
+                    example: '#service-endpoint-1'
+                    type: string
+                type:
+                    example: LinkedDomains
+                    type: string
+                url:
+                    example: https://example.com
+                    format: uri
+                    type: string
+            required:
+                - id
+                - type
+                - url
+            type: object
+        SessionResponse:
+            properties:
+                email:
+                    example: alice@example.com
+                    format: email
+                    type: string
+                expires_at:
+                    format: date-time
+                    type: string
+                machine:
+                    example: false
+                    type: boolean
+                name:
+                    example: Alice Cooper
+                    type: string
+                organization:
+                    example: org_456
+                    type: string
+                roles:
+                    items:
+                        type: string
+                    type: array
+                scopes:
+                    items:
+                        type: string
+                    type: array
+                subject:
+                    example: user_2139482
+                    type: string
+                username:
+                    example: alice
+                    type: string
+            required:
+                - subject
+                - roles
+                - scopes
+                - machine
+            type: object
+        StoreCredentialContainerRequest:
+            properties:
+                credential:
+                    type: object
+                format:
+                    example: VC1_0_JWT
+                    type: string
+                rawVc:
+                    type: string
+            required:
+                - rawVc
+            type: object
+        StoreCredentialRequest:
+            properties:
+                credential:
+                    type: object
+                format:
+                    example: VC1_0_JWT
+                    type: string
+                id:
+                    example: vc-membership-1
+                    type: string
+                participantContextId:
+                    example: default
+                    type: string
+                payload:
+                    type: object
+                rawVc:
+                    type: string
+                verifiableCredentialContainer:
+                    $ref: '#/components/schemas/StoreCredentialContainerRequest'
+            required:
+                - id
+            type: object
+        TokenResponse:
+            properties:
+                access_token:
+                    example: eyJhbGciOi...
+                    type: string
+                expires_in:
+                    example: 3600
+                    type: integer
+                scope:
+                    example: openid profile
+                    type: string
+                token_type:
+                    example: Bearer
+                    type: string
+            required:
+                - access_token
+                - token_type
+                - expires_in
+            type: object
+        UpdateTokenRequest:
+            properties:
+                token:
+                    example: apiKey_custom_override
+                    type: string
+            required:
+                - token
+            type: object
+        WalletInfoResponse:
+            properties:
+                createdAt:
+                    format: date-time
+                    type: string
+                dids:
+                    items:
+                        $ref: '#/components/schemas/DidResponse'
+                    type: array
+                id:
+                    example: wallet-default
+                    type: string
+                name:
+                    example: Alexandria Sovereign Wallet
+                    type: string
+            required:
+                - id
+                - name
+                - createdAt
+                - dids
+            type: object
+    securitySchemes:
+        BearerAuth:
+            bearerFormat: JWT
+            description: OAuth 2.0 Bearer access token
+            scheme: bearer
+            type: http
+        SessionCookie:
+            description: Sealed HTTP session cookie
+            in: cookie
+            name: alexandria_session
+            type: apiKey
+info:
+    contact:
+        name: Alexandria Team
+    description: Decentralized identity, wallet management, and authentication proxy for Gaia-X and sovereign dataspaces.
+    license:
+        name: Apache 2.0
+        url: https://www.apache.org/licenses/LICENSE-2.0.html
+    title: Alexandria API
+    version: 1.0.0
+openapi: 3.0.3
+paths:
+    /.well-known/did.json:
+        get:
+            description: Resolves the public DID document of this node for the did:web method.
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                    description: DID document resolved
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: No DID document established
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            summary: W3C DID Document
+            tags:
+                - Well-Known
+    /api/v1/auth/callback:
+        get:
+            description: Receives the authorization code from the identity provider, validates state and PKCE verifier, exchanges code for tokens, and seals the session cookie.
+            parameters:
+                - description: Authorization code issued by provider
+                  in: query
+                  name: code
+                  required: true
+                  schema:
+                    type: string
+                - description: OIDC state parameter for CSRF mitigation
+                  in: query
+                  name: state
+                  required: true
+                  schema:
+                    type: string
+                - description: Error code from the identity provider if refused
+                  in: query
+                  name: error
+                  schema:
+                    type: string
+                - description: Set to 'json' to return session document instead of redirecting
+                  in: query
+                  name: response
+                  schema:
+                    enum:
+                        - json
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SessionResponse'
+                    description: Session details when requested via JSON
+                "302":
+                    description: Redirects browser to return_to destination with session cookie set
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Missing or mismatched state/code
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Provider refused or token verification failed
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            summary: OIDC callback
+            tags:
+                - Auth
+    /api/v1/auth/login:
+        get:
+            description: Starts the OIDC authorization code flow with PKCE, saving the flow state in a temporary cookie.
+            parameters:
+                - description: OIDC prompt parameter (e.g. login, consent)
+                  in: query
+                  name: prompt
+                  schema:
+                    type: string
+                - description: Hint about the login identifier
+                  in: query
+                  name: login_hint
+                  schema:
+                    type: string
+                - description: Target organization identifier
+                  in: query
+                  name: organization
+                  schema:
+                    type: string
+                - description: Identity provider selection hint
+                  in: query
+                  name: idp
+                  schema:
+                    type: string
+                - description: URL to redirect to after successful authentication
+                  in: query
+                  name: return_to
+                  schema:
+                    type: string
+                - description: Set to 'json' to receive the authorization URL instead of 302 redirect
+                  in: query
+                  name: response
+                  schema:
+                    enum:
+                        - json
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LoginResponse'
+                    description: Authorization URL payload for programmatic callers
+                "302":
+                    description: Redirects browser to the OIDC provider authorization page
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Invalid login parameters
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            summary: Initiate OIDC login
+            tags:
+                - Auth
+    /api/v1/auth/logout:
+        post:
+            description: Clears the local session cookie and revokes the refresh token at the identity provider.
+            parameters:
+                - description: Set to 'json' to return end session URL instead of redirect
+                  in: query
+                  name: response
+                  schema:
+                    enum:
+                        - json
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LogoutResponse'
+                    description: End session URL for single-page applications
+                "302":
+                    description: Redirects to provider end session endpoint
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - SessionCookie: []
+            summary: Log out
+            tags:
+                - Auth
+    /api/v1/auth/refresh:
+        post:
+            description: Renews the access token using the refresh token stored inside the sealed session cookie.
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SessionResponse'
+                    description: Session successfully renewed
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: No active session or refresh token rejected
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - SessionCookie: []
+            summary: Refresh session
+            tags:
+                - Auth
+    /api/v1/auth/session:
+        get:
+            description: Returns details of the caller established by the verified token or session cookie.
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SessionResponse'
+                    description: Current caller identity
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Unauthenticated caller
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Current session
+            tags:
+                - Auth
+    /api/v1/auth/token:
+        post:
+            description: Proxies client_credentials grant to the identity provider, minting a bearer token for machine-to-machine callers.
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/MachineTokenRequest'
+                    application/x-www-form-urlencoded:
+                        schema:
+                            $ref: '#/components/schemas/MachineTokenRequest'
+                required: true
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TokenResponse'
+                    description: Minted access token
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Missing client credentials
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Invalid credentials
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            summary: OAuth 2.0 machine token grant
+            tags:
+                - Auth
+    /api/v1/auth/userinfo:
+        get:
+            description: Proxies UserInfo claims from the identity provider using the caller's access token.
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                    description: Raw OIDC UserInfo claims
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Unauthenticated caller or upstream refused
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: OIDC UserInfo
+            tags:
+                - Auth
+    /api/v1/ssi-auth/wallet/credential:
+        post:
+            description: Imports and stores a Verifiable Credential into the wallet repository.
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/StoreCredentialRequest'
+                required: true
+            responses:
+                "201":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CredentialResponse'
+                    description: Credential stored
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Invalid credential data
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Store Verifiable Credential
+            tags:
+                - Credentials
+    /api/v1/ssi-auth/wallet/credential/{id}:
+        delete:
+            description: Removes a Verifiable Credential from the wallet storage by ID.
+            parameters:
+                - description: Credential ID
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "202":
+                    description: Credential deletion accepted
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Credential not found
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Delete Verifiable Credential
+            tags:
+                - Credentials
+    /api/v1/ssi-auth/wallet/dcp/request:
+        post:
+            description: Sends a Dataspace Credential Protocol issuance request to an external issuer.
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/DcpCredentialRequest'
+                required: true
+            responses:
+                "202":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DcpRequestResponse'
+                    description: DCP request accepted
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Invalid DCP request payload
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: DCP request submission failed
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Request credential via DCP
+            tags:
+                - DCP
+    /api/v1/ssi-auth/wallet/dcp/request/{id}:
+        get:
+            description: Checks the processing status and results of a pending DCP credential request.
+            parameters:
+                - description: DCP Request ID
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DcpStatusResponse'
+                    description: DCP request status
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: DCP request not found
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Get DCP request status
+            tags:
+                - DCP
+    /api/v1/ssi-auth/wallet/did:
+        get:
+            description: Returns the identifier string of the wallet's default DID.
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DidIdResponse'
+                    description: Default DID identifier
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: No default DID set
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Get default DID
+            tags:
+                - DID
+        post:
+            description: Registers or generates a new DID document (e.g. did:jwk, did:web).
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RegisterDidRequest'
+                required: true
+            responses:
+                "201":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DidResponse'
+                    description: DID created
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Invalid builder parameters
+                "409":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: DID already exists
+                "422":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Unsupported DID method
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Register DID
+            tags:
+                - DID
+    /api/v1/ssi-auth/wallet/did/{id}:
+        delete:
+            description: Deletes a DID record from the wallet.
+            parameters:
+                - description: DID identifier
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "202":
+                    description: DID deletion accepted
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: DID not found
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Delete DID
+            tags:
+                - DID
+        get:
+            description: Retrieves a single DID record by identifier or alias.
+            parameters:
+                - description: DID identifier or alias
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DidResponse'
+                    description: DID details
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: DID not found
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Get DID by ID
+            tags:
+                - DID
+    /api/v1/ssi-auth/wallet/did/{id}/default:
+        post:
+            description: Promotes a DID to be the wallet's default active identity.
+            parameters:
+                - description: DID identifier
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DidResponse'
+                    description: Default DID updated
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: DID not found
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Set default DID
+            tags:
+                - DID
+    /api/v1/ssi-auth/wallet/did/{id}/endpoints:
+        post:
+            description: Appends a new service endpoint definition into the DID document.
+            parameters:
+                - description: DID identifier
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ServiceEndpointRequest'
+                required: true
+            responses:
+                "201":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DidResponse'
+                    description: Service endpoint added
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Invalid endpoint payload
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: DID not found
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Add service endpoint
+            tags:
+                - DID
+    /api/v1/ssi-auth/wallet/did/{id}/endpoints/{endpoint_id}:
+        delete:
+            description: Deletes a service endpoint from the DID document.
+            parameters:
+                - description: DID identifier
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+                - description: Endpoint identifier
+                  in: path
+                  name: endpoint_id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DidResponse'
+                    description: Service endpoint removed
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: DID or Endpoint not found
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Remove service endpoint
+            tags:
+                - DID
+    /api/v1/ssi-auth/wallet/did/{id}/key/{key_id}:
+        delete:
+            description: Unbinds a key from the verification methods of a DID.
+            parameters:
+                - description: DID identifier
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+                - description: Key identifier to unbind
+                  in: path
+                  name: key_id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DidResponse'
+                    description: Key removed from DID
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: DID or Key not found
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Remove key from DID
+            tags:
+                - DID
+        post:
+            description: Binds a key into the verification methods of a DID.
+            parameters:
+                - description: DID identifier
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+                - description: Key identifier to bind
+                  in: path
+                  name: key_id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DidResponse'
+                    description: Key added to DID
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: DID or Key not found
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Add key to DID
+            tags:
+                - DID
+    /api/v1/ssi-auth/wallet/did/{id}/key/{key_id}/default:
+        post:
+            description: Promotes a verification method to be the primary key for the DID.
+            parameters:
+                - description: DID identifier
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+                - description: Key identifier
+                  in: path
+                  name: key_id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DidResponse'
+                    description: Default key set
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: DID or Key not found
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Set default key for DID
+            tags:
+                - DID
+    /api/v1/ssi-auth/wallet/did/{id}/publish:
+        post:
+            description: Publishes the DID document to its designated registry or endpoint.
+            parameters:
+                - description: DID identifier
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DidStateResponse'
+                    description: DID published
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: DID not found
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Publish DID
+            tags:
+                - DID
+    /api/v1/ssi-auth/wallet/did/{id}/state:
+        get:
+            description: Returns the current state (published, unpublished, draft) of the DID.
+            parameters:
+                - description: DID identifier
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DidStateResponse'
+                    description: DID state
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: DID not found
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Get DID publication state
+            tags:
+                - DID
+    /api/v1/ssi-auth/wallet/did/{id}/unpublish:
+        post:
+            description: Unpublishes or revokes publication of a DID document.
+            parameters:
+                - description: DID identifier
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DidStateResponse'
+                    description: DID unpublished
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: DID not found
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Unpublish DID
+            tags:
+                - DID
+    /api/v1/ssi-auth/wallet/did/all:
+        get:
+            description: Renders every DID document currently held by the wallet.
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                items:
+                                    $ref: '#/components/schemas/DidResponse'
+                                type: array
+                    description: List of DIDs
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: List all DIDs
+            tags:
+                - DID
+    /api/v1/ssi-auth/wallet/info:
+        get:
+            description: Retrieves wallet metadata, creation timestamp, and managed DIDs.
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WalletInfoResponse'
+                    description: Wallet metadata
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Wallet metadata
+            tags:
+                - Wallet
+    /api/v1/ssi-auth/wallet/is-linked:
+        get:
+            description: Reports whether the node has completed the handshake with the delegated wallet provider.
+            responses:
+                "200":
+                    description: Wallet is linked and identity is established
+                "404":
+                    description: Wallet is not linked
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Check wallet link status
+            tags:
+                - Wallet
+    /api/v1/ssi-auth/wallet/keys:
+        get:
+            description: Returns all public key records stored in the wallet.
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                items:
+                                    $ref: '#/components/schemas/KeyResponse'
+                                type: array
+                    description: List of keys
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: List wallet keys
+            tags:
+                - Keys
+        post:
+            description: Imports an existing private/public keypair into the wallet via PEM or JWK format.
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RegisterKeyRequest'
+                required: true
+            responses:
+                "201":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/KeyResponse'
+                    description: Key registered
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Invalid key format or missing key material
+                "409":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Key ID conflict
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Import keypair
+            tags:
+                - Keys
+    /api/v1/ssi-auth/wallet/keys/{id}:
+        delete:
+            description: Removes a keypair from the wallet by key ID.
+            parameters:
+                - description: Key identifier
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "202":
+                    description: Key deletion accepted
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Key not found
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Delete key
+            tags:
+                - Keys
+    /api/v1/ssi-auth/wallet/keys/{id}/revoke:
+        post:
+            description: Revokes a cryptographic keypair.
+            parameters:
+                - description: Key identifier
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "202":
+                    description: Revocation accepted
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Key not found
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Revoke key
+            tags:
+                - Keys
+    /api/v1/ssi-auth/wallet/keys/{id}/rotate:
+        post:
+            description: Rotates the specified key, creating a successor keypair.
+            parameters:
+                - description: Key identifier
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RotateKeyRequest'
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/KeyResponse'
+                    description: Key rotated
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Invalid duration
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Key not found
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Rotate key
+            tags:
+                - Keys
+    /api/v1/ssi-auth/wallet/link:
+        post:
+            description: Executes the link handshake with the wallet, creating or recovering the default identity.
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DidResponse'
+                    description: Wallet linked successfully
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Invalid handshake request
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Wallet communication failed
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Link wallet
+            tags:
+                - Wallet
+    /api/v1/ssi-auth/wallet/oid4vci:
+        post:
+            description: Processes an OpenID for Verifiable Credential Issuance request URI.
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/OidcUriRequest'
+                required: true
+            responses:
+                "200":
+                    description: OID4VCI request processed successfully
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Malformed request URI
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Protocol exchange failed
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Process OID4VCI credential offer
+            tags:
+                - Protocols
+    /api/v1/ssi-auth/wallet/oid4vp:
+        post:
+            description: Processes an OpenID for Verifiable Presentations request URI.
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/OidcUriRequest'
+                required: true
+            responses:
+                "200":
+                    description: OID4VP presentation processed successfully
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Malformed presentation request
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Presentation exchange failed
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Process OID4VP presentation request
+            tags:
+                - Protocols
+    /api/v1/ssi-auth/wallet/participants:
+        post:
+            description: Provisions a new tenant/participant context in IdentityHub.
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateParticipantRequest'
+                required: true
+            responses:
+                "201":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ParticipantResponse'
+                    description: Participant created
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Invalid participant payload
+                "409":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Participant context ID conflict
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Create participant context
+            tags:
+                - Participants
+    /api/v1/ssi-auth/wallet/participants/{id}:
+        get:
+            description: Retrieves the participant configuration and status from IdentityHub.
+            parameters:
+                - description: Participant Context ID
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ParticipantResponse'
+                    description: Participant details
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Participant not found
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Get participant by ID
+            tags:
+                - Participants
+    /api/v1/ssi-auth/wallet/participants/{id}/state:
+        post:
+            description: Activates or deactivates a participant context.
+            parameters:
+                - description: Participant Context ID
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ParticipantStateRequest'
+                required: true
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ParticipantResponse'
+                    description: Participant state updated
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Invalid state request
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Participant not found
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Set participant active state
+            tags:
+                - Participants
+    /api/v1/ssi-auth/wallet/participants/{id}/token:
+        post:
+            description: Generates a fresh API key for the participant context.
+            parameters:
+                - description: Participant Context ID
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ParticipantTokenResponse'
+                    description: New token minted
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Participant not found
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Regenerate participant API token
+            tags:
+                - Participants
+        put:
+            description: Sets or overrides the in-memory authorization token for the participant context.
+            parameters:
+                - description: Participant Context ID
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateTokenRequest'
+                required: true
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                properties:
+                                    message:
+                                        type: string
+                                    participantId:
+                                        type: string
+                                type: object
+                    description: Token updated
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Missing token
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: Update participant API token in memory
+            tags:
+                - Participants
+    /api/v1/ssi-auth/wallet/vcs:
+        get:
+            description: Retrieves credentials held in the wallet, optionally filtered by VC type.
+            parameters:
+                - description: Filter by Verifiable Credential type name
+                  in: query
+                  name: type
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                items:
+                                    $ref: '#/components/schemas/CredentialResponse'
+                                type: array
+                    description: List of credentials
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Internal error
+            security:
+                - BearerAuth: []
+                - SessionCookie: []
+            summary: List Verifiable Credentials
+            tags:
+                - Credentials
+    /docs:
+        get:
+            description: Serves interactive Swagger UI documentation for browsing and testing the API.
+            responses:
+                "200":
+                    content:
+                        text/html:
+                            schema:
+                                type: string
+                    description: Swagger UI HTML page
+            summary: Interactive API Documentation
+            tags:
+                - OpenAPI
+    /healthz:
+        get:
+            description: Confirms the HTTP server process is running and accepting requests.
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HealthResponse'
+                    description: Process is live
+            summary: Liveness probe
+            tags:
+                - System
+    /openapi.json:
+        get:
+            description: Returns the complete OpenAPI 3.0 specification in JSON format.
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                    description: OpenAPI specification in JSON
+            summary: OpenAPI JSON Specification
+            tags:
+                - OpenAPI
+    /openapi.yaml:
+        get:
+            description: Returns the complete OpenAPI 3.0 specification in YAML format.
+            responses:
+                "200":
+                    content:
+                        application/yaml:
+                            schema:
+                                type: string
+                    description: OpenAPI specification in YAML
+            summary: OpenAPI YAML Specification
+            tags:
+                - OpenAPI
+    /readyz:
+        get:
+            description: Reports aggregate readiness of all configured subsystems (database, wallet, identity provider).
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HealthResponse'
+                    description: All subsystems ready
+                "503":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HealthResponse'
+                    description: One or more subsystems not ready
+            summary: Readiness probe
+            tags:
+                - System
+servers:
+    - description: Current Origin
+      url: /
+    - description: Local TLS Proxy
+      url: https://alexandria.127.0.0.1.nip.io:8443
+    - description: Internal Local HTTP
+      url: http://127.0.0.1:1234
+tags:
+    - description: Liveness and readiness probes
+      name: System
+    - description: W3C decentralized identity discovery
+      name: Well-Known
+    - description: OpenAPI specifications and interactive documentation
+      name: OpenAPI
+    - description: OIDC login, OAuth tokens, and session management
+      name: Auth
+    - description: Wallet status, metadata, and link handshake
+      name: Wallet
+    - description: Cryptographic keypair lifecycle (import, rotate, revoke, delete)
+      name: Keys
+    - description: Decentralized Identifiers management and publication
+      name: DID
+    - description: Verifiable Credentials storage and retrieval
+      name: Credentials
+    - description: OID4VCI and OID4VP protocol exchanges
+      name: Protocols
+    - description: Dataspace Credential Protocol issuance requests and status
+      name: DCP
+    - description: Multi-tenant participant contexts and token management
+      name: Participants

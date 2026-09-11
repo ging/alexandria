@@ -42,7 +42,7 @@ common_config:
     name: "alexandria"
   api:
     version: "v1"
-    openapi_path: "./static/specs/openapi/merged_openapi.json"
+    openapi_path: "./api/openapi.yaml"
   connection:
     is_local: true
     is_prod: false

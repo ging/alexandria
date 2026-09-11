@@ -135,6 +135,8 @@ const (
 	ModuleStorage = "storage"
 	// ModuleObservability is internal/observability, this package.
 	ModuleObservability = "observability"
+	// ModuleOpenAPI is internal/openapi, the API specification and documentation context.
+	ModuleOpenAPI = "openapi"
 	// ModuleMain is the composition root.
 	ModuleMain = "main"
 )
