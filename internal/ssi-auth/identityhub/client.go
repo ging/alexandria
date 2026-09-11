@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/caparicio-esd/alexandria/internal/common"
@@ -24,6 +25,7 @@ const defaultTimeout = 10 * time.Second
 type Client struct {
 	http   *resty.Client
 	apiKey string
+	mu     sync.RWMutex
 	logger *slog.Logger
 }
 
@@ -57,6 +59,21 @@ func NewClient(baseURL string, apiKey string, logger *slog.Logger) (*Client, err
 		apiKey: apiKey,
 		logger: logger,
 	}, nil
+}
+
+// SetAPIKey updates the API key header used for future HTTP requests.
+func (c *Client) SetAPIKey(apiKey string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.apiKey = apiKey
+	c.http.SetHeader("x-api-key", apiKey)
+}
+
+// APIKey returns the currently active API key.
+func (c *Client) APIKey() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.apiKey
 }
 
 // Close terminates any idle network connections.
@@ -177,8 +194,11 @@ func (c *Client) AddKey(ctx context.Context, pid string, desc *KeyDescriptorDto)
 
 // RotateKey triggers a key rotation with an active overlap duration.
 func (c *Client) RotateKey(ctx context.Context, pid string, keyID string, duration time.Duration) error {
-	path := fmt.Sprintf("/participants/%s/keypairs/%s/rotate?duration=%s",
-		url.PathEscape(pid), url.PathEscape(keyID), duration.String())
+	path := fmt.Sprintf("/participants/%s/keypairs/%s/rotate",
+		url.PathEscape(pid), url.PathEscape(keyID))
+	if duration > 0 {
+		path = fmt.Sprintf("%s?duration=%d", path, duration.Milliseconds())
+	}
 
 	res, err := c.http.R().SetContext(ctx).Post(path)
 	if err != nil {

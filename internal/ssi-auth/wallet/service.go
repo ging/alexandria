@@ -78,8 +78,7 @@ func (s *Service) IsLinked(_ context.Context) bool {
 
 // ===== Keys ==================================================================
 
-// RegisterKey imports raw PEM key material and indexes it under an optional
-// alias, filed under the identifier the caller names.
+// RegisterKey imports raw PEM or JOSE key material and indexes it under an optional alias.
 func (s *Service) RegisterKey(ctx context.Context, pem string, alias *string, id *string) (Key, error) {
 	var a string
 	if alias != nil {
@@ -91,7 +90,8 @@ func (s *Service) RegisterKey(ctx context.Context, pem string, alias *string, id
 		return Key{}, common.Invalid("pem", err.Error())
 	}
 
-	if !pemDescriptor.Private {
+	isJSON := strings.HasPrefix(strings.TrimSpace(pem), "{")
+	if !isJSON && !pemDescriptor.Private {
 		return Key{}, common.Invalid("pem", "carries only a public key; the wallet has to be able to sign with it")
 	}
 
@@ -542,6 +542,22 @@ func (s *Service) RegenerateParticipantToken(ctx context.Context, participantID 
 	}
 
 	return tok, nil
+}
+
+// UpdateParticipantToken updates the in-memory token for a participant context.
+func (s *Service) UpdateParticipantToken(ctx context.Context, participantID string, token string) error {
+	if strings.TrimSpace(participantID) == "" {
+		return common.Invalid("id", "is required")
+	}
+	if strings.TrimSpace(token) == "" {
+		return common.Invalid("token", "is required")
+	}
+
+	if err := s.wallet.UpdateParticipantToken(ctx, participantID, token); err != nil {
+		return fmt.Errorf("wallet reported error updating token: %w", err)
+	}
+
+	return nil
 }
 
 // =============================================================

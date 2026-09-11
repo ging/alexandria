@@ -219,6 +219,10 @@ func (s *stubWallet) RegenerateParticipantToken(_ context.Context, _ string) (st
 	return "new-token", s.err
 }
 
+func (s *stubWallet) UpdateParticipantToken(_ context.Context, _ string, _ string) error {
+	return s.err
+}
+
 // binding records which verification-method mutation the port saw, and with
 // which pair of identifiers: the two are interchangeable in type and not in
 // meaning, so a swapped argument is exactly the mistake worth pinning.

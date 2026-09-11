@@ -71,6 +71,7 @@ func (r *WalletRouter) Register(parent *gin.RouterGroup) *gin.RouterGroup {
 	partRouter.GET("/:id", r.getParticipant)
 	partRouter.POST("/:id/state", r.setParticipantState)
 	partRouter.POST("/:id/token", r.regenerateParticipantToken)
+	partRouter.PUT("/:id/token", r.updateParticipantToken)
 
 	return walletRouter
 }
@@ -106,18 +107,19 @@ func (r *WalletRouter) isLinked(c *gin.Context) {
 }
 
 func (r *WalletRouter) registerKey(c *gin.Context) {
-	var registerKeyReq registerKeyReq
+	var req registerKeyReq
 
-	if err := json.NewDecoder(c.Request.Body).Decode(&registerKeyReq); err != nil {
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
 		respondError(c, err)
 		return
 	}
 
+	keyMaterial := req.rawKey()
 	key, err := r.holder.RegisterKey(
 		c.Request.Context(),
-		registerKeyReq.Pem,
-		&registerKeyReq.Alias,
-		registerKeyReq.ID,
+		keyMaterial,
+		&req.Alias,
+		req.ID,
 	)
 	if err != nil {
 		respondError(c, err)
@@ -576,4 +578,27 @@ func (r *WalletRouter) regenerateParticipantToken(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, participantTokenResp{Token: tok})
+}
+
+type updateTokenReq struct {
+	Token string `json:"token" binding:"required"`
+}
+
+func (r *WalletRouter) updateParticipantToken(c *gin.Context) {
+	participantID := c.Params.ByName("id")
+	var req updateTokenReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "token is required"})
+		return
+	}
+
+	if err := r.holder.UpdateParticipantToken(c.Request.Context(), participantID, req.Token); err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":       "token updated in memory",
+		"participantId": participantID,
+	})
 }

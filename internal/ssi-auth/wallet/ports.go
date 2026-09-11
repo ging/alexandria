@@ -75,6 +75,8 @@ type Wallet interface {
 	SetParticipantState(ctx context.Context, participantID string, active bool) (Participant, error)
 	// RegenerateParticipantToken rotates the API token for a participant context.
 	RegenerateParticipantToken(ctx context.Context, participantID string) (string, error)
+	// UpdateParticipantToken updates the in-memory API token for a participant context.
+	UpdateParticipantToken(ctx context.Context, participantID string, token string) error
 }
 
 // ===== Pem Descriptor ===========================================

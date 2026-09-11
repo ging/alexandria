@@ -20,6 +20,8 @@ import (
 
 type mockWallet struct {
 	credentials         []wallet.Credential
+	keys                []wallet.Key
+	info                wallet.WalletInfo
 	gotDeleteCredential string
 	err                 error
 }
@@ -28,8 +30,14 @@ func (m *mockWallet) Link(context.Context) (wallet.Did, error) { return wallet.D
 func (m *mockWallet) RegisterKey(context.Context, *wallet.KeyPlan) (wallet.Key, error) {
 	return wallet.Key{}, m.err
 }
-func (m *mockWallet) GetAllKeys(context.Context) ([]wallet.Key, error) { return nil, nil }
-func (m *mockWallet) DeleteKey(context.Context, string) error          { return nil }
+
+func (m *mockWallet) GetAllKeys(context.Context) ([]wallet.Key, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.keys, nil
+}
+func (m *mockWallet) DeleteKey(context.Context, string) error { return nil }
 func (m *mockWallet) RegisterDid(context.Context, *wallet.DidPlan) (wallet.Did, error) {
 	return wallet.Did{}, m.err
 }
@@ -55,7 +63,10 @@ func (m *mockWallet) SetDefaultKey(context.Context, string, string) (wallet.Did,
 }
 
 func (m *mockWallet) WalletInfo(context.Context) (wallet.WalletInfo, error) {
-	return wallet.WalletInfo{}, nil
+	if m.err != nil {
+		return wallet.WalletInfo{}, m.err
+	}
+	return m.info, nil
 }
 
 func (m *mockWallet) GetAllCredentials(context.Context) ([]wallet.Credential, error) {
@@ -132,6 +143,10 @@ func (m *mockWallet) SetParticipantState(context.Context, string, bool) (wallet.
 
 func (m *mockWallet) RegenerateParticipantToken(context.Context, string) (string, error) {
 	return "new-tok", m.err
+}
+
+func (m *mockWallet) UpdateParticipantToken(context.Context, string, string) error {
+	return m.err
 }
 
 func setupWalletRouter(mock *mockWallet) *gin.Engine {
@@ -458,5 +473,87 @@ func TestIdentityHubEndpointsSuccess(t *testing.T) {
 	engine.ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+
+	// Update participant token
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/wallet/participants/pid1/token", strings.NewReader(`{"token":"manual-tok"}`))
+	engine.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+// TestGetWalletInfoExcludesPermissionAndAddedAt ensures removed metadata fields are absent from JSON.
+func TestGetWalletInfoExcludesPermissionAndAddedAt(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	mock := &mockWallet{
+		info: wallet.WalletInfo{
+			ID:         "wid1",
+			Name:       "wname",
+			CreatedAt:  now,
+			AddedAt:    now,
+			Permission: "admin",
+		},
+	}
+	engine := setupWalletRouter(mock)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/wallet/info", nil)
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("unmarshaling body: %v", err)
+	}
+
+	if _, exists := raw["permission"]; exists {
+		t.Error("expected 'permission' to be absent from wallet info response")
+	}
+	if _, exists := raw["addedAt"]; exists {
+		t.Error("expected 'addedAt' to be absent from wallet info response")
+	}
+}
+
+// TestGetKeysExcludesUsage ensures usage field is absent from the serialized key response.
+func TestGetKeysExcludesUsage(t *testing.T) {
+	t.Parallel()
+
+	mock := &mockWallet{
+		keys: []wallet.Key{
+			{
+				ID:    "key-1",
+				Kty:   "RSA",
+				Usage: []string{"sign_token", "sign_credentials"},
+			},
+		},
+	}
+	engine := setupWalletRouter(mock)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/wallet/keys", nil)
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var raw []map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("unmarshaling body: %v", err)
+	}
+
+	if len(raw) != 1 {
+		t.Fatalf("expected 1 key, got %d", len(raw))
+	}
+
+	if _, exists := raw[0]["usage"]; exists {
+		t.Error("expected 'usage' to be absent from key response")
 	}
 }

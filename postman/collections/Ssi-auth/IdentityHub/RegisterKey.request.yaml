@@ -5,9 +5,9 @@ body:
   type: json
   content: |-
     {
-        "id": "key-1asdsadasdasd",
-        "pem": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDr//yYtu1E2ngC\nmCZ0zpzvuE7D7XEj60ErhTz9bOYulpxQDNI6wy0tt5Xesgkp+RGs/KwozgOn6K9F\nAXuYDyPcUL8/hZrFeMY18udjgCDryykywVNwgf9zDCwEu/59mBzCGh0DQLEC+qRv\n7rgAet4CZKR2rNuyNuYmqXBkx8PfB7pfnWvpHqr9j34AopmtXpjc6zYp9yNSemlk\n26P1dZrvGUkVfjNAzvUkkwkjTq1TyPIQGf/k5teO56LTDIjgA2CBpavGP/zQls81\n1kDh9qrVFIlNx33bWRYG0d0txTsYzb2FLklL6mQTD2B76fQJKVB6TWMe6pKveoCt\nCvJvZ1A5AgMBAAECggEAOHBSv07X9WRt2Oj8IWkb/PRN2etZ6GYlgrvtdwnpDnE0\nVqyKRkVQ86L483YOXPxUrtMKdQO3uhsad11AaoAMam7hHdbcyab1eAdsMM5+kQVY\nB+xWAQ0Fw0TA7izrUqvjDMRj9dgtvPGmC6LCXFMF7vqUnlD+hWM9rTdOSru/awGf\ndqRUQfKyhPMqgZ8XNgpDBQ+656wGDpWbaMwD41+7oNkgVNch7l86X4hjmHnZV1Ur\nwiDq3NOvHgj+H9JAQSMmyvtSCVlddrovsuz4w4TqemZ2T+KnSAZuMJFW+WP/6RG7\n0KUS43PZfYl5mQsS/KNzfqlsmWn5G/GKpV0eONYZVQKBgQD/45etPkGJCN8KmiZa\nSvt9AV4FODw/NFzHtL4nIcl/Z3Hxdn9XuYAYb1FNHDwbt/s+EL4JOTtL0kLTovkz\nSDp/eYuGaz2j1WeZ8VFxjTlkrJ6FeJqHyzphIKq3iyusuwf8bofqRJWRrXeM7jkF\nsGb4DPudrYNSUrm51N8pJh6OrwKBgQDsGi+s5Ecl2VoBNswS312nAAudku4BCO+v\nRWY+XCXHNIjs/pLQIrjGWdca7elDdvIw/s8mWmqvZfEq1wRz96yGT7leIyQUecLL\nJR0+AD/tp/8X1gJcHzeUXLH1leBPL5pCWSFfXPDxBDYdgSsftlQXBkl4K5l8V2rm\nc7BwpLMJlwKBgQDx0jWO5Ryt0hJmRJMmFWJhGh+uMxzMZkGgATEKbiWsHyhRFrj1\nQDrL3Lcqdhpf35ixaMUOlmVxG/1HX+a9De8qdMTkfQg9gflsQ9/BvcKVX4RXgkgX\nOHmtPF/ZIM5faEj9x77uJ25pw1MNfjupIrHMjQhkVIucCs21znQuwPVzxQKBgByW\nIxWc4hxsD6C8AMN8NfulXsKqapTHfzXKglGkmJJhAv8m56G5woOJlyjUi3y2pyZV\ng8FSCz7HagbU194uq73rYzdJq/GquHIeQUcjgpoE0DcTm1+KDBGzk3x3tBwCWHwW\nDJteRnH4H5E89Xq2ecH76eNZ7BCJCRF0CnXpCyBrAoGAS5fTkGwoozeW/4EsACeZ\nK1euT3oE7g4VPt3bipUAC1yI4T9h3piytrTWeHzBwXYHpQIEOx/rmN1mmmqXI7bs\n/BKI+UXMTgFj5m+NtZ8+LofID06B+i2D7IG1Dj9nDVuVwruy7cY6S1N6aTLQwZnt\nukjWvXiJy97LtDuP8YYWBnI=\n-----END PRIVATE KEY-----",
-        "alias": "key-112312312"
+        "id": "key-jose-1",
+        "alias": "key-jose-alias",
+        "pem": "{\"kty\":\"OKP\",\"crv\":\"Ed25519\",\"kid\":\"key-jose-1\",\"x\":\"9nhnpQlR-MdqxM6qmqftTdCmCphBkJTzwP6855UXoSk\"}"
     }
 auth:
   type: inherit

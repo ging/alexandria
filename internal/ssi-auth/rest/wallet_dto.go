@@ -75,7 +75,6 @@ type keyResp struct {
 	CreatedAt           time.Time `json:"createdAt"`
 	SerializedPublicKey *string   `json:"serializedPublicKey,omitempty"`
 	KeyContext          *string   `json:"keyContext,omitempty"`
-	Usage               []string  `json:"usage,omitempty"`
 	DefaultPair         *bool     `json:"defaultPair,omitempty"`
 	PrivateKeyAlias     *string   `json:"privateKeyAlias,omitempty"`
 }
@@ -91,7 +90,6 @@ func newKeyResp(k wallet.Key) keyResp {
 		CreatedAt:           k.CreatedAt,
 		SerializedPublicKey: k.SerializedPublicKey,
 		KeyContext:          k.KeyContext,
-		Usage:               k.Usage,
 		DefaultPair:         k.DefaultPair,
 		PrivateKeyAlias:     k.PrivateKeyAlias,
 	}
@@ -108,10 +106,27 @@ func newKeyResps(keys []wallet.Key) []keyResp {
 	return out
 }
 
+// registerKeyReq carries parameters for importing a keypair.
 type registerKeyReq struct {
-	ID    *string `json:"id,omitempty"`
-	Pem   string  `json:"pem"`
-	Alias string  `json:"alias,omitempty"`
+	ID    *string         `json:"id,omitempty"`
+	Pem   string          `json:"pem,omitempty"`
+	Jwk   json.RawMessage `json:"jwk,omitempty"`
+	Alias string          `json:"alias,omitempty"`
+}
+
+// rawKey resolves key material from Pem or Jwk fields.
+func (r registerKeyReq) rawKey() string {
+	if r.Pem != "" {
+		return strings.TrimSpace(r.Pem)
+	}
+	if len(r.Jwk) > 0 {
+		var s string
+		if err := json.Unmarshal(r.Jwk, &s); err == nil {
+			return strings.TrimSpace(s)
+		}
+		return strings.TrimSpace(string(r.Jwk))
+	}
+	return ""
 }
 
 // ===== DID Registering rest DTOs =========================================================
@@ -252,24 +267,21 @@ func (b didBuilderReq) toDomain() (common.DidBuilder, error) {
 
 // ===== Wallet Info DTO =========================================================
 
+// walletInfoRest is the public representation of the wallet's metadata.
 type walletInfoRest struct {
-	ID         string    `json:"id"`
-	Name       string    `json:"name"`
-	CreatedAt  time.Time `json:"createdAt"`
-	AddedAt    time.Time `json:"addedAt"`
-	Permission string    `json:"permission"`
-	Dids       []didResp `json:"dids"`
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"createdAt"`
+	Dids      []didResp `json:"dids"`
 }
 
-// newKeyResp projects a domain key onto the wire.
+// newWalletInfoRest projects domain wallet info onto the wire.
 func newWalletInfoRest(i wallet.WalletInfo) walletInfoRest {
 	return walletInfoRest{
-		ID:         i.ID,
-		Name:       i.Name,
-		CreatedAt:  i.CreatedAt,
-		AddedAt:    i.AddedAt,
-		Permission: i.Permission,
-		Dids:       newDidResps(i.Dids),
+		ID:        i.ID,
+		Name:      i.Name,
+		CreatedAt: i.CreatedAt,
+		Dids:      newDidResps(i.Dids),
 	}
 }
 

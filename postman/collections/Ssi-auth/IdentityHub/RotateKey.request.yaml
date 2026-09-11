@@ -1,5 +1,5 @@
 $kind: http-request
-url: "{{baseUrl}}/api/v1/ssi-auth/wallet/keys/key-1/rotate"
+url: "{{baseUrl}}/api/v1/ssi-auth/wallet/keys/key-jose-1/rotate"
 method: POST
 body:
   type: json

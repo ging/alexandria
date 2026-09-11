@@ -22,6 +22,35 @@ import (
 
 const defaultSuperUserKey = "c3VwZXItdXNlcg==.c3VwZXItdXNlci1zZWNyZXQta2V5LTEyMzQ1Njc4OTA="
 
+const sampleRSAPrivateKeyPEM = `-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDr//yYtu1E2ngC
+mCZ0zpzvuE7D7XEj60ErhTz9bOYulpxQDNI6wy0tt5Xesgkp+RGs/KwozgOn6K9F
+AXuYDyPcUL8/hZrFeMY18udjgCDryykywVNwgf9zDCwEu/59mBzCGh0DQLEC+qRv
+7rgAet4CZKR2rNuyNuYmqXBkx8PfB7pfnWvpHqr9j34AopmtXpjc6zYp9yNSemlk
+26P1dZrvGUkVfjNAzvUkkwkjTq1TyPIQGf/k5teO56LTDIjgA2CBpavGP/zQls81
+1kDh9qrVFIlNx33bWRYG0d0txTsYzb2FLklL6mQTD2B76fQJKVB6TWMe6pKveoCt
+CvJvZ1A5AgMBAAECggEAOHBSv07X9WRt2Oj8IWkb/PRN2etZ6GYlgrvtdwnpDnE0
+VqyKRkVQ86L483YOXPxUrtMKdQO3uhsad11AaoAMam7hHdbcyab1eAdsMM5+kQVY
+B+xWAQ0Fw0TA7izrUqvjDMRj9dgtvPGmC6LCXFMF7vqUnlD+hWM9rTdOSru/awGf
+dqRUQfKyhPMqgZ8XNgpDBQ+656wGDpWbaMwD41+7oNkgVNch7l86X4hjmHnZV1Ur
+wiDq3NOvHgj+H9JAQSMmyvtSCVlddrovsuz4w4TqemZ2T+KnSAZuMJFW+WP/6RG7
+0KUS43PZfYl5mQsS/KNzfqlsmWn5G/GKpV0eONYZVQKBgQD/45etPkGJCN8KmiZa
+Svt9AV4FODw/NFzHtL4nIcl/Z3Hxdn9XuYAYb1FNHDwbt/s+EL4JOTtL0kLTovkz
+SDp/eYuGaz2j1WeZ8VFxjTlkrJ6FeJqHyzphIKq3iyusuwf8bofqRJWRrXeM7jkF
+sGb4DPudrYNSUrm51N8pJh6OrwKBgQDsGi+s5Ecl2VoBNswS312nAAudku4BCO+v
+RWY+XCXHNIjs/pLQIrjGWdca7elDdvIw/s8mWmqvZfEq1wRz96yGT7leIyQUecLL
+JR0+AD/tp/8X1gJcHzeUXLH1leBPL5pCWSFfXPDxBDYdgSsftlQXBkl4K5l8V2rm
+c7BwpLMJlwKBgQDx0jWO5Ryt0hJmRJMmFWJhGh+uMxzMZkGgATEKbiWsHyhRFrj1
+QDrL3Lcqdhpf35ixaMUOlmVxG/1HX+a9De8qdMTkfQg9gflsQ9/BvcKVX4RXgkgX
+OHmtPF/ZIM5faEj9x77uJ25pw1MNfjupIrHMjQhkVIucCs21znQuwPVzxQKBgByW
+IxWc4hxsD6C8AMN8NfulXsKqapTHfzXKglGkmJJhAv8m56G5woOJlyjUi3y2pyZV
+g8FSCz7HagbU194uq73rYzdJq/GquHIeQUcjgpoE0DcTm1+KDBGzk3x3tBwCWHwW
+DJteRnH4H5E89Xq2ecH76eNZ7BCJCRF0CnXpCyBrAoGAS5fTkGwoozeW/4EsACeZ
+K1euT3oE7g4VPt3bipUAC1yI4T9h3piytrTWeHzBwXYHpQIEOx/rmN1mmmqXI7bs
+/BKI+UXMTgFj5m+NtZ8+LofID06B+i2D7IG1Dj9nDVuVwruy7cY6S1N6aTLQwZnt
+ukjWvXiJy97LtDuP8YYWBnI=
+-----END PRIVATE KEY-----`
+
 func identityHubIdentityURL() string {
 	val := os.Getenv("IDENTITYHUB_IDENTITY_URL")
 	if val != "" {
@@ -57,12 +86,14 @@ func probeIdentityHub(t *testing.T, healthURL string) {
 	_ = resp.Body.Close()
 }
 
-func TestIdentityHubLiveIntegration(t *testing.T) {
+func setupLiveIntegration(t *testing.T) (wallet.Wallet, context.Context) {
+	t.Helper()
+
 	healthURL := identityHubHealthURL()
 	probeIdentityHub(t, healthURL)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
+	t.Cleanup(cancel)
 
 	identityURL := identityHubIdentityURL()
 	apiKey := identityHubAPIKey()
@@ -77,9 +108,14 @@ func TestIdentityHubLiveIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("identityhub.New failed: %v", err)
 	}
-	defer func() { _ = adapter.Close() }()
+	t.Cleanup(func() { _ = adapter.Close() })
 
-	// 1. Verify link / default identity
+	return adapter, ctx
+}
+
+func TestIdentityHubLive_LinkAndWalletInfo(t *testing.T) {
+	adapter, ctx := setupLiveIntegration(t)
+
 	did, err := adapter.Link(ctx)
 	if err != nil {
 		t.Fatalf("Link failed against live IdentityHub: %v", err)
@@ -89,14 +125,16 @@ func TestIdentityHubLiveIntegration(t *testing.T) {
 	}
 	t.Logf("Linked against live IdentityHub super-user DID: %s", did.ID)
 
-	// 2. Verify wallet telemetry info
 	info, err := adapter.WalletInfo(ctx)
 	if err != nil {
 		t.Fatalf("WalletInfo failed: %v", err)
 	}
 	t.Logf("Wallet info name: %s, ID: %s", info.Name, info.ID)
+}
 
-	// 3. Verify keys inventory
+func TestIdentityHubLive_KeysInventory(t *testing.T) {
+	adapter, ctx := setupLiveIntegration(t)
+
 	keys, err := adapter.GetAllKeys(ctx)
 	if err != nil {
 		t.Fatalf("GetAllKeys failed: %v", err)
@@ -109,8 +147,11 @@ func TestIdentityHubLiveIntegration(t *testing.T) {
 		}
 		t.Logf("Key %s: kty=%s, crv=%s, alias=%s", k.ID, k.Kty, crvStr, k.Alias)
 	}
+}
 
-	// 4. Verify DIDs inventory
+func TestIdentityHubLive_DidsInventory(t *testing.T) {
+	adapter, ctx := setupLiveIntegration(t)
+
 	dids, err := adapter.GetAllDids(ctx)
 	if err != nil {
 		t.Fatalf("GetAllDids failed: %v", err)
@@ -122,8 +163,11 @@ func TestIdentityHubLiveIntegration(t *testing.T) {
 			t.Errorf("expected DID document to contain verificationMethods, got 0")
 		}
 	}
+}
 
-	// 5. Test participant provisioning and management
+func TestIdentityHubLive_ParticipantManagement(t *testing.T) {
+	adapter, ctx := setupLiveIntegration(t)
+
 	testPid := fmt.Sprintf("test-part-%d", time.Now().UnixNano())
 	testDid := fmt.Sprintf("did:web:%s", testPid)
 	plan := &wallet.ParticipantPlan{
@@ -145,7 +189,6 @@ func TestIdentityHubLiveIntegration(t *testing.T) {
 	}
 	t.Logf("Successfully provisioned participant %s", testPid)
 
-	// Query created participant
 	part, err := adapter.GetParticipant(ctx, testPid)
 	if err != nil {
 		t.Fatalf("GetParticipant failed: %v", err)
@@ -154,12 +197,10 @@ func TestIdentityHubLiveIntegration(t *testing.T) {
 		t.Errorf("expected participant ID %s, got %s", testPid, part.ID)
 	}
 
-	// Deactivate participant
 	if _, err := adapter.SetParticipantState(ctx, testPid, false); err != nil {
 		t.Errorf("SetParticipantState deactivate failed: %v", err)
 	}
 
-	// Regenerate token for participant
 	newToken, err := adapter.RegenerateParticipantToken(ctx, testPid)
 	if err != nil {
 		t.Errorf("RegenerateParticipantToken failed: %v", err)
@@ -167,60 +208,83 @@ func TestIdentityHubLiveIntegration(t *testing.T) {
 	if newToken == "" {
 		t.Errorf("expected non-empty token from RegenerateParticipantToken")
 	}
+}
 
-	// 6. Test RegisterKey with PEM key
-	rsaKey := `-----BEGIN PRIVATE KEY-----
-MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDr//yYtu1E2ngC
-mCZ0zpzvuE7D7XEj60ErhTz9bOYulpxQDNI6wy0tt5Xesgkp+RGs/KwozgOn6K9F
-AXuYDyPcUL8/hZrFeMY18udjgCDryykywVNwgf9zDCwEu/59mBzCGh0DQLEC+qRv
-7rgAet4CZKR2rNuyNuYmqXBkx8PfB7pfnWvpHqr9j34AopmtXpjc6zYp9yNSemlk
-26P1dZrvGUkVfjNAzvUkkwkjTq1TyPIQGf/k5teO56LTDIjgA2CBpavGP/zQls81
-1kDh9qrVFIlNx33bWRYG0d0txTsYzb2FLklL6mQTD2B76fQJKVB6TWMe6pKveoCt
-CvJvZ1A5AgMBAAECggEAOHBSv07X9WRt2Oj8IWkb/PRN2etZ6GYlgrvtdwnpDnE0
-VqyKRkVQ86L483YOXPxUrtMKdQO3uhsad11AaoAMam7hHdbcyab1eAdsMM5+kQVY
-B+xWAQ0Fw0TA7izrUqvjDMRj9dgtvPGmC6LCXFMF7vqUnlD+hWM9rTdOSru/awGf
-dqRUQfKyhPMqgZ8XNgpDBQ+656wGDpWbaMwD41+7oNkgVNch7l86X4hjmHnZV1Ur
-wiDq3NOvHgj+H9JAQSMmyvtSCVlddrovsuz4w4TqemZ2T+KnSAZuMJFW+WP/6RG7
-0KUS43PZfYl5mQsS/KNzfqlsmWn5G/GKpV0eONYZVQKBgQD/45etPkGJCN8KmiZa
-Svt9AV4FODw/NFzHtL4nIcl/Z3Hxdn9XuYAYb1FNHDwbt/s+EL4JOTtL0kLTovkz
-SDp/eYuGaz2j1WeZ8VFxjTlkrJ6FeJqHyzphIKq3iyusuwf8bofqRJWRrXeM7jkF
-sGb4DPudrYNSUrm51N8pJh6OrwKBgQDsGi+s5Ecl2VoBNswS312nAAudku4BCO+v
-RWY+XCXHNIjs/pLQIrjGWdca7elDdvIw/s8mWmqvZfEq1wRz96yGT7leIyQUecLL
-JR0+AD/tp/8X1gJcHzeUXLH1leBPL5pCWSFfXPDxBDYdgSsftlQXBkl4K5l8V2rm
-c7BwpLMJlwKBgQDx0jWO5Ryt0hJmRJMmFWJhGh+uMxzMZkGgATEKbiWsHyhRFrj1
-QDrL3Lcqdhpf35ixaMUOlmVxG/1HX+a9De8qdMTkfQg9gflsQ9/BvcKVX4RXgkgX
-OHmtPF/ZIM5faEj9x77uJ25pw1MNfjupIrHMjQhkVIucCs21znQuwPVzxQKBgByW
-IxWc4hxsD6C8AMN8NfulXsKqapTHfzXKglGkmJJhAv8m56G5woOJlyjUi3y2pyZV
-g8FSCz7HagbU194uq73rYzdJq/GquHIeQUcjgpoE0DcTm1+KDBGzk3x3tBwCWHwW
-DJteRnH4H5E89Xq2ecH76eNZ7BCJCRF0CnXpCyBrAoGAS5fTkGwoozeW/4EsACeZ
-K1euT3oE7g4VPt3bipUAC1yI4T9h3piytrTWeHzBwXYHpQIEOx/rmN1mmmqXI7bs
-/BKI+UXMTgFj5m+NtZ8+LofID06B+i2D7IG1Dj9nDVuVwruy7cY6S1N6aTLQwZnt
-ukjWvXiJy97LtDuP8YYWBnI=
------END PRIVATE KEY-----`
+func TestIdentityHubLive_RegisterKey(t *testing.T) {
+	adapter, ctx := setupLiveIntegration(t)
 
 	keyID := fmt.Sprintf("test-key-%d", time.Now().UnixNano())
 	keyPlan := &wallet.KeyPlan{
 		ID:    keyID,
 		Alias: "test-alias",
-		Pem:   rsaKey,
+		Pem:   sampleRSAPrivateKeyPEM,
 	}
 	if _, err := adapter.RegisterKey(ctx, keyPlan); err != nil {
 		t.Fatalf("RegisterKey failed: %v", err)
 	}
 	t.Logf("Successfully registered key %s in IdentityHub", keyID)
+}
 
-	// 7. Verify RegisterDid with friendly alias (resolves to participant DID and publishes)
+func TestIdentityHubLive_RegisterJwkKey(t *testing.T) {
+	adapter, ctx := setupLiveIntegration(t)
+
+	keyID := fmt.Sprintf("test-jwk-%d", time.Now().UnixNano())
+	jwkStr := fmt.Sprintf(`{"kty":"OKP","crv":"Ed25519","kid":"%s","x":"9nhnpQlR-MdqxM6qmqftTdCmCphBkJTzwP6855UXoSk"}`, keyID)
+	keyPlan := &wallet.KeyPlan{
+		ID:    keyID,
+		Alias: "test-jwk-alias",
+		Pem:   jwkStr,
+	}
+	registered, err := adapter.RegisterKey(ctx, keyPlan)
+	if err != nil {
+		t.Fatalf("RegisterKey with JWK failed: %v", err)
+	}
+	if registered.Kty != "OKP" {
+		t.Errorf("expected Kty OKP, got %s", registered.Kty)
+	}
+	t.Logf("Successfully registered JWK key %s in IdentityHub", keyID)
+}
+
+func TestIdentityHubLive_RotateAndRevokeKey(t *testing.T) {
+	adapter, ctx := setupLiveIntegration(t)
+
+	keyID := fmt.Sprintf("test-rot-%d", time.Now().UnixNano())
+	keyPlan := &wallet.KeyPlan{
+		ID:    keyID,
+		Alias: "test-rot-alias",
+		Pem:   sampleRSAPrivateKeyPEM,
+	}
+	if _, err := adapter.RegisterKey(ctx, keyPlan); err != nil {
+		t.Fatalf("RegisterKey failed: %v", err)
+	}
+
+	rotated, err := adapter.RotateKey(ctx, keyID, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("RotateKey failed: %v", err)
+	}
+	t.Logf("Successfully rotated key %s, state: %s", keyID, rotated.State)
+
+	if err := adapter.RevokeKey(ctx, keyID); err != nil {
+		t.Fatalf("RevokeKey failed: %v", err)
+	}
+	t.Logf("Successfully revoked key %s", keyID)
+}
+
+func TestIdentityHubLive_RegisterDidAndEndpoints(t *testing.T) {
+	adapter, ctx := setupLiveIntegration(t)
+
+	// Verify RegisterDid with friendly alias (resolves to participant DID and publishes)
 	if _, err := adapter.RegisterDid(ctx, &wallet.DidPlan{Alias: "hola"}); err != nil {
 		t.Fatalf("RegisterDid with alias 'hola' failed: %v", err)
 	}
 	t.Logf("Successfully executed RegisterDid with alias 'hola'")
 
-	// 7b. Verify RegisterDid with unmanaged DID returns ErrInvalidInput gracefully
+	// Verify RegisterDid with unmanaged DID returns ErrInvalidInput gracefully
 	if _, err := adapter.RegisterDid(ctx, &wallet.DidPlan{Alias: "did:web:unmanaged.com"}); !errors.Is(err, common.ErrInvalidInput) {
 		t.Errorf("expected ErrInvalidInput for unmanaged DID, got %v", err)
 	}
 
-	// 7c. Verify DID state
+	// Verify DID state
 	didState, err := adapter.GetDidState(ctx, "did:web:super-user")
 	if err != nil {
 		t.Errorf("GetDidState failed: %v", err)
@@ -228,7 +292,7 @@ ukjWvXiJy97LtDuP8YYWBnI=
 		t.Logf("GetDidState for super-user: %s", didState.State)
 	}
 
-	// 7d. Verify AddServiceEndpoint
+	// Verify AddServiceEndpoint
 	epID := fmt.Sprintf("ep-live-test-%d", time.Now().UnixNano())
 	epPlan := wallet.ServiceEndpointPlan{
 		ID:   epID,
@@ -244,8 +308,11 @@ ukjWvXiJy97LtDuP8YYWBnI=
 			t.Logf("Warning: RemoveServiceEndpoint clean-up failed: %v", err)
 		}
 	}
+}
 
-	// 8. Verify that Fafnir-only methods return ErrNotImplementedInIdentityHub
+func TestIdentityHubLive_UnsupportedOperations(t *testing.T) {
+	adapter, ctx := setupLiveIntegration(t)
+
 	if err := adapter.ProcessOid4vci(ctx, "offer-uri"); !errors.Is(err, common.ErrNotImplementedInIdentityHub) {
 		t.Errorf("expected ErrNotImplementedInIdentityHub for ProcessOid4vci, got %v", err)
 	}

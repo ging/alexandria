@@ -25,7 +25,7 @@ func writeJSON(w http.ResponseWriter, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func TestAdapterOperations(t *testing.T) {
+func newMockIdentityHubMux() *http.ServeMux {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/participants/test-pid", func(w http.ResponseWriter, r *http.Request) {
@@ -56,6 +56,7 @@ func TestAdapterOperations(t *testing.T) {
 		if r.Method == http.MethodGet {
 			writeJSON(w, []identityhub.KeyPairDto{
 				{
+					ID:    "key-1",
 					KeyID: "key-1",
 					State: "ACTIVE",
 					Descriptor: &identityhub.KeyDescriptorDto{
@@ -190,8 +191,13 @@ func TestAdapterOperations(t *testing.T) {
 		})
 	})
 
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
+	return mux
+}
+
+func setupTestAdapter(t *testing.T) (wallet.Wallet, context.Context) {
+	t.Helper()
+	srv := httptest.NewServer(newMockIdentityHubMux())
+	t.Cleanup(srv.Close)
 
 	adapter, err := identityhub.New(&config.IdentityHubConfig{
 		IdentityAPIURL: srv.URL,
@@ -201,11 +207,14 @@ func TestAdapterOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected init error: %v", err)
 	}
-	defer func() { _ = adapter.Close() }()
+	t.Cleanup(func() { _ = adapter.Close() })
 
-	ctx := context.Background()
+	return adapter, context.Background()
+}
 
-	// 1. Link & WalletInfo
+func TestAdapter_LinkAndWalletInfo(t *testing.T) {
+	adapter, ctx := setupTestAdapter(t)
+
 	did, err := adapter.Link(ctx)
 	if err != nil {
 		t.Fatalf("Link failed: %v", err)
@@ -221,8 +230,11 @@ func TestAdapterOperations(t *testing.T) {
 	if info.ID != "test-pid" {
 		t.Errorf("expected participant test-pid, got %s", info.ID)
 	}
+}
 
-	// 2. Keys
+func TestAdapter_Keys(t *testing.T) {
+	adapter, ctx := setupTestAdapter(t)
+
 	keys, err := adapter.GetAllKeys(ctx)
 	if err != nil || len(keys) != 1 {
 		t.Fatalf("GetAllKeys failed: %v, len=%d", err, len(keys))
@@ -236,8 +248,11 @@ func TestAdapterOperations(t *testing.T) {
 	if err := adapter.RevokeKey(ctx, "key-1"); err != nil {
 		t.Errorf("RevokeKey failed: %v", err)
 	}
+}
 
-	// 3. DIDs
+func TestAdapter_Dids(t *testing.T) {
+	adapter, ctx := setupTestAdapter(t)
+
 	if _, err := adapter.PublishDid(ctx, "did:web:example.com"); err != nil {
 		t.Errorf("PublishDid failed: %v", err)
 	}
@@ -245,7 +260,11 @@ func TestAdapterOperations(t *testing.T) {
 	if err != nil || st.State != wallet.DidStatePublished {
 		t.Errorf("GetDidState failed: %v, state=%s", err, st.State)
 	}
-	if _, err := adapter.AddServiceEndpoint(ctx, "did:web:example.com", wallet.ServiceEndpointPlan{ID: "ep-1", Type: "CredentialService", URL: "https://example.com/ep"}); err != nil {
+	if _, err := adapter.AddServiceEndpoint(ctx, "did:web:example.com", wallet.ServiceEndpointPlan{
+		ID:   "ep-1",
+		Type: "CredentialService",
+		URL:  "https://example.com/ep",
+	}); err != nil {
 		t.Errorf("AddServiceEndpoint failed: %v", err)
 	}
 	if _, err := adapter.RemoveServiceEndpoint(ctx, "did:web:example.com", "ep-1"); err != nil {
@@ -254,8 +273,11 @@ func TestAdapterOperations(t *testing.T) {
 	if _, err := adapter.UnpublishDid(ctx, "did:web:example.com"); err != nil {
 		t.Errorf("UnpublishDid failed: %v", err)
 	}
+}
 
-	// 4. Credentials
+func TestAdapter_Credentials(t *testing.T) {
+	adapter, ctx := setupTestAdapter(t)
+
 	creds, err := adapter.GetAllCredentials(ctx)
 	if err != nil || len(creds) != 1 {
 		t.Fatalf("GetAllCredentials failed: %v", err)
@@ -270,8 +292,11 @@ func TestAdapterOperations(t *testing.T) {
 	if err := adapter.DeleteCredential(ctx, "cred-1"); err != nil {
 		t.Errorf("DeleteCredential failed: %v", err)
 	}
+}
 
-	// 5. Participants
+func TestAdapter_Participants(t *testing.T) {
+	adapter, ctx := setupTestAdapter(t)
+
 	if _, err := adapter.CreateParticipant(ctx, &wallet.ParticipantPlan{ID: "p-2", Did: "did:web:p2"}); err != nil {
 		t.Errorf("CreateParticipant failed: %v", err)
 	}
@@ -287,8 +312,18 @@ func TestAdapterOperations(t *testing.T) {
 		t.Errorf("RegenerateParticipantToken failed: %v, tok=%s", err, tok)
 	}
 
-	// 6. DCP
-	reqID, err := adapter.RequestDcpCredential(ctx, &wallet.DcpCredentialRequestPlan{IssuerURL: "https://issuer", Types: []string{"MembershipCredential"}})
+	if err := adapter.UpdateParticipantToken(ctx, "test-pid", "manual-token"); err != nil {
+		t.Errorf("UpdateParticipantToken failed: %v", err)
+	}
+}
+
+func TestAdapter_DCP(t *testing.T) {
+	adapter, ctx := setupTestAdapter(t)
+
+	reqID, err := adapter.RequestDcpCredential(ctx, &wallet.DcpCredentialRequestPlan{
+		IssuerURL: "https://issuer",
+		Types:     []string{"MembershipCredential"},
+	})
 	if err != nil || reqID != "req-123" {
 		t.Fatalf("RequestDcpCredential failed: %v, id=%s", err, reqID)
 	}
@@ -296,8 +331,11 @@ func TestAdapterOperations(t *testing.T) {
 	if err != nil || dcpSt.Status != "COMPLETED" {
 		t.Errorf("GetDcpRequestStatus failed: %v", err)
 	}
+}
 
-	// 6. Unsupported operations in IdentityHub
+func TestAdapter_UnsupportedOperations(t *testing.T) {
+	adapter, ctx := setupTestAdapter(t)
+
 	if err := adapter.ProcessOid4vci(ctx, "oid4vci://offer"); !errors.Is(err, common.ErrNotImplementedInIdentityHub) {
 		t.Errorf("expected ErrNotImplementedInIdentityHub, got %v", err)
 	}

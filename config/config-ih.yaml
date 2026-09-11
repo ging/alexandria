@@ -98,7 +98,7 @@ auth_config:
   # which is only safe while this node is the sole relying party. In Zitadel
   # the value to put here is the project id.
   audiences: []
-  scopes: ["openid", "profile", "email", "offline_access"]
+  scopes: [ "openid", "profile", "email", "offline_access" ]
   redirect_url: "https://alexandria.127.0.0.1.nip.io:8443/api/v1/auth/callback"
   # Where the browser lands once a login completes, and after a logout.
   app_url: "https://alexandria.127.0.0.1.nip.io:8443/"
@@ -145,7 +145,7 @@ client_config:
 verify_req_config:
   is_cert_allowed: false
   auto_approve_cert: false
-  vcs_requested: [DataSpaceParticipant]
+  vcs_requested: [ DataSpaceParticipant ]
 
 did_config:
   type: Jwk

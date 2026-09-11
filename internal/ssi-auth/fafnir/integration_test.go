@@ -82,19 +82,19 @@ func TestFafnirLiveIntegration(t *testing.T) {
 	t.Logf("Wallet info name: %s, permissions: %s", info.Name, info.Permission)
 
 	// 5. Verify that IdentityHub-specific methods return ErrNotImplementedInFafnir
-	if err := adapter.RotateKey(ctx, "key-1", time.Hour); !errors.Is(err, common.ErrNotImplementedInFafnir) {
+	if _, err := adapter.RotateKey(ctx, "key-1", time.Hour); !errors.Is(err, common.ErrNotImplementedInFafnir) {
 		t.Errorf("expected ErrNotImplementedInFafnir for RotateKey, got %v", err)
 	}
 	if err := adapter.RevokeKey(ctx, "key-1"); !errors.Is(err, common.ErrNotImplementedInFafnir) {
 		t.Errorf("expected ErrNotImplementedInFafnir for RevokeKey, got %v", err)
 	}
-	if err := adapter.PublishDid(ctx, "did:web:test"); !errors.Is(err, common.ErrNotImplementedInFafnir) {
+	if _, err := adapter.PublishDid(ctx, "did:web:test"); !errors.Is(err, common.ErrNotImplementedInFafnir) {
 		t.Errorf("expected ErrNotImplementedInFafnir for PublishDid, got %v", err)
 	}
 	if _, err := adapter.GetDidState(ctx, "did:web:test"); !errors.Is(err, common.ErrNotImplementedInFafnir) {
 		t.Errorf("expected ErrNotImplementedInFafnir for GetDidState, got %v", err)
 	}
-	if err := adapter.CreateParticipant(ctx, nil); !errors.Is(err, common.ErrNotImplementedInFafnir) {
+	if _, err := adapter.CreateParticipant(ctx, nil); !errors.Is(err, common.ErrNotImplementedInFafnir) {
 		t.Errorf("expected ErrNotImplementedInFafnir for CreateParticipant, got %v", err)
 	}
 }

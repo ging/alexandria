@@ -40,6 +40,7 @@ coverage.html
 /docs/artifacts/
 CURRENT_NOTES.md
 /CLAUDE.md
+/GEMINI.md
 
 # Documentation site (Fumadocs)
 /docs/node_modules/

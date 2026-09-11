@@ -1,5 +1,5 @@
 $kind: http-request
-url: "{{baseUrl}}/api/v1/ssi-auth/wallet/keys/key-1"
+url: "{{baseUrl}}/api/v1/ssi-auth/wallet/keys/key-jose-1"
 method: DELETE
 auth:
   type: inherit

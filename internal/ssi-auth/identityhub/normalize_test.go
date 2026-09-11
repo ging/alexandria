@@ -11,8 +11,8 @@ import (
 	"time"
 )
 
-func TestNormalizeKey(t *testing.T) {
-	// 1. RSA Key in PEM
+func generateRSAPublicKeyPEM(t *testing.T) string {
+	t.Helper()
 	rsaPriv, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("generating rsa key: %v", err)
@@ -21,7 +21,24 @@ func TestNormalizeKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshaling rsa pub: %v", err)
 	}
-	rsaPubPem := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: rsaPubDer}))
+	return string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: rsaPubDer}))
+}
+
+func generateECDSAPublicKeyPEM(t *testing.T) string {
+	t.Helper()
+	ecPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generating ec key: %v", err)
+	}
+	ecPubDer, err := x509.MarshalPKIXPublicKey(&ecPriv.PublicKey)
+	if err != nil {
+		t.Fatalf("marshaling ec pub: %v", err)
+	}
+	return string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: ecPubDer}))
+}
+
+func TestNormalizeKey_RSA_PEM(t *testing.T) {
+	rsaPubPem := generateRSAPublicKeyPEM(t)
 
 	rsaDto := KeyPairDto{
 		KeyID:               "rsa-key-1",
@@ -39,8 +56,9 @@ func TestNormalizeKey(t *testing.T) {
 	if rsaKey.Alias != "my-rsa-alias" {
 		t.Errorf("expected alias 'my-rsa-alias', got %s", rsaKey.Alias)
 	}
+}
 
-	// 2. Ed25519 in JWK JSON
+func TestNormalizeKey_Ed25519_JWK(t *testing.T) {
 	edJwk := `{"kty":"OKP","crv":"Ed25519","kid":"ed-key","x":"A3xPgplaUBuhjG2DZGSEVvVBUvyLkm4PAWKqk47aEEw"}`
 	edDto := KeyPairDto{
 		KeyID:               "ed-key-1",
@@ -54,17 +72,10 @@ func TestNormalizeKey(t *testing.T) {
 	if edKey.Crv == nil || *edKey.Crv != "Ed25519" {
 		t.Errorf("expected crv Ed25519, got %v", edKey.Crv)
 	}
+}
 
-	// 3. ECDSA P-256 in PEM
-	ecPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatalf("generating ec key: %v", err)
-	}
-	ecPubDer, err := x509.MarshalPKIXPublicKey(&ecPriv.PublicKey)
-	if err != nil {
-		t.Fatalf("marshaling ec pub: %v", err)
-	}
-	ecPubPem := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: ecPubDer}))
+func TestNormalizeKey_ECDSA_P256_PEM(t *testing.T) {
+	ecPubPem := generateECDSAPublicKeyPEM(t)
 
 	ecDto := KeyPairDto{
 		KeyID:               "ec-key-1",
@@ -80,8 +91,9 @@ func TestNormalizeKey(t *testing.T) {
 	if ecKey.Alias != "ec-key-1" {
 		t.Errorf("expected fallback alias 'ec-key-1', got %s", ecKey.Alias)
 	}
+}
 
-	// 4. Fallback to Descriptor
+func TestNormalizeKey_FallbackToDescriptor(t *testing.T) {
 	descDto := KeyPairDto{
 		KeyID: "desc-key",
 		Descriptor: &KeyDescriptorDto{

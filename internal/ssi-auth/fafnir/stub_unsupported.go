@@ -85,3 +85,8 @@ func (a *Adapter) SetParticipantState(_ context.Context, _ string, _ bool) (wall
 func (a *Adapter) RegenerateParticipantToken(_ context.Context, _ string) (string, error) {
 	return "", common.ErrNotImplementedInFafnir
 }
+
+// UpdateParticipantToken returns not implemented for Fafnir.
+func (a *Adapter) UpdateParticipantToken(_ context.Context, _ string, _ string) error {
+	return common.ErrNotImplementedInFafnir
+}

@@ -7,6 +7,7 @@ import (
 	"crypto"
 	"crypto/ed25519"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"log/slog"
@@ -159,14 +160,22 @@ func (a *Adapter) RegisterKey(ctx context.Context, plan *wallet.KeyPlan) (wallet
 	}
 
 	if plan.Pem != "" {
-		pubPem, err := extractPublicKeyPEM(plan.Pem)
-		if err == nil {
-			desc.PublicKeyPem = pubPem
-		} else {
-			if desc.Properties == nil {
-				desc.Properties = make(map[string]any)
+		trimmed := strings.TrimSpace(plan.Pem)
+		if strings.HasPrefix(trimmed, "{") {
+			var jwkMap map[string]any
+			if err := json.Unmarshal([]byte(trimmed), &jwkMap); err == nil {
+				desc.PublicKeyJwk = jwkMap
+				if kid, ok := jwkMap["kid"].(string); ok && kid != "" && (desc.KeyID == "" || strings.HasSuffix(desc.KeyID, ".json")) {
+					desc.KeyID = kid
+				}
 			}
-			desc.Properties["pem"] = plan.Pem
+		} else {
+			pubPem, err := extractPublicKeyPEM(plan.Pem)
+			if err == nil {
+				desc.PublicKeyPem = pubPem
+			} else {
+				desc.PublicKeyPem = plan.Pem
+			}
 		}
 	}
 
@@ -254,9 +263,32 @@ func (a *Adapter) GetAllKeys(ctx context.Context) ([]wallet.Key, error) {
 	return normalizeKeys(keys), nil
 }
 
+// resolveKeyPairResourceID maps a user-facing keyID or KeyPair ID to the internal KeyPairResource UUID.
+func (a *Adapter) resolveKeyPairResourceID(ctx context.Context, keyID string) (string, error) {
+	keys, err := a.client.ListKeys(ctx, a.pid)
+	if err != nil {
+		return "", fmt.Errorf("identityhub: listing keys: %w", err)
+	}
+
+	for _, k := range keys {
+		if k.ID == keyID || k.KeyID == keyID || (k.Descriptor != nil && k.Descriptor.KeyID == keyID) || k.PrivateKeyAlias == keyID {
+			if k.ID != "" {
+				return k.ID, nil
+			}
+			return k.KeyID, nil
+		}
+	}
+
+	return "", fmt.Errorf("identityhub: key %q not found for participant %q: %w", keyID, a.pid, common.ErrNotFound)
+}
+
 // DeleteKey revokes a key pair in IdentityHub.
 func (a *Adapter) DeleteKey(ctx context.Context, keyID string) error {
-	return a.client.RevokeKey(ctx, a.pid, keyID)
+	resourceID, err := a.resolveKeyPairResourceID(ctx, keyID)
+	if err != nil {
+		return err
+	}
+	return a.client.RevokeKey(ctx, a.pid, resourceID)
 }
 
 // resolveDid determines the target DID to operate on.
@@ -363,14 +395,19 @@ func (a *Adapter) DeleteCredential(ctx context.Context, credentialID string) err
 
 // RotateKey triggers key rotation with an overlap window and returns the updated key.
 func (a *Adapter) RotateKey(ctx context.Context, keyID string, duration time.Duration) (wallet.Key, error) {
-	if err := a.client.RotateKey(ctx, a.pid, keyID, duration); err != nil {
+	resourceID, err := a.resolveKeyPairResourceID(ctx, keyID)
+	if err != nil {
+		return wallet.Key{}, err
+	}
+
+	if err := a.client.RotateKey(ctx, a.pid, resourceID, duration); err != nil {
 		return wallet.Key{}, err
 	}
 
 	keys, err := a.client.ListKeys(ctx, a.pid)
 	if err == nil {
 		for _, k := range keys {
-			if k.KeyID == keyID {
+			if k.ID == resourceID || k.KeyID == keyID {
 				return normalizeKey(k), nil
 			}
 		}
@@ -387,7 +424,11 @@ func (a *Adapter) RotateKey(ctx context.Context, keyID string, duration time.Dur
 
 // RevokeKey immediately revokes an asymmetric keypair.
 func (a *Adapter) RevokeKey(ctx context.Context, keyID string) error {
-	return a.client.RevokeKey(ctx, a.pid, keyID)
+	resourceID, err := a.resolveKeyPairResourceID(ctx, keyID)
+	if err != nil {
+		return err
+	}
+	return a.client.RevokeKey(ctx, a.pid, resourceID)
 }
 
 // PublishDid triggers publication of the participant DID document and returns its publication state.
@@ -608,7 +649,29 @@ func (a *Adapter) SetParticipantState(ctx context.Context, participantID string,
 
 // RegenerateParticipantToken rotates the authentication token for a participant.
 func (a *Adapter) RegenerateParticipantToken(ctx context.Context, participantID string) (string, error) {
-	return a.client.RegenerateParticipantToken(ctx, participantID)
+	tok, err := a.client.RegenerateParticipantToken(ctx, participantID)
+	if err != nil {
+		return "", err
+	}
+
+	if participantID == a.pid {
+		a.client.SetAPIKey(tok)
+		a.logger.WarnContext(ctx, "regenerated API token for active participant context; updated in-memory client. Please update wallet_config.api_key in configuration before restarting",
+			"participant_id", participantID)
+	}
+
+	return tok, nil
+}
+
+// UpdateParticipantToken hot-updates the in-memory authentication token for the active participant.
+func (a *Adapter) UpdateParticipantToken(ctx context.Context, participantID string, token string) error {
+	if participantID == a.pid {
+		a.client.SetAPIKey(token)
+		a.logger.InfoContext(ctx, "updated in-memory API token for active participant",
+			"participant_id", participantID)
+		return nil
+	}
+	return nil
 }
 
 // ===== UNSUPPORTED OPERATIONS IN IDENTITYHUB =================================
