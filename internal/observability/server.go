@@ -12,7 +12,7 @@ import (
 	"net/http/pprof"
 	"time"
 
-	"github.com/caparicio-esd/alexandria/internal/config"
+	"github.com/ging/alexandria/internal/config"
 )
 
 // internalTimeouts keep the diagnostics listener from being a way to hold

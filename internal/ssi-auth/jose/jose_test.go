@@ -7,7 +7,7 @@ import (
 	"crypto/rand"
 	"testing"
 
-	"github.com/caparicio-esd/alexandria/internal/ssi-auth/jose"
+	"github.com/ging/alexandria/internal/ssi-auth/jose"
 	"github.com/lestrrat-go/jwx/v3/jwk"
 )
 

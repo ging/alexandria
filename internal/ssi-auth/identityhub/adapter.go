@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/caparicio-esd/alexandria/internal/common"
-	"github.com/caparicio-esd/alexandria/internal/config"
-	"github.com/caparicio-esd/alexandria/internal/ssi-auth/wallet"
+	"github.com/ging/alexandria/internal/common"
+	"github.com/ging/alexandria/internal/config"
+	"github.com/ging/alexandria/internal/ssi-auth/wallet"
 )
 
 var _ wallet.Wallet = (*Adapter)(nil)

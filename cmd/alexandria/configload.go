@@ -8,7 +8,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/caparicio-esd/alexandria/internal/config"
+	"github.com/ging/alexandria/internal/config"
 )
 
 // configEnvVar names the deployment file when no --config flag is given.

@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/caparicio-esd/alexandria/internal/auth-proxy/identity"
-	"github.com/caparicio-esd/alexandria/internal/auth-proxy/oidc"
-	"github.com/caparicio-esd/alexandria/internal/config"
+	"github.com/ging/alexandria/internal/auth-proxy/identity"
+	"github.com/ging/alexandria/internal/auth-proxy/oidc"
+	"github.com/ging/alexandria/internal/config"
 	"github.com/lestrrat-go/httprc/v3"
 	"github.com/lestrrat-go/jwx/v3/jwk"
 	"github.com/lestrrat-go/jwx/v3/jwt"

@@ -107,7 +107,7 @@ export default function HomePage() {
             </Link>
 
             <a
-              href="https://github.com/caparicio-esd/alexandria"
+              href="https://github.com/ging/alexandria"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-xl border border-fd-border/70 bg-fd-card/50 px-5 py-3 text-sm font-medium text-fd-muted-foreground hover:text-fd-foreground hover:border-fd-border transition-colors"

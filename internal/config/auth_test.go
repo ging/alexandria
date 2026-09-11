@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/caparicio-esd/alexandria/internal/config"
+	"github.com/ging/alexandria/internal/config"
 )
 
 // enabledAuth is a valid production-shaped section, which each case then breaks

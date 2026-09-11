@@ -13,7 +13,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/caparicio-esd/alexandria/internal/config"
+	"github.com/ging/alexandria/internal/config"
 )
 
 var (

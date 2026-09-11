@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/caparicio-esd/alexandria/internal/ssi-auth/jose"
-	"github.com/caparicio-esd/alexandria/internal/ssi-auth/wallet"
+	"github.com/ging/alexandria/internal/ssi-auth/jose"
+	"github.com/ging/alexandria/internal/ssi-auth/wallet"
 	"github.com/lestrrat-go/jwx/v3/jwk"
 )
 

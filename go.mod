@@ -1,4 +1,4 @@
-module github.com/caparicio-esd/alexandria
+module github.com/ging/alexandria
 
 go 1.26.6
 

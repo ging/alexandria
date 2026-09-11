@@ -10,8 +10,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/caparicio-esd/alexandria/internal/ssi-auth/rest"
 	"github.com/gin-gonic/gin"
+	"github.com/ging/alexandria/internal/ssi-auth/rest"
 )
 
 // TestAccessLogLevelFollowsTheStatus pins the severity mapping. A failure that

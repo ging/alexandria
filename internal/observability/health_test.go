@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/caparicio-esd/alexandria/internal/observability"
+	"github.com/ging/alexandria/internal/observability"
 )
 
 func TestLivenessIgnoresDependencies(t *testing.T) {

@@ -3,8 +3,8 @@
 package httpapi
 
 import (
-	"github.com/caparicio-esd/alexandria/internal/observability"
 	"github.com/gin-gonic/gin"
+	"github.com/ging/alexandria/internal/observability"
 )
 
 // APIVersion is the version segment every bounded context is mounted under, and

@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/caparicio-esd/alexandria/internal/config"
-	"github.com/caparicio-esd/alexandria/internal/observability"
-	"github.com/caparicio-esd/alexandria/internal/ssi-auth/rest"
-	"github.com/caparicio-esd/alexandria/internal/storage/postgres"
 	"github.com/gin-gonic/gin"
+	"github.com/ging/alexandria/internal/config"
+	"github.com/ging/alexandria/internal/observability"
+	"github.com/ging/alexandria/internal/ssi-auth/rest"
+	"github.com/ging/alexandria/internal/storage/postgres"
 )
 
 // startMetrics builds the metric pipeline, or returns nil when metrics are off.

@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/caparicio-esd/alexandria/internal/common"
-	"github.com/caparicio-esd/alexandria/internal/ssi-auth/rest"
-	"github.com/caparicio-esd/alexandria/internal/ssi-auth/wallet"
 	"github.com/gin-gonic/gin"
+	"github.com/ging/alexandria/internal/common"
+	"github.com/ging/alexandria/internal/ssi-auth/rest"
+	"github.com/ging/alexandria/internal/ssi-auth/wallet"
 )
 
 type mockWallet struct {

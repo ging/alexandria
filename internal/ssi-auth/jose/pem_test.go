@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/caparicio-esd/alexandria/internal/ssi-auth/jose"
+	"github.com/ging/alexandria/internal/ssi-auth/jose"
 )
 
 // armour wraps DER in the PEM block type that announces it. The tests build

@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/caparicio-esd/alexandria/internal/config"
+	"github.com/ging/alexandria/internal/config"
 )
 
 // requestIDKey is the context key carrying the per-request identifier.

@@ -7,10 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/caparicio-esd/alexandria/internal/httpapi"
-	"github.com/caparicio-esd/alexandria/internal/observability"
-	"github.com/caparicio-esd/alexandria/internal/ssi-auth/rest"
 	"github.com/gin-gonic/gin"
+	"github.com/ging/alexandria/internal/httpapi"
+	"github.com/ging/alexandria/internal/observability"
+	"github.com/ging/alexandria/internal/ssi-auth/rest"
 )
 
 // TestProbesAreMountedAtTheRoot pins where the probes live. They must not drift

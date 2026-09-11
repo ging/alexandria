@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	authproxy "github.com/caparicio-esd/alexandria/internal/auth-proxy"
-	"github.com/caparicio-esd/alexandria/internal/auth-proxy/identity"
-	"github.com/caparicio-esd/alexandria/internal/config"
-	"github.com/caparicio-esd/alexandria/internal/httpapi"
-	"github.com/caparicio-esd/alexandria/internal/observability"
 	"github.com/gin-gonic/gin"
+	authproxy "github.com/ging/alexandria/internal/auth-proxy"
+	"github.com/ging/alexandria/internal/auth-proxy/identity"
+	"github.com/ging/alexandria/internal/config"
+	"github.com/ging/alexandria/internal/httpapi"
+	"github.com/ging/alexandria/internal/observability"
 )
 
 // protectedRoute is a stand-in for every route a bounded context mounts: the

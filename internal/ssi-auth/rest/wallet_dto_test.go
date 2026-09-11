@@ -7,7 +7,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/caparicio-esd/alexandria/internal/common"
+	"github.com/ging/alexandria/internal/common"
 )
 
 func TestDidBuilderReqDecodesJwk(t *testing.T) {

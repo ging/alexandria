@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/caparicio-esd/alexandria/internal/config"
-	"github.com/caparicio-esd/alexandria/internal/observability"
+	"github.com/ging/alexandria/internal/config"
+	"github.com/ging/alexandria/internal/observability"
 )
 
 func TestLoggerCarriesTheRequestID(t *testing.T) {

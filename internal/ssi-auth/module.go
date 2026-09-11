@@ -10,14 +10,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/caparicio-esd/alexandria/internal/config"
-	"github.com/caparicio-esd/alexandria/internal/observability"
-	"github.com/caparicio-esd/alexandria/internal/ssi-auth/fafnir"
-	"github.com/caparicio-esd/alexandria/internal/ssi-auth/identityhub"
-	keys "github.com/caparicio-esd/alexandria/internal/ssi-auth/pem"
-	"github.com/caparicio-esd/alexandria/internal/ssi-auth/rest"
-	"github.com/caparicio-esd/alexandria/internal/ssi-auth/wallet"
 	"github.com/gin-gonic/gin"
+	"github.com/ging/alexandria/internal/config"
+	"github.com/ging/alexandria/internal/observability"
+	"github.com/ging/alexandria/internal/ssi-auth/fafnir"
+	"github.com/ging/alexandria/internal/ssi-auth/identityhub"
+	keys "github.com/ging/alexandria/internal/ssi-auth/pem"
+	"github.com/ging/alexandria/internal/ssi-auth/rest"
+	"github.com/ging/alexandria/internal/ssi-auth/wallet"
 )
 
 // Wallet handshake backoff. The first pause is short because the common case is
