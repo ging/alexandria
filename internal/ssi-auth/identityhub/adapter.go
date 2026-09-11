@@ -23,7 +23,7 @@ var _ wallet.Wallet = (*Adapter)(nil)
 
 // Adapter connects Alexandria domain use cases to an Eclipse EDC IdentityHub instance.
 type Adapter struct {
-	client *Client
+	client *EdcClient
 	pid    string
 	logger *slog.Logger
 }
@@ -38,7 +38,7 @@ func New(cfg *config.IdentityHubConfig, logger *slog.Logger) (*Adapter, error) {
 		logger = slog.Default()
 	}
 
-	client, err := NewClient(cfg.IdentityAPIURL, cfg.APIKey, logger)
+	client, err := NewEdcClient(cfg.IdentityAPIURL, cfg.APIKey, logger)
 	if err != nil {
 		return nil, err
 	}

@@ -1,4 +1,4 @@
-// client_test verifies the Fafnir HTTP client adapter against mocked endpoints.
+// adapter_test verifies the Fafnir HTTP client adapter against mocked endpoints.
 // It validates URL paths, JSON request encodings, and HTTP error conversions.
 package fafnir_test
 
