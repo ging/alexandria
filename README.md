@@ -3,23 +3,23 @@
 ![banner alexandria](./docs/static/banner.png)
 
 <!-- State of the code: CI, release, docs, license -->
-[![ci](https://github.com/caparicio-esd/alexandria/actions/workflows/ci.yaml/badge.svg)](https://github.com/caparicio-esd/alexandria/actions/workflows/ci.yaml)
-[![docs](https://img.shields.io/badge/docs-fumadocs-FF3366?logo=bookstack&logoColor=white)](https://caparicio-esd.github.io/alexandria/)
-[![go report card](https://goreportcard.com/badge/github.com/caparicio-esd/alexandria)](https://goreportcard.com/report/github.com/caparicio-esd/alexandria)
-[![go reference](https://pkg.go.dev/badge/github.com/caparicio-esd/alexandria.svg)](https://pkg.go.dev/github.com/caparicio-esd/alexandria)
+[![ci](https://github.com/ging/alexandria/actions/workflows/ci.yaml/badge.svg)](https://github.com/ging/alexandria/actions/workflows/ci.yaml)
+[![docs](https://img.shields.io/badge/docs-fumadocs-FF3366?logo=bookstack&logoColor=white)](https://ging.github.io/alexandria/)
+[![go report card](https://goreportcard.com/badge/github.com/ging/alexandria)](https://goreportcard.com/report/github.com/ging/alexandria)
+[![go reference](https://pkg.go.dev/badge/github.com/ging/alexandria.svg)](https://pkg.go.dev/github.com/ging/alexandria)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
-[![last commit](https://img.shields.io/github/last-commit/caparicio-esd/alexandria?color=6f42c1)](https://github.com/caparicio-esd/alexandria/commits/main)
+[![last commit](https://img.shields.io/github/last-commit/ging/alexandria?color=6f42c1)](https://github.com/ging/alexandria/commits/main)
 
 <!-- Technology stack -->
-[![go](https://img.shields.io/github/go-mod/go-version/caparicio-esd/alexandria?logo=go&logoColor=white&label=go)](go.mod)
+[![go](https://img.shields.io/github/go-mod/go-version/ging/alexandria?logo=go&logoColor=white&label=go)](go.mod)
 [![postgres](https://img.shields.io/badge/postgres-17-4169E1?logo=postgresql&logoColor=white)](docker-compose.dev.yaml)
-[![zitadel](https://img.shields.io/badge/zitadel-v4-2b3990?logo=auth0&logoColor=white)](https://caparicio-esd.github.io/alexandria/docs/development/authentication)
+[![zitadel](https://img.shields.io/badge/zitadel-v4-2b3990?logo=auth0&logoColor=white)](https://ging.github.io/alexandria/docs/development/authentication)
 [![caddy](https://img.shields.io/badge/caddy-2-1F88C0?logo=caddy&logoColor=white)](Caddyfile)
 [![docker](https://img.shields.io/badge/docker-compose-2496ED?logo=docker&logoColor=white)](deploy/docker/README.md)
 [![task](https://img.shields.io/badge/task-runner-29BEB0?logo=task&logoColor=white)](Taskfile.yaml)
-[![adr](https://img.shields.io/badge/decisions-ADR-informational)](https://caparicio-esd.github.io/alexandria/docs/adr)
+[![adr](https://img.shields.io/badge/decisions-ADR-informational)](https://ging.github.io/alexandria/docs/adr)
 
-> 📖 **Full Documentation Portal:** Comprehensive guides, architecture diagrams, API specs, and Architecture Decision Records (ADRs) are published at **[caparicio-esd.github.io/alexandria](https://ging.github.io/alexandria/)**.
+> 📖 **Full Documentation Portal:** Comprehensive guides, architecture diagrams, API specs, and Architecture Decision Records (ADRs) are published at **[ging.github.io/alexandria](https://ging.github.io/alexandria/)**.
 
 ---
 
@@ -95,14 +95,14 @@ For in-depth explanations, configuration details, and architecture specification
 
 | Topic | Documentation Guide |
 |:---|:---|
-| **Getting Started** | [Prerequisites & Local Quickstart](https://caparicio-esd.github.io/alexandria/docs/getting-started/quickstart) |
-| **Configuration** | [One Document Model & Viper Overrides](https://caparicio-esd.github.io/alexandria/docs/getting-started/configuration) |
-| **Architecture** | [Hexagonal Design & Bounded Contexts](https://caparicio-esd.github.io/alexandria/docs/architecture/bounded-contexts) |
-| **Wallet Port** | [Unified Wallet Port & Adapters (Fafnir / IdentityHub)](https://caparicio-esd.github.io/alexandria/docs/architecture/wallet-port) |
-| **Remote Conformance** | [SHACL Shape Validation & Conformance Testing](https://caparicio-esd.github.io/alexandria/docs/development/conformance) |
-| **Authentication & IAM** | [Zitadel OIDC, PKCE & Session Security](https://caparicio-esd.github.io/alexandria/docs/development/authentication) |
-| **REST API Reference** | [HTTP Endpoints Catalog](https://caparicio-esd.github.io/alexandria/docs/development/endpoints) |
-| **Architecture Decisions** | [Accepted ADRs (0001 - 0007)](https://caparicio-esd.github.io/alexandria/docs/adr) |
+| **Getting Started** | [Prerequisites & Local Quickstart](https://ging.github.io/alexandria/docs/getting-started/quickstart) |
+| **Configuration** | [One Document Model & Viper Overrides](https://ging.github.io/alexandria/docs/getting-started/configuration) |
+| **Architecture** | [Hexagonal Design & Bounded Contexts](https://ging.github.io/alexandria/docs/architecture/bounded-contexts) |
+| **Wallet Port** | [Unified Wallet Port & Adapters (Fafnir / IdentityHub)](https://ging.github.io/alexandria/docs/architecture/wallet-port) |
+| **Remote Conformance** | [SHACL Shape Validation & Conformance Testing](https://ging.github.io/alexandria/docs/development/conformance) |
+| **Authentication & IAM** | [Zitadel OIDC, PKCE & Session Security](https://ging.github.io/alexandria/docs/development/authentication) |
+| **REST API Reference** | [HTTP Endpoints Catalog](https://ging.github.io/alexandria/docs/development/endpoints) |
+| **Architecture Decisions** | [Accepted ADRs (0001 - 0007)](https://ging.github.io/alexandria/docs/adr) |
 
 ---
 

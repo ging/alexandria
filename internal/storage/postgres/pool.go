@@ -9,7 +9,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/caparicio-esd/alexandria/internal/config"
+	"github.com/ging/alexandria/internal/config"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

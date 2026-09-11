@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	keys "github.com/caparicio-esd/alexandria/internal/ssi-auth/pem"
+	keys "github.com/ging/alexandria/internal/ssi-auth/pem"
 )
 
 // pkcs8 armours a private key in the one encoding that carries every key type

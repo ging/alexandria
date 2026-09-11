@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/caparicio-esd/alexandria/internal/common"
-	"github.com/caparicio-esd/alexandria/internal/config"
+	"github.com/ging/alexandria/internal/common"
+	"github.com/ging/alexandria/internal/config"
 )
 
 // TestLoadFixtures runs the parser against the four node configurations, which

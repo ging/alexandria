@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/caparicio-esd/alexandria/internal/observability"
 	"github.com/gin-gonic/gin"
+	"github.com/ging/alexandria/internal/observability"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"

@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/caparicio-esd/alexandria/internal/common"
-	"github.com/caparicio-esd/alexandria/internal/ssi-auth/jose"
-	"github.com/caparicio-esd/alexandria/internal/ssi-auth/wallet"
+	"github.com/ging/alexandria/internal/common"
+	"github.com/ging/alexandria/internal/ssi-auth/jose"
+	"github.com/ging/alexandria/internal/ssi-auth/wallet"
 	"github.com/trustbloc/did-go/doc/did"
 )
 

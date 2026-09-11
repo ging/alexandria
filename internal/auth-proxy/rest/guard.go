@@ -9,10 +9,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/caparicio-esd/alexandria/internal/auth-proxy/identity"
-	"github.com/caparicio-esd/alexandria/internal/auth-proxy/session"
-	"github.com/caparicio-esd/alexandria/internal/auth-proxy/token"
 	"github.com/gin-gonic/gin"
+	"github.com/ging/alexandria/internal/auth-proxy/identity"
+	"github.com/ging/alexandria/internal/auth-proxy/session"
+	"github.com/ging/alexandria/internal/auth-proxy/token"
 )
 
 // PrincipalKey is where the authenticated caller is filed on the gin context,

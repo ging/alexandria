@@ -6,7 +6,7 @@ package config
 import (
 	"fmt"
 
-	"github.com/caparicio-esd/alexandria/internal/common"
+	"github.com/ging/alexandria/internal/common"
 )
 
 // Did selects the identifier scheme this node anchors its identity on.

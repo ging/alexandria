@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/caparicio-esd/alexandria/internal/common"
+	"github.com/ging/alexandria/internal/common"
 	"github.com/trustbloc/did-go/doc/did"
 )
 

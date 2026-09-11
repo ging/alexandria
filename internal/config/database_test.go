@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/caparicio-esd/alexandria/internal/config"
+	"github.com/ging/alexandria/internal/config"
 )
 
 // TestDSNEscapesCredentials: a password with an "@" in it must not be able to

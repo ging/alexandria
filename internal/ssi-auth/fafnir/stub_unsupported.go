@@ -7,8 +7,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/caparicio-esd/alexandria/internal/common"
-	"github.com/caparicio-esd/alexandria/internal/ssi-auth/wallet"
+	"github.com/ging/alexandria/internal/common"
+	"github.com/ging/alexandria/internal/ssi-auth/wallet"
 )
 
 // RotateKey returns not implemented for Fafnir.

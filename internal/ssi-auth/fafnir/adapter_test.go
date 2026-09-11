@@ -10,9 +10,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/caparicio-esd/alexandria/internal/common"
-	"github.com/caparicio-esd/alexandria/internal/ssi-auth/fafnir"
-	"github.com/caparicio-esd/alexandria/internal/ssi-auth/wallet"
+	"github.com/ging/alexandria/internal/common"
+	"github.com/ging/alexandria/internal/ssi-auth/fafnir"
+	"github.com/ging/alexandria/internal/ssi-auth/wallet"
 )
 
 // keyRecord is a real Fafnir key record: the columns of its "keys" table, in

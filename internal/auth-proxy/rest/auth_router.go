@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/caparicio-esd/alexandria/internal/auth-proxy/identity"
-	"github.com/caparicio-esd/alexandria/internal/auth-proxy/oidc"
-	"github.com/caparicio-esd/alexandria/internal/auth-proxy/session"
-	"github.com/caparicio-esd/alexandria/internal/auth-proxy/token"
-	"github.com/caparicio-esd/alexandria/internal/config"
 	"github.com/gin-gonic/gin"
+	"github.com/ging/alexandria/internal/auth-proxy/identity"
+	"github.com/ging/alexandria/internal/auth-proxy/oidc"
+	"github.com/ging/alexandria/internal/auth-proxy/session"
+	"github.com/ging/alexandria/internal/auth-proxy/token"
+	"github.com/ging/alexandria/internal/config"
 )
 
 // Deps is everything the adapter needs, wired at the context's composition

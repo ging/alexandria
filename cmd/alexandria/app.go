@@ -10,13 +10,13 @@ import (
 	"log/slog"
 	"time"
 
-	authproxy "github.com/caparicio-esd/alexandria/internal/auth-proxy"
-	"github.com/caparicio-esd/alexandria/internal/config"
-	"github.com/caparicio-esd/alexandria/internal/httpapi"
-	"github.com/caparicio-esd/alexandria/internal/observability"
-	ssiauth "github.com/caparicio-esd/alexandria/internal/ssi-auth"
-	"github.com/caparicio-esd/alexandria/internal/storage/postgres"
 	"github.com/gin-gonic/gin"
+	authproxy "github.com/ging/alexandria/internal/auth-proxy"
+	"github.com/ging/alexandria/internal/config"
+	"github.com/ging/alexandria/internal/httpapi"
+	"github.com/ging/alexandria/internal/observability"
+	ssiauth "github.com/ging/alexandria/internal/ssi-auth"
+	"github.com/ging/alexandria/internal/storage/postgres"
 )
 
 // Module is a bounded context the process mounts and supervises.

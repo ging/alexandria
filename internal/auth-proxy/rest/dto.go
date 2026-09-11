@@ -6,7 +6,7 @@ package rest
 import (
 	"time"
 
-	"github.com/caparicio-esd/alexandria/internal/auth-proxy/identity"
+	"github.com/ging/alexandria/internal/auth-proxy/identity"
 )
 
 // loginResp is the answer to a login started by a client that would rather open

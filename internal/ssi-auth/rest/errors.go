@@ -11,8 +11,8 @@ import (
 	"net/http"
 	"reflect"
 
-	"github.com/caparicio-esd/alexandria/internal/common"
 	"github.com/gin-gonic/gin"
+	"github.com/ging/alexandria/internal/common"
 )
 
 // OriginalResponse carries structured upstream diagnostics from IdentityHub or Fafnir.
