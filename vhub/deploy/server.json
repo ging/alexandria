@@ -1,0 +1,9 @@
+{
+  "listen": "127.0.0.1:8080",
+  "public_base_url": "http://localhost:8080",
+  "did": "did:web:localhost%3A8080",
+  "sqlite_path": "../var/hub/hub.db",
+  "blob_dir": "../var/hub/blobs",
+  "signing_key_path": "../var/hub/hub.key",
+  "tokens_path": "tokens.json"
+}

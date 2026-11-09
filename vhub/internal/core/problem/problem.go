@@ -17,7 +17,7 @@ type Problem struct {
 	Title    string    `json:"title"`
 	Status   int       `json:"status"`
 	Detail   string    `json:"detail,omitempty"`
-	Code     string    `json:"code"`
+	Code     string    `json:"code,omitempty"`
 	Severity string    `json:"severity"`
 	Path     string    `json:"path,omitempty"`
 	Line     int       `json:"line,omitempty"`

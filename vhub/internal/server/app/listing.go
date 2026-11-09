@@ -155,4 +155,6 @@ func Envelope(s Signer, signed any) ([]byte, error) {
 }
 
 // DIDDocument returns the hub DID document built from the published keys.
-func (l *Listing) DIDDocument() did.Document { return did.NewDocument(l.d.DID, l.d.Signer.PublishedKeys()) }
+func (l *Listing) DIDDocument() did.Document {
+	return did.NewDocument(l.d.DID, l.d.Signer.PublishedKeys())
+}
