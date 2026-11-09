@@ -1,0 +1,7 @@
+$kind: collection
+name: '05 DID document'
+description: |-
+  Hub DID document generated from the published keys (Q15, REQ-HUB-015).
+order: 5000
+auth:
+  type: noauth

@@ -45,7 +45,8 @@ func WriteProblem(w http.ResponseWriter, p problem.Problem) {
 func WriteError(w http.ResponseWriter, err error) {
 	var f app.Findings
 	if errors.As(err, &f) {
-		WriteProblem(w, problem.FromAll(f, Status(f[0].Code)))
+		// Validation findings are always unprocessable, whatever compiler produced their codes.
+		WriteProblem(w, problem.FromAll(f, http.StatusUnprocessableEntity))
 		return
 	}
 	if ce, ok := codes.As(err); ok {

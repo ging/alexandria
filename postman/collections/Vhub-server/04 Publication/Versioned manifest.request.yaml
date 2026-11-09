@@ -1,0 +1,26 @@
+$kind: http-request
+method: GET
+url: '{{hubUrl}}/pub/{{slug}}/{{version}}/manifest.json'
+order: 3000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      const sha = CryptoJS.SHA256(pm.response.text()).toString();
+      pm.test('200 immutable, ETag = SHA-256 of the bytes (REQ-HUB-011)', () => {
+        pm.response.to.have.status(200);
+        pm.expect(pm.response.headers.get('Cache-Control')).to.include('immutable');
+        pm.expect(pm.response.headers.get('ETag')).to.eql('"' + sha + '"');
+      });
+      pm.test('media type application/json', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json'));
+      const m = pm.response.json();
+      pm.test('every slot artefact is listed with its gates', () => {
+        const schema = m.files.find(f => f.path === pm.collectionVariables.get('profilePath') + '/schema.json');
+        pm.expect(schema.role).to.eql('json-schema');
+        pm.expect(schema.applies_to).to.include('policy_intake');
+        const ctx = m.files.find(f => f.role === 'mapping');
+        pm.expect(ctx.url).to.match(/context\.jsonld$/);
+        pm.expect(m.slots).to.deep.include({slot: 'odrl', obligation: 'mandatory'});
+      });
+      const b64 = m.files[0].digest.split(';')[1].replace(/-/g, '+').replace(/_/g, '/');
+      pm.collectionVariables.set('blobHex', CryptoJS.enc.Base64.parse(b64 + '='.repeat((4 - b64.length % 4) % 4)).toString(CryptoJS.enc.Hex));

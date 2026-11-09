@@ -1,0 +1,10 @@
+$kind: collection
+name: '08 Revocation (destructive)'
+description: |-
+  Revokes 1.0.0 with the default revoked_from = R + propagation_window (FL8). Irreversible: a re-run answers DATES_ALREADY_REVOKED.
+order: 8000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{releaserToken}}'

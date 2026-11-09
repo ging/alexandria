@@ -65,7 +65,7 @@
       ],
       "mode": "enforce",
       "body": {
-        "select": "$.offer.permission[0]"
+        "select": "$.offer"
       }
     },
     {
@@ -81,7 +81,7 @@
       ],
       "mode": "enforce",
       "body": {
-        "select": "$.offer.permission[0]"
+        "select": "$.offer"
       }
     },
     {
@@ -159,7 +159,7 @@
       ],
       "mode": "enforce",
       "body": {
-        "select": "$.agreement.permission[0]"
+        "select": "$.agreement"
       }
     },
     {
@@ -175,7 +175,7 @@
       ],
       "mode": "enforce",
       "body": {
-        "select": "$.agreement.permission[0]"
+        "select": "$.agreement"
       }
     },
     {

@@ -1,0 +1,31 @@
+$kind: http-request
+method: POST
+url: '{{hubUrl}}/v1/candidates/{{candidateId}}:reject'
+order: 3000
+headers:
+  - key: 'Content-Type'
+    value: 'application/json'
+body:
+  type: json
+  content: |-
+    {"comment": "Demo of :reject; the same draft is proposed again."}
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{releaserToken}}'
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      if (!pm.collectionVariables.get('candidateId')) {
+        console.log('no open candidate (re-run); skipping');
+        pm.execution.skipRequest();
+      }
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('200 rejected', () => {
+        pm.response.to.have.status(200);
+        pm.expect(pm.response.json().state).to.eql('rejected');
+      });

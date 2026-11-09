@@ -1,0 +1,15 @@
+$kind: http-request
+method: GET
+url: '{{hubUrl}}/v1/versions/{{version}}'
+order: 2000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('200 private, no-cache', () => {
+        pm.response.to.have.status(200);
+        pm.expect(pm.response.headers.get('Cache-Control')).to.eql('private, no-cache');
+      });
+      pm.test('record equals its listing entry field by field (REQ-HUB-021)', () => {
+        pm.expect(pm.response.json().signed.record).to.eql(JSON.parse(pm.collectionVariables.get('listedRecord')));
+      });

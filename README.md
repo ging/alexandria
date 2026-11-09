@@ -96,13 +96,15 @@ For in-depth explanations, configuration details, and architecture specification
 | Topic | Documentation Guide |
 |:---|:---|
 | **Getting Started** | [Prerequisites & Local Quickstart](https://ging.github.io/alexandria/docs/getting-started/quickstart) |
-| **Configuration** | [One Document Model & Viper Overrides](https://ging.github.io/alexandria/docs/getting-started/configuration) |
-| **Architecture** | [Hexagonal Design & Bounded Contexts](https://ging.github.io/alexandria/docs/architecture/bounded-contexts) |
-| **Wallet Port** | [Unified Wallet Port & Adapters (Fafnir / IdentityHub)](https://ging.github.io/alexandria/docs/architecture/wallet-port) |
-| **Remote Conformance** | [SHACL Shape Validation & Conformance Testing](https://ging.github.io/alexandria/docs/development/conformance) |
-| **Authentication & IAM** | [Zitadel OIDC, PKCE & Session Security](https://ging.github.io/alexandria/docs/development/authentication) |
-| **REST API Reference** | [HTTP Endpoints Catalog](https://ging.github.io/alexandria/docs/development/endpoints) |
-| **Architecture Decisions** | [Accepted ADRs (0001 - 0007)](https://ging.github.io/alexandria/docs/adr) |
+| **Incremental Tutorials** | [5-Step Hands-On Tutorial Path (`vhubc`, `vhub-server`, `vhub-client`, F6 & Wallets)](https://ging.github.io/alexandria/docs/tutorials) |
+| **Vocabulary Hub & DSL** | [`vhub` v0.2.1 Specification, `eunomia.profiles/v1` DSL & F5 Catalog](https://ging.github.io/alexandria/docs/vhub) |
+| **Configuration** | [`server.json`, Client `config.json` & Node `config.yaml` Reference](https://ging.github.io/alexandria/docs/getting-started/configuration) |
+| **Architecture** | [Hexagonal Design, `archtest` & Bounded Contexts](https://ging.github.io/alexandria/docs/architecture/bounded-contexts) |
+| **Wallet Port** | [Unified Wallet Port & Adapters (Fafnir / IdentityHub / DCP)](https://ging.github.io/alexandria/docs/architecture/wallet-port) |
+| **Conformance & Traceability** | [61 `REQ-*`, 64 `F5` Codes, Scenario F6 & `TRACEABILITY.md`](https://ging.github.io/alexandria/docs/development/conformance) |
+| **Authentication & IAM** | [Zitadel OIDC, PKCE & `vhub-server` Role Authorization](https://ging.github.io/alexandria/docs/development/authentication) |
+| **REST API Reference** | [Complete HTTP Endpoints Catalog & Swagger UI (`/docs`)](https://ging.github.io/alexandria/docs/development/endpoints) |
+| **Architecture Decisions** | [Accepted ADRs (0001 - 0009, `DP-1..15`, `Q1..17`)](https://ging.github.io/alexandria/docs/adr) |
 
 ---
 
@@ -134,6 +136,15 @@ go run ./cmd/vhubc compile -o out internal/dsl/testdata/colors.profile.yaml
 ```
 
 Con `"compiler": "dsl"` en `server.json`, el hub acepta borradores YAML. Detalles y revisión de la especificación en [`PROFILES_DSL.md`](PROFILES_DSL.md).
+
+### Colecciones Postman
+
+`postman/collections/Vhub-server` (API `/v1`, `/pub`, DID document y errores del contrato) y `postman/collections/Vhub-client` (API de administración y tráfico DSP por `dsp-ingress`), con el entorno `postman/environments/vhub-local.environment.yaml` (puertos de `config/`):
+
+```bash
+postman collection run postman/collections/Vhub-server -e postman/environments/vhub-local.environment.yaml
+postman collection run postman/collections/Vhub-client -e postman/environments/vhub-local.environment.yaml
+```
 
 ### Objetivos del `Makefile`
 

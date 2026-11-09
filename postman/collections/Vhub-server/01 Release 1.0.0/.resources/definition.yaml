@@ -1,0 +1,10 @@
+$kind: collection
+name: '01 Release 1.0.0'
+description: |-
+  Author, validate, propose and approve the initial release (FL1). Editor requests inherit the editor token; candidate requests use the releaser token.
+order: 1000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{editorToken}}'

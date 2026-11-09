@@ -1,0 +1,24 @@
+$kind: http-request
+method: GET
+url: '{{hubUrl}}/v1/candidates/{{candidateId}}'
+order: 6000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{releaserToken}}'
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      if (!pm.collectionVariables.get('candidateId')) {
+        console.log('no open candidate (re-run); skipping');
+        pm.execution.skipRequest();
+      }
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('200 open candidate', () => {
+        pm.response.to.have.status(200);
+        pm.expect(pm.response.json().state).to.eql('open');
+      });

@@ -1,0 +1,13 @@
+$kind: http-request
+name: '404 unknown agreement (REQ-CLI-026)'
+method: GET
+url: '{{clientAdmin}}/agreements/urn:uuid:not-registered'
+order: 5000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('404 API_NOT_FOUND', () => {
+        pm.response.to.have.status(404);
+        pm.expect(pm.response.json().code).to.eql('API_NOT_FOUND');
+      });

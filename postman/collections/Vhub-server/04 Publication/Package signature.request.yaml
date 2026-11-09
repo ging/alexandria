@@ -1,0 +1,19 @@
+$kind: http-request
+method: GET
+url: '{{hubUrl}}/pub/packages/{{manifestSegment}}/manifest.sig'
+order: 7000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      const sha = CryptoJS.SHA256(pm.response.text()).toString();
+      pm.test('200 immutable, ETag = SHA-256 of the bytes (REQ-HUB-011)', () => {
+        pm.response.to.have.status(200);
+        pm.expect(pm.response.headers.get('Cache-Control')).to.include('immutable');
+        pm.expect(pm.response.headers.get('ETag')).to.eql('"' + sha + '"');
+      });
+      pm.test('{kid, alg, sig} signed by a key of the DID document (§3.4)', () => {
+        const s = pm.response.json();
+        pm.expect(s.alg).to.eql('EdDSA');
+        pm.expect(s.kid).to.eql(pm.collectionVariables.get('listingKid'));
+      });

@@ -1,0 +1,13 @@
+$kind: http-request
+name: '/status on dsp-ingress goes to the connector'
+method: GET
+url: '{{clientDsp}}/status'
+order: 7000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('the admin API is not served on DSP listeners (REQ-CLI-019)', () => {
+        pm.response.to.have.status(200);
+        pm.expect(pm.response.json().received).to.eql('GET /protocol/status');
+      });

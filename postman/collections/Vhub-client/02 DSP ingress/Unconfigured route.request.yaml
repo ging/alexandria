@@ -1,0 +1,20 @@
+$kind: http-request
+name: 'Route without configuration (default_action)'
+method: POST
+url: '{{clientDsp}}/not/configured'
+order: 6000
+headers:
+  - key: 'Content-Type'
+    value: 'application/json'
+body:
+  type: json
+  content: |-
+    {}
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('default_action forward reaches the connector (REQ-CLI-022)', () => {
+        pm.response.to.have.status(200);
+        pm.expect(pm.response.json().received).to.eql('POST /protocol/not/configured');
+      });
