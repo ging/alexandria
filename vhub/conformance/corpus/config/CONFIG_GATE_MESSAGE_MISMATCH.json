@@ -1,0 +1,32 @@
+{
+  "space": "https://example.com/spaces/demo",
+  "trust": {
+    "hub_did": "did:web:hub.example.com",
+    "hub": "https://hub.example.com",
+    "credentials": "file:corpus/config/credentials.json"
+  },
+  "upstreams": {
+    "dsp": "http://connector:8282/protocol"
+  },
+  "listeners": {
+    "admin": {
+      "bind": "127.0.0.1:9900"
+    }
+  },
+  "routes": [
+    {
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/negotiations/request"
+      },
+      "message": "ContractRequestMessage",
+      "gates": [
+        "agreement_admission"
+      ]
+    }
+  ],
+  "events": {
+    "sink": "file:corpus/config/events.jsonl"
+  }
+}

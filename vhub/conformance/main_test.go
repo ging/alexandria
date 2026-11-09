@@ -26,6 +26,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	code := m.Run()
+	stopShared()
 	_ = os.RemoveAll(dir)
 	os.Exit(code)
 }
