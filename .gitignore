@@ -48,3 +48,9 @@ CURRENT_NOTES.md
 /docs/out/
 /docs/.source/
 
+# Tutorial Python caches and virtualenvs
+/tutorial/.venv/
+/tutorial/__pycache__/
+/tutorial/.ipynb_checkpoints/
+
+

@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Bootstraps Go binaries and a local Python virtualenv, then launches JupyterLab on tutorial/.
+# Pass --port <port> or extra arguments to forward them directly to jupyter lab.
+set -euo pipefail
+
+TUTORIAL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${TUTORIAL_DIR}/.." && pwd)"
+VENV_DIR="${TUTORIAL_DIR}/.venv"
+PORT="${PORT:-8888}"
+
+echo "Building Go binaries into ${REPO_ROOT}/bin ..."
+mkdir -p "${REPO_ROOT}/bin"
+(
+  cd "${REPO_ROOT}"
+  go build -o bin/alexandriac ./cmd/alexandriac
+  go build -o bin/alexandria-server ./cmd/alexandria-server
+  go build -o bin/alexandria-client ./cmd/alexandria-client
+  go build -o bin/fake-connector ./deploy/fake-connector
+)
+
+if [[ ! -x "${VENV_DIR}/bin/jupyter" ]]; then
+  echo "Creating virtual environment in ${VENV_DIR} and installing JupyterLab..."
+  python3 -m venv "${VENV_DIR}"
+  "${VENV_DIR}/bin/pip" install --upgrade pip
+  "${VENV_DIR}/bin/pip" install -r "${TUTORIAL_DIR}/requirements.txt"
+fi
+
+echo "Starting JupyterLab in ${TUTORIAL_DIR} (port ${PORT})..."
+exec "${VENV_DIR}/bin/jupyter" lab \
+  --port="${PORT}" \
+  --ServerApp.root_dir="${TUTORIAL_DIR}" \
+  --ServerApp.default_url="/lab/tree/01_dsl_y_compilacion_alexandriac.ipynb" \
+  "$@"
