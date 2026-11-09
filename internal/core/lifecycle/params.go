@@ -1,4 +1,4 @@
-// Lifecycle parameters of a SpaceProfile with the defaults of §2.10 and their LIFECYCLE_* invariants.
+// Package lifecycle defines the lifecycle parameters of a SpaceProfile with the defaults of §2.10 and their LIFECYCLE_* invariants.
 // The hub validates drafts with them and the client reads them from space-lock.json (REQ-HUB-001).
 package lifecycle
 
@@ -69,7 +69,7 @@ func (p Params) Validate() []*codes.Error {
 			out = append(out, &codes.Error{Code: c, Path: path, Detail: detail})
 		}
 	}
-	add(p.Freshness.MaxStaleness > p.Freshness.TTL, codes.LifecycleStalenessLtTtl, "/lifecycle/freshness/max_staleness", "max_staleness must be greater than ttl")
+	add(p.Freshness.MaxStaleness > p.Freshness.TTL, codes.LifecycleStalenessLtTTL, "/lifecycle/freshness/max_staleness", "max_staleness must be greater than ttl")
 	add(p.GraceWindow > 0, codes.LifecycleGraceZero, "/lifecycle/grace_window", "grace_window must be greater than P0D")
 	add(p.SyncInterval <= p.Freshness.TTL/2, codes.LifecycleSyncInterval, "/lifecycle/sync_interval", "sync_interval must be at most ttl/2")
 	add(p.ClockSkew > 0, codes.LifecycleClockSkew, "/lifecycle/clock_skew", "clock_skew must be greater than PT0S")

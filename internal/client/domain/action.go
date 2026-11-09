@@ -1,4 +1,4 @@
-// Mapping from mode and classification to an action, and the most-restrictive combination across gates.
+// Package domain provides the mapping from mode and classification to an action, and the most-restrictive combination across gates.
 // Implements the two tables of §4.7 (REQ-SYS-007, REQ-CLI-011, REQ-CLI-012).
 package domain
 

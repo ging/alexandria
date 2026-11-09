@@ -1,4 +1,4 @@
-// Listing and version-record documents, the §3.4 membership rule and the S4–S6 continuity checks.
+// Package lifecycle defines the listing and version-record documents, the §3.4 membership rule and the S4–S6 continuity checks.
 // The hub builds listings with Build and the client checks them with CheckContinuity (REQ-HUB-008, REQ-HUB-009, REQ-CLI-004).
 package lifecycle
 

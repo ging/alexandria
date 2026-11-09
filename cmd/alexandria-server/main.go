@@ -59,7 +59,9 @@ func run(cfgPath, clockFile string) error {
 	srv := &http.Server{Addr: cfg.Listen, Handler: mod.Handler(), ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		<-ctx.Done()
-		_ = srv.Shutdown(context.Background())
+		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(sctx)
 	}()
 	log.Printf("alexandria-server listening on %s as %s (PoC: not for production)", cfg.Listen, cfg.DID)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

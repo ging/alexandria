@@ -1,4 +1,4 @@
-// Version record with its class and its four dates, as carried by listings and version records.
+// Package lifecycle defines the version record with its class and its four dates, as carried by listings and version records.
 // Shared by hub and client so both read the same dates (§3.4, REQ-SYS-004).
 package lifecycle
 

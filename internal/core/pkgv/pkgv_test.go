@@ -14,9 +14,11 @@ import (
 // valid builds a coherent package for version 1.0.0 with one schema file.
 func valid() (Files, ni.Digest) {
 	content := []byte(`{"type":"object"}`)
-	m := Manifest{Space: "https://example.com/spaces/demo", Version: "1.0.0",
+	m := Manifest{
+		Space: "https://example.com/spaces/demo", Version: "1.0.0",
 		Files: []File{{Path: "schemas/policy.schema.json", MediaType: "application/schema+json", Digest: ni.Sum(content), Role: "json-schema", Slot: "odrl", AppliesTo: []string{"policy_intake"}}},
-		Slots: []Slot{{Slot: "odrl", Obligation: "mandatory"}}}
+		Slots: []Slot{{Slot: "odrl", Obligation: "mandatory"}},
+	}
 	mb, _ := json.Marshal(m)
 	d := ni.Sum(mb)
 	sl, _ := json.Marshal(SpaceLock{Space: m.Space, Version: "1.0.0", Manifest: d, Lifecycle: lifecycle.Defaults()})

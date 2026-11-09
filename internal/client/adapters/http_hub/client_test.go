@@ -22,8 +22,10 @@ func syncer(h *testkit.HTTPServer, dir, token string) (*app.Sync, *testkit.Recor
 	trust := app.NewHubTrust(h.DID, did_web.New(true), h.Clock, 6*timex.Hour, ev, testkit.Space)
 	ag := &app.Agreements{Repo: store.Agreements(), Events: ev, Clock: h.Clock, Space: testkit.Space}
 	st := &app.Status{Cell: cell, Clock: h.Clock, Trust: trust, Packages: store, Events: ev, Space: testkit.Space}
-	return &app.Sync{Hub: http_hub.New(h.URL, token), Trust: trust, Receipts: receipt_scitt_fake.Verifier{}, Continuity: store, Packages: store,
-		Agreements: ag, Audit: &app.Audit{Window: 10, Events: ev, Clock: h.Clock}, Status: st, Cell: cell, Clock: h.Clock, Events: ev, Space: testkit.Space}, ev
+	return &app.Sync{
+		Hub: http_hub.New(h.URL, token), Trust: trust, Receipts: receipt_scitt_fake.Verifier{}, Continuity: store, Packages: store,
+		Agreements: ag, Audit: &app.Audit{Window: 10, Events: ev, Clock: h.Clock}, Status: st, Cell: cell, Clock: h.Clock, Events: ev, Space: testkit.Space,
+	}, ev
 }
 
 func TestT_CLI_003_SyncOverHTTPAgainstRealHub(t *testing.T) {

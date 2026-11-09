@@ -90,8 +90,10 @@ func TestT_CLI_001_RouteInvariants(t *testing.T) {
 
 func TestT_CLI_013_HeaderSerialization(t *testing.T) {
 	sunset := timex.Instant(1793613600)
-	got := Header([]Item{{Result: Warning, Gate: GatePolicy, Code: codes.VerdictNotInHead, Version: "1.0.0", Sunset: &sunset},
-		{Result: Violation, Gate: GateDSP, Code: codes.VerdictViolation, Version: "2.0.0"}})
+	got := Header([]Item{
+		{Result: Warning, Gate: GatePolicy, Code: codes.VerdictNotInHead, Version: "1.0.0", Sunset: &sunset},
+		{Result: Violation, Gate: GateDSP, Code: codes.VerdictViolation, Version: "2.0.0"},
+	})
 	want := `warning;gate=policy_intake;code="VERDICT_NOT_IN_HEAD";version="1.0.0";sunset=@1793613600, violation;gate=dsp_message;code="VERDICT_VIOLATION"`
 	if got != want {
 		t.Fatalf("got %s", got)

@@ -1,4 +1,4 @@
-// Edge: the hot path. Routes a message, classifies each gate, combines actions, forwards or rejects, and captures agreements.
+// Package app implements Edge: the hot path. Routes a message, classifies each gate, combines actions, forwards or rejects, and captures agreements.
 // Built without HubAPI or DIDResolver, and it never rewrites a forwarded body (REQ-SYS-001..003, REQ-CLI-010..015, REQ-CLI-021, REQ-CLI-022).
 package app
 
@@ -71,7 +71,7 @@ func (e *Edge) Handle(req *Request) *Response {
 	}
 	if resp.Status >= 200 && resp.Status < 300 {
 		if route.Message == "ContractAgreementMessage" {
-			e.capture(req, route, outs, snap, tL)
+			e.capture(req, outs, snap, tL)
 		}
 		if route.ValidateResponse != nil {
 			e.validateResponse(req, route, resp, snap, state, tL)
@@ -175,8 +175,10 @@ func (e *Edge) reject(req *Request, route domain.Route, outs []outcome, items []
 	hdr := http.Header{}
 	hdr.Set(domain.HeaderName, domain.Header(items))
 	if req.Listener == domain.MgmtIngress {
-		p := map[string]any{"type": problem.TypeURI(first.Code()), "title": string(first.Code()), "status": http.StatusUnprocessableEntity,
-			"code": string(first.Code()), "severity": "error", "findings": nonNil(first.Findings)}
+		p := map[string]any{
+			"type": problem.TypeURI(first.Code()), "title": string(first.Code()), "status": http.StatusUnprocessableEntity,
+			"code": string(first.Code()), "severity": "error", "findings": nonNil(first.Findings),
+		}
 		hdr.Set("Content-Type", problem.ContentType)
 		return &Response{Status: http.StatusUnprocessableEntity, Header: hdr, Body: marshal(p)}
 	}
@@ -203,7 +205,7 @@ func (e *Edge) defaultReject(req *Request) *Response {
 }
 
 // capture registers an accepted ContractAgreementMessage with the version that passed (§4.9).
-func (e *Edge) capture(req *Request, route domain.Route, outs []outcome, snap *domain.Snapshot, tL timex.Instant) {
+func (e *Edge) capture(req *Request, outs []outcome, snap *domain.Snapshot, tL timex.Instant) {
 	if snap == nil {
 		return
 	}

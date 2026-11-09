@@ -1,4 +1,4 @@
-// Published package model (manifest.json, space-lock.json, files) and its offline verification S8, S11–S13.
+// Package pkgv defines the published package model (manifest.json, space-lock.json, files) and its offline verification S8, S11–S13.
 // The hub produces packages with this model and the client verifies them without network (REQ-CLI-006, REQ-CLI-007, DP-6).
 package pkgv
 

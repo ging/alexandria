@@ -15,7 +15,8 @@ const dspContext = "https://w3id.org/dspace/2025/1/context.jsonld"
 
 // shaclPackage is a package whose odrl slot has a SHACL artefact and declares one context.
 func shaclPackage() *pkgv.Package {
-	return &pkgv.Package{Digest: "ni:///sha-256;test",
+	return &pkgv.Package{
+		Digest: "ni:///sha-256;test",
 		Manifest: pkgv.Manifest{Slots: []pkgv.Slot{{Slot: "odrl", Obligation: "mandatory"}}, Files: []pkgv.File{
 			{Path: "shapes.ttl", Role: "shacl", Slot: "odrl", AppliesTo: []string{"policy_intake"}},
 			{Path: "ctx.jsonld", Role: "mapping", Slot: "odrl", URL: dspContext, AppliesTo: []string{}},

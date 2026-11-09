@@ -1,4 +1,4 @@
-// Static bearer-token authentication: tokens.json maps a token to {principal, roles[]} (PoC substitute for OIDC).
+// Package auth_static provides static bearer-token authentication: tokens.json maps a token to {principal, roles[]} (PoC substitute for OIDC).
 // Produces the same Principal an auth_oidc adapter would, so the §3.6 role matrix applies unchanged (DP-3, REQ-HUB-017).
 package auth_static
 
@@ -16,7 +16,7 @@ type Tokens map[string]domain.Principal
 
 // Load reads a tokens.json file.
 func Load(path string) (Tokens, error) {
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(path) // #nosec G304 -- path chosen by the operator in server.json.
 	if err != nil {
 		return nil, err
 	}

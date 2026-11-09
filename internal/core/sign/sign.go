@@ -1,4 +1,4 @@
-// Signed envelope {signed, signature{kid, alg, sig}} and Ed25519 verification over JCS(signed).
+// Package sign defines the signed envelope {signed, signature{kid, alg, sig}} and Ed25519 verification over JCS(signed).
 // The same code checks listings, version records and manifest.sig on both sides (§3.4, REQ-SYS-009, REQ-HUB-010).
 package sign
 

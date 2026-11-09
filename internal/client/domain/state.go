@@ -1,4 +1,4 @@
-// Client state machine as a pure function of the last accepted snapshot and the local instant.
+// Package domain implements the client state machine as a pure function of the last accepted snapshot and the local instant.
 // A failed sync never changes the state; E2 is t_l ≥ expires_at and E3 is t_l − expires_at ≥ max_staleness (§4.5, REQ-SYS-008, REQ-CLI-002, REQ-CLI-008, REQ-CLI-018).
 package domain
 

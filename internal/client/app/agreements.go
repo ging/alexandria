@@ -1,4 +1,4 @@
-// Agreements: capture of accepted agreements, admission of transfers, import, lookup and package retention.
+// Package app implements Agreements: capture of accepted agreements, admission of transfers, import, lookup and package retention.
 // Also announces AGREEMENT_REVOCATION_SCHEDULED for each agreement of a newly revoked version (§4.9, REQ-CLI-015..017, REQ-CLI-026).
 package app
 
@@ -41,8 +41,10 @@ func (a *Agreements) Capture(body []byte, role, source, version string, snap *do
 		return
 	}
 	rec, _ := snap.KnownRecord(version)
-	e := domain.Entry{AgreementID: id, ProviderPID: m.ProviderPID, ConsumerPID: m.ConsumerPID, Role: role, Version: version,
-		Manifest: rec.Manifest, RecordedAt: tL, Source: source}
+	e := domain.Entry{
+		AgreementID: id, ProviderPID: m.ProviderPID, ConsumerPID: m.ConsumerPID, Role: role, Version: version,
+		Manifest: rec.Manifest, RecordedAt: tL, Source: source,
+	}
 	for _, k := range []string{"odrl:profile", "profile", "http://www.w3.org/ns/odrl/2/profile"} {
 		if p, ok := m.Agreement[k].(string); ok {
 			e.DeclaredProfile = &p
@@ -90,11 +92,11 @@ func (a *Agreements) Admit(body []byte, snap *domain.Snapshot, tL timex.Instant,
 func (a *Agreements) Import(pairs []ImportPair, snap *domain.Snapshot) error {
 	for _, p := range pairs {
 		if snap == nil {
-			return codes.New(codes.ApiNotFound, "version %s is not known", p.Version)
+			return codes.New(codes.APINotFound, "version %s is not known", p.Version)
 		}
 		rec, ok := snap.KnownRecord(p.Version)
 		if !ok {
-			return codes.New(codes.ApiNotFound, "version %s is not known", p.Version)
+			return codes.New(codes.APINotFound, "version %s is not known", p.Version)
 		}
 		if err := a.Repo.Put(domain.Entry{AgreementID: p.AgreementID, Version: p.Version, Manifest: rec.Manifest, RecordedAt: a.Clock.Now(), Source: "import"}); err != nil {
 			return err
@@ -122,7 +124,7 @@ func (a *Agreements) Get(id string, snap *domain.Snapshot, tL timex.Instant) (Ag
 		return AgreementView{}, err
 	}
 	if !ok {
-		return AgreementView{}, codes.New(codes.ApiNotFound, "agreement %s not found", id)
+		return AgreementView{}, codes.New(codes.APINotFound, "agreement %s not found", id)
 	}
 	usable := true
 	if snap != nil {

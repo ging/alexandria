@@ -1,4 +1,4 @@
-// Revocation use case: applies REV-1..REV-4, appends a new signed record and issues a fresh listing.
+// Package app implements the revocation use case: applies REV-1..REV-4, appends a new signed record and issues a fresh listing.
 // The only date that may ever be added to an emitted record is revoked_from (REQ-HUB-007, REQ-HUB-014).
 package app
 
@@ -29,7 +29,7 @@ func (r *Revocation) Revoke(p domain.Principal, version string, o RevokeOptions)
 	}
 	v, err := semver.Parse(version)
 	if err != nil {
-		return nil, codes.New(codes.ApiNotFound, "version %s not found", version)
+		return nil, codes.New(codes.APINotFound, "version %s not found", version)
 	}
 	rel, err := r.d.Releases.Release(v)
 	if err != nil {

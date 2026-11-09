@@ -1,4 +1,4 @@
-// ProfileCompiler adapter over the eunomia.profiles/v1 language: a draft is a YAML stream with one SpaceProfile and its OdrlProfiles.
+// Package compiler_dsl is the ProfileCompiler adapter over the eunomia.profiles/v1 language: a draft is a YAML stream with one SpaceProfile and its OdrlProfiles.
 // Each slot's artefacts enter the package with the gates of its binding, so the space is a verifiable stack of specifications (REQ-HUB-001, REQ-HUB-004, DP-6).
 package compiler_dsl
 
@@ -101,6 +101,8 @@ func (c Compiler) Compile(doc []byte, ctx app.CompileContext) (domain.Compiled, 
 		return domain.Compiled{}, err
 	}
 	r.Lock.Manifest = string(ni.Sum(manifest))
-	return domain.Compiled{Space: sp.ID, Version: v, Class: class, Params: r.Lock.Lifecycle, Manifest: manifest,
-		SpaceLock: r.Lock.JSON(), Files: files, Entries: entries}, nil
+	return domain.Compiled{
+		Space: sp.ID, Version: v, Class: class, Params: r.Lock.Lifecycle, Manifest: manifest,
+		SpaceLock: r.Lock.JSON(), Files: files, Entries: entries,
+	}, nil
 }

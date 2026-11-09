@@ -57,7 +57,7 @@ func New(deps Deps) (*Module, error) {
 	cfg := deps.Config
 	for _, p := range []string{cfg.SQLitePath, cfg.SigningKeyPath} {
 		if p != "" {
-			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
 				return nil, err
 			}
 		}

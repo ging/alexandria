@@ -1,4 +1,4 @@
-// VHub-Verdict header (RFC 9651 List of Tokens with parameters) and the DSP error bodies of §4.8.
+// Package domain builds the VHub-Verdict header (RFC 9651 List of Tokens with parameters) and the DSP error bodies of §4.8.
 // The header lists one item per enforce gate whose classification is not ok (REQ-CLI-013, DP-11).
 package domain
 

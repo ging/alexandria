@@ -1,4 +1,4 @@
-// Authoring use case: drafts with optimistic concurrency, validation and proposal of frozen candidates.
+// Package app implements the authoring use case: drafts with optimistic concurrency, validation and proposal of frozen candidates.
 // Candidates copy the compiled artefacts so later draft edits never change them (REQ-HUB-001, REQ-HUB-002, REQ-HUB-018, REQ-HUB-019).
 package app
 
@@ -62,21 +62,21 @@ func (a *Authoring) ReplaceDraft(p domain.Principal, id, ifMatch string, doc []b
 		return domain.Draft{}, err
 	}
 	if ifMatch == "" {
-		return domain.Draft{}, codes.New(codes.ApiPreconditionRequired, "PUT requires If-Match")
+		return domain.Draft{}, codes.New(codes.APIPreconditionRequired, "PUT requires If-Match")
 	}
 	cur, err := a.d.Drafts.Get(id)
 	if err != nil {
 		return domain.Draft{}, notFound(err, "draft "+id)
 	}
 	if cur.ETag != ifMatch {
-		return domain.Draft{}, codes.New(codes.ApiPreconditionFailed, "If-Match %s does not match %s", ifMatch, cur.ETag)
+		return domain.Draft{}, codes.New(codes.APIPreconditionFailed, "If-Match %s does not match %s", ifMatch, cur.ETag)
 	}
 	if err := a.check(doc, 3); err != nil {
 		return domain.Draft{}, err
 	}
 	d, err := a.d.Drafts.Replace(id, ifMatch, doc)
 	if errors.Is(err, ErrPreconditionFailed) {
-		return domain.Draft{}, codes.New(codes.ApiPreconditionFailed, "draft %s changed concurrently", id)
+		return domain.Draft{}, codes.New(codes.APIPreconditionFailed, "draft %s changed concurrently", id)
 	}
 	if err != nil {
 		return domain.Draft{}, notFound(err, "draft "+id)

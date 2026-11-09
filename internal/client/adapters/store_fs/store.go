@@ -1,4 +1,4 @@
-// Filesystem stores of the client: continuity (sequence, known dates, DID cache), verified packages and agreements.
+// Package store_fs provides the filesystem stores of the client: continuity (sequence, known dates, DID cache), verified packages and agreements.
 // Writes are atomic renames so a restart never sees half a state (REQ-SYS-006, REQ-CLI-005, REQ-CLI-017).
 package store_fs
 
@@ -31,7 +31,7 @@ var (
 
 // Open creates the state directory.
 func Open(dir string) (*Store, error) {
-	if err := os.MkdirAll(filepath.Join(dir, "packages"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "packages"), 0o750); err != nil {
 		return nil, err
 	}
 	return &Store{dir: dir}, nil
@@ -39,11 +39,11 @@ func Open(dir string) (*Store, error) {
 
 // writeAtomic writes a file through a temporary sibling and a rename.
 func writeAtomic(path string, b []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
 		return err
 	}
 	return os.Rename(tmp, path)
@@ -79,7 +79,7 @@ func (s *Store) Get(d ni.Digest) (pkgv.Files, bool, error) {
 	dir := s.pkgDir(d)
 	var f pkgv.Files
 	for name, dst := range map[string]*[]byte{"manifest.json": &f.Manifest, "manifest.sig": &f.Sig, "manifest.receipt": &f.Receipt, "space-lock.json": &f.SpaceLock} {
-		b, err := os.ReadFile(filepath.Join(dir, name))
+		b, err := os.ReadFile(filepath.Join(dir, name)) // #nosec G304 -- path under the client state dir.
 		if errors.Is(err, os.ErrNotExist) {
 			return pkgv.Files{}, false, nil
 		}
@@ -95,7 +95,7 @@ func (s *Store) Get(d ni.Digest) (pkgv.Files, bool, error) {
 			return err
 		}
 		rel, _ := filepath.Rel(root, p)
-		b, err := os.ReadFile(p)
+		b, err := os.ReadFile(p) // #nosec G304 G122 -- path under the client state dir.
 		f.Content[filepath.ToSlash(rel)] = b
 		return err
 	})

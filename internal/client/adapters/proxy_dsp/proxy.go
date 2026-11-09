@@ -1,9 +1,10 @@
-// L7 proxy for dsp-ingress, mgmt-ingress and dsp-egress: reads the body as bytes, calls Edge and writes its response.
+// Package proxy_dsp provides the L7 proxy for dsp-ingress, mgmt-ingress and dsp-egress: reads the body as bytes, calls Edge and writes its response.
 // Uses a raw RoundTrip instead of httputil.ReverseProxy so no header (X-Forwarded-For, User-Agent, Accept-Encoding) is added (REQ-SYS-003, REQ-CLI-014, REQ-CLI-019, REQ-CLI-022).
 package proxy_dsp
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -110,7 +111,7 @@ func (u *Upstream) Forward(r *app.Request) (*app.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	out, err := http.NewRequest(r.Method, t.String(), bytes.NewReader(r.Body))
+	out, err := http.NewRequestWithContext(context.Background(), r.Method, t.String(), bytes.NewReader(r.Body))
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +125,7 @@ func (u *Upstream) Forward(r *app.Request) (*app.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err

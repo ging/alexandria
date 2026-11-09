@@ -1,4 +1,4 @@
-// Local copy of the ODRL 2.2 Core and Common Vocabulary terms by category, used by N3 to check adopted terms.
+// Package dsl holds a local copy of the ODRL 2.2 Core and Common Vocabulary terms by category, used by N3 to check adopted terms.
 // Adopted terms are checked against this copy and never against the network (§8.4, §12 N3).
 package dsl
 
@@ -41,14 +41,4 @@ func init() {
 var categoryKind = map[string]string{
 	"actions": "action", "left_operands": "left_operand", "operators": "operator",
 	"right_operands": "right_operand", "party_functions": "party_function", "asset_relations": "asset_relation",
-}
-
-// isCore reports whether an action IRI is an ODRL Core action.
-func isCore(iri string) bool {
-	for _, c := range odrlCore {
-		if iri == Reserved["odrl"]+c {
-			return true
-		}
-	}
-	return false
 }

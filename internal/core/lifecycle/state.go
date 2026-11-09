@@ -1,4 +1,4 @@
-// Pure in-force computation and reference states of a version, with the lease margin as an argument.
+// Package lifecycle implements the pure in-force computation and reference states of a version, with the lease margin as an argument.
 // The hub uses margin 0 (§3.5) and the client margin L (§4.6) on the same code (REQ-CLI-009, REQ-SYS-007, REQ-HUB-009).
 package lifecycle
 
@@ -39,7 +39,7 @@ func InForce(rs []Record, v Record, t timex.Instant, m timex.Duration) bool {
 		return false
 	}
 	for _, w := range rs {
-		if semver.Less(v.Version, w.Version) && !(t < Ends(w).Add(m)) {
+		if semver.Less(v.Version, w.Version) && t >= Ends(w).Add(m) {
 			return false
 		}
 	}

@@ -3,20 +3,28 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"io"
 	"log"
 	"net/http"
+	"time"
 )
 
+// main serves the fake connector on the -listen address.
 func main() {
 	addr := flag.String("listen", "127.0.0.1:8282", "listen address")
 	flag.Parse()
 	log.Printf("fake-connector listening on %s", *addr)
-	log.Fatal(http.ListenAndServe(*addr, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b, _ := io.ReadAll(r.Body)
-		log.Printf("connector received %s %s (%d bytes)", r.Method, r.URL.Path, len(b))
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"@type":"Ack","received":"` + r.Method + " " + r.URL.Path + `"}`))
-	})))
+	srv := &http.Server{Addr: *addr, Handler: http.HandlerFunc(ack), ReadHeaderTimeout: 10 * time.Second}
+	log.Fatal(srv.ListenAndServe())
+}
+
+// ack logs the request and answers with a JSON acknowledgement naming it.
+func ack(w http.ResponseWriter, r *http.Request) {
+	b, _ := io.ReadAll(r.Body)
+	log.Printf("connector received %q %q (%d bytes)", r.Method, r.URL.Path, len(b)) // #nosec G706 -- values are quoted, so newlines cannot forge entries.
+	out, _ := json.Marshal(map[string]string{"@type": "Ack", "received": r.Method + " " + r.URL.Path})
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(out) // #nosec G705 -- JSON-encoded body served as application/json.
 }

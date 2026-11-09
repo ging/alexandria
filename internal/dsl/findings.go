@@ -1,4 +1,4 @@
-// Validation findings of the language with severity, code, document, JSON pointer and source line (§12).
+// Package dsl defines the validation findings of the language with severity, code, document, JSON pointer and source line (§12).
 // Codes are those of the language spec, not the closed vhub catalog of F5.
 package dsl
 

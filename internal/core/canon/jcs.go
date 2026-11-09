@@ -1,4 +1,4 @@
-// JSON Canonicalization Scheme (RFC 8785) used to produce the bytes that the hub signs.
+// Package canon implements the JSON Canonicalization Scheme (RFC 8785) used to produce the bytes that the hub signs.
 // One implementation shared by signer and verifier so both see identical bytes (REQ-HUB-010).
 package canon
 

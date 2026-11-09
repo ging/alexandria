@@ -1,4 +1,4 @@
-// Problem Details (RFC 9457) with the code, severity, path and line extensions of §3.6.
+// Package problem implements Problem Details (RFC 9457) with the code, severity, path and line extensions of §3.6.
 // Shared shape of every error body in /v1, the management API and the admin API (REQ-HUB-017, REQ-HUB-019).
 package problem
 

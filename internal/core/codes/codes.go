@@ -1,9 +1,10 @@
-// Closed catalog of error, warning and info codes loaded from the F5 table (catalog.tsv).
+// Package codes holds the closed catalog of error, warning and info codes loaded from the F5 table (catalog.tsv).
 // A code outside this catalog does not exist; POC_ codes live apart in compiler_poc and evaluator_poc (F5, REQ-CLI-021).
 package codes
 
 import (
 	_ "embed"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -33,32 +34,33 @@ type Entry struct {
 
 // Catalog codes, one constant per F5 row.
 const (
-	ApiForbiddenRole                Code = "API_FORBIDDEN_ROLE"
-	ApiPreconditionRequired         Code = "API_PRECONDITION_REQUIRED"
-	ApiPreconditionFailed           Code = "API_PRECONDITION_FAILED"
-	ApiNotFound                     Code = "API_NOT_FOUND"
-	ApiInvalidState                 Code = "API_INVALID_STATE"
-	ReleaseAborted                  Code = "RELEASE_ABORTED"
-	DatesGraceOnCompatible          Code = "DATES_GRACE_ON_COMPATIBLE"
-	DatesEmergencyOnCompatible      Code = "DATES_EMERGENCY_ON_COMPATIBLE"
-	DatesZeroGraceWithoutEmergency  Code = "DATES_ZERO_GRACE_WITHOUT_EMERGENCY"
-	DatesEmergencyWithGrace         Code = "DATES_EMERGENCY_WITH_GRACE"
-	DatesJustificationRequired      Code = "DATES_JUSTIFICATION_REQUIRED"
-	DatesNonMonotonic               Code = "DATES_NON_MONOTONIC"
-	DatesTooManyVersions            Code = "DATES_TOO_MANY_VERSIONS"
-	DatesRevocationTooEarly         Code = "DATES_REVOCATION_TOO_EARLY"
-	DatesRevokeLeavesNoHead         Code = "DATES_REVOKE_LEAVES_NO_HEAD"
-	DatesAlreadyRevoked             Code = "DATES_ALREADY_REVOKED"
-	LifecycleStalenessLtTtl         Code = "LIFECYCLE_STALENESS_LT_TTL"
-	LifecycleGraceZero              Code = "LIFECYCLE_GRACE_ZERO"
-	LifecycleSyncInterval           Code = "LIFECYCLE_SYNC_INTERVAL"
-	LifecycleClockSkew              Code = "LIFECYCLE_CLOCK_SKEW"
-	LifecycleLease                  Code = "LIFECYCLE_LEASE"
-	LifecyclePropagation            Code = "LIFECYCLE_PROPAGATION"
-	LifecycleMaxVersions            Code = "LIFECYCLE_MAX_VERSIONS"
-	ConfigSchema                    Code = "CONFIG_SCHEMA"
-	ConfigRouteOverlap              Code = "CONFIG_ROUTE_OVERLAP"
-	ConfigGateMessageMismatch       Code = "CONFIG_GATE_MESSAGE_MISMATCH"
+	APIForbiddenRole               Code = "API_FORBIDDEN_ROLE"
+	APIPreconditionRequired        Code = "API_PRECONDITION_REQUIRED"
+	APIPreconditionFailed          Code = "API_PRECONDITION_FAILED"
+	APINotFound                    Code = "API_NOT_FOUND"
+	APIInvalidState                Code = "API_INVALID_STATE"
+	ReleaseAborted                 Code = "RELEASE_ABORTED"
+	DatesGraceOnCompatible         Code = "DATES_GRACE_ON_COMPATIBLE"
+	DatesEmergencyOnCompatible     Code = "DATES_EMERGENCY_ON_COMPATIBLE"
+	DatesZeroGraceWithoutEmergency Code = "DATES_ZERO_GRACE_WITHOUT_EMERGENCY"
+	DatesEmergencyWithGrace        Code = "DATES_EMERGENCY_WITH_GRACE"
+	DatesJustificationRequired     Code = "DATES_JUSTIFICATION_REQUIRED"
+	DatesNonMonotonic              Code = "DATES_NON_MONOTONIC"
+	DatesTooManyVersions           Code = "DATES_TOO_MANY_VERSIONS"
+	DatesRevocationTooEarly        Code = "DATES_REVOCATION_TOO_EARLY"
+	DatesRevokeLeavesNoHead        Code = "DATES_REVOKE_LEAVES_NO_HEAD"
+	DatesAlreadyRevoked            Code = "DATES_ALREADY_REVOKED"
+	LifecycleStalenessLtTTL        Code = "LIFECYCLE_STALENESS_LT_TTL"
+	LifecycleGraceZero             Code = "LIFECYCLE_GRACE_ZERO"
+	LifecycleSyncInterval          Code = "LIFECYCLE_SYNC_INTERVAL"
+	LifecycleClockSkew             Code = "LIFECYCLE_CLOCK_SKEW"
+	LifecycleLease                 Code = "LIFECYCLE_LEASE"
+	LifecyclePropagation           Code = "LIFECYCLE_PROPAGATION"
+	LifecycleMaxVersions           Code = "LIFECYCLE_MAX_VERSIONS"
+	ConfigSchema                   Code = "CONFIG_SCHEMA"
+	ConfigRouteOverlap             Code = "CONFIG_ROUTE_OVERLAP"
+	ConfigGateMessageMismatch      Code = "CONFIG_GATE_MESSAGE_MISMATCH"
+	// #nosec G101 -- a code name, not a credential.
 	ConfigCredentialsUnreadable     Code = "CONFIG_CREDENTIALS_UNREADABLE"
 	ConfigUpstreamMissing           Code = "CONFIG_UPSTREAM_MISSING"
 	SyncUnreachable                 Code = "SYNC_UNREACHABLE"
@@ -159,6 +161,7 @@ func New(c Code, format string, args ...any) *Error {
 
 // As extracts a coded error from err, if any.
 func As(err error) (*Error, bool) {
-	ce, ok := err.(*Error)
+	var ce *Error
+	ok := errors.As(err, &ce)
 	return ce, ok
 }

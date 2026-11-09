@@ -1,4 +1,4 @@
-// Vendored profiles: external specifications copied and pinned locally, such as DCAT-AP shapes or DSP schemas.
+// Package dsl resolves vendored profiles: external specifications copied and pinned locally, such as DCAT-AP shapes or DSP schemas.
 // Lookup reads <slot>/<version>/vendor.json from a file system and never touches the network (§11.3 source: vendored).
 package dsl
 

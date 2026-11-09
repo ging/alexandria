@@ -265,11 +265,11 @@ func f8ModuleFallback() map[string][]string {
 
 // readFirstTwoLines returns the concatenated first two lines of a file.
 func readFirstTwoLines(path string) (string, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 -- repository file found by the walk.
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	sc := bufio.NewScanner(f)
 	var lines []string
 	for i := 0; i < 2 && sc.Scan(); i++ {
@@ -328,7 +328,7 @@ func scanTestFiles(root string, catalog []codeRow) (map[string][]string, map[str
 			if !strings.HasSuffix(path, "_test.go") {
 				return nil
 			}
-			data, err := os.ReadFile(path)
+			data, err := os.ReadFile(path) // #nosec G304 G122 -- repository file found by the walk.
 			if err != nil {
 				return err
 			}
@@ -363,7 +363,7 @@ func scanTestFiles(root string, catalog []codeRow) (map[string][]string, map[str
 
 // loadCatalog parses the 64 normative codes from internal/core/codes/catalog.tsv.
 func loadCatalog(path string) ([]codeRow, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- fixed catalog path of this repository.
 	if err != nil {
 		return nil, err
 	}
@@ -402,10 +402,10 @@ func writeTraceabilityMarkdown(
 	b.WriteString("# Matriz de Trazabilidad (`REQ-*` → Sección → Módulo → Prueba `T-*` y Catálogo `N-*`)\n\n")
 	b.WriteString("Generado automáticamente por `go run ./conformance/trace`.\n\n")
 	b.WriteString("## Resumen de cobertura\n\n")
-	b.WriteString(fmt.Sprintf("- **Requisitos normativos (F2, F3, F4):** %d / %d cubiertos con módulos y pruebas `TestT_*`.\n", len(allRequirements), len(allRequirements)))
-	b.WriteString(fmt.Sprintf("- **Paquetes de producción verificados (`cmd/` + `internal/`):** %d paquetes con referencia explícita a `REQ-*`.\n", len(pkgReqs)))
-	b.WriteString(fmt.Sprintf("- **Códigos del catálogo cerrado F5:** %d / %d cubiertos con casos negativos `N-<CÓDIGO>` (%d inalcanzable en la PoC por DP-7 y documentado en `OPEN_QUESTIONS.md`).\n\n",
-		len(catalog)-len(unreachable), len(catalog), len(unreachable)))
+	fmt.Fprintf(&b, "- **Requisitos normativos (F2, F3, F4):** %d / %d cubiertos con módulos y pruebas `TestT_*`.\n", len(allRequirements), len(allRequirements))
+	fmt.Fprintf(&b, "- **Paquetes de producción verificados (`cmd/` + `internal/`):** %d paquetes con referencia explícita a `REQ-*`.\n", len(pkgReqs))
+	fmt.Fprintf(&b, "- **Códigos del catálogo cerrado F5:** %d / %d cubiertos con casos negativos `N-<CÓDIGO>` (%d inalcanzable en la PoC por DP-7 y documentado en `OPEN_QUESTIONS.md`).\n\n",
+		len(catalog)-len(unreachable), len(catalog), len(unreachable))
 
 	b.WriteString("## 1. Trazabilidad Requisito → Sección → Módulo(s) → Prueba(s) `T-*`\n\n")
 	b.WriteString("| Requisito | Sección | Módulo(s) | Prueba(s) `T-*` |\n")
@@ -413,7 +413,7 @@ func writeTraceabilityMarkdown(
 	for _, r := range allRequirements {
 		mods := formatBacktickList(reqMods[r.id])
 		tests := formatBacktickList(reqTests[r.id])
-		b.WriteString(fmt.Sprintf("| `%s` | %s | %s | %s |\n", r.id, r.sections, mods, tests))
+		fmt.Fprintf(&b, "| `%s` | %s | %s | %s |\n", r.id, r.sections, mods, tests)
 	}
 
 	b.WriteString("\n## 2. Trazabilidad inversa Módulo → Requisitos (`§8.8`)\n\n")
@@ -425,7 +425,7 @@ func writeTraceabilityMarkdown(
 	}
 	sort.Strings(pkgs)
 	for _, pkg := range pkgs {
-		b.WriteString(fmt.Sprintf("| `%s` | %s |\n", pkg, formatBacktickList(pkgReqs[pkg])))
+		fmt.Fprintf(&b, "| `%s` | %s |\n", pkg, formatBacktickList(pkgReqs[pkg]))
 	}
 
 	b.WriteString("\n## 3. Cobertura del catálogo cerrado de códigos F5 (`N-<CÓDIGO>`)\n\n")
@@ -439,10 +439,10 @@ func writeTraceabilityMarkdown(
 		} else if note, ok := unreachable[c.code]; ok {
 			status = fmt.Sprintf("_N/A en PoC_: %s", note)
 		}
-		b.WriteString(fmt.Sprintf("| `%s` | %s | %s | `%s` | %s | %s |\n",
-			c.code, c.emitter, c.channel, c.severity, c.reqs, status))
+		fmt.Fprintf(&b, "| `%s` | %s | %s | `%s` | %s | %s |\n",
+			c.code, c.emitter, c.channel, c.severity, c.reqs, status)
 	}
-	return os.WriteFile(outPath, []byte(b.String()), 0o644)
+	return os.WriteFile(outPath, []byte(b.String()), 0o644) // #nosec G306 -- generated documentation, world-readable on purpose.
 }
 
 // formatBacktickList formats a string slice as comma-separated markdown code spans.

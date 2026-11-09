@@ -1,4 +1,4 @@
-// Server domain: principals and the §3.6 role matrix, drafts, candidates, releases, revocations and events.
+// Package domain holds the server domain: principals and the §3.6 role matrix, drafts, candidates, releases, revocations and events.
 // Pure types and rules with no I/O; the authz matrix is checked cell by cell (REQ-HUB-002, REQ-HUB-003, REQ-HUB-017).
 package domain
 

@@ -1,4 +1,4 @@
-// Minimal JSONPath (RFC 9535) subset for body.select: $, .name, ['name'] and [index] segments.
+// Package domain provides a minimal JSONPath (RFC 9535) subset for body.select: $, .name, ['name'] and [index] segments.
 // A body that is not JSON, or a path that does not select exactly one node, is MESSAGE_UNPARSEABLE (§4.3, §4.7, REQ-CLI-011).
 package domain
 

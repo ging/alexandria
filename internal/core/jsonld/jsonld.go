@@ -1,4 +1,4 @@
-// Offline JSON-LD 1.1 expansion with json-gold: the loader only serves the documents it was given, never the network.
+// Package jsonld provides offline JSON-LD 1.1 expansion with json-gold: the loader only serves the documents it was given, never the network.
 // Shared by the compiler (N5 context check) and the client evaluator, so both expand alike (D-PVP-1, REQ-CLI-010, REQ-SYS-001).
 package jsonld
 

@@ -33,7 +33,7 @@ func admin(t *testing.T, ts string) (*httptest.Server, *testkit.Client) {
 // get fetches a path and returns status and body.
 func get(t *testing.T, srv *httptest.Server, method, path, body string) (int, string) {
 	t.Helper()
-	req, _ := http.NewRequest(method, srv.URL+path, strings.NewReader(body))
+	req, _ := http.NewRequestWithContext(t.Context(), method, srv.URL+path, strings.NewReader(body))
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

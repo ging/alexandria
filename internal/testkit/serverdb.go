@@ -1,4 +1,4 @@
-// In-memory implementations of the alexandria-server repositories with per-step fault injection.
+// Package testkit provides in-memory implementations of the alexandria-server repositories with per-step fault injection.
 // Lets app tests inject failures at each REQ-HUB-004 step and run without SQLite (F8 §8.7).
 package testkit
 
@@ -38,8 +38,10 @@ type MemDB struct {
 
 // NewMemDB returns an empty store.
 func NewMemDB() *MemDB {
-	return &MemDB{drafts: map[string]domain.Draft{}, candidates: map[string]domain.Candidate{}, decisions: map[string]domain.Candidate{},
-		revocations: map[string]domain.Revocation{}, blobs: map[string][]byte{}}
+	return &MemDB{
+		drafts: map[string]domain.Draft{}, candidates: map[string]domain.Candidate{}, decisions: map[string]domain.Candidate{},
+		revocations: map[string]domain.Revocation{}, blobs: map[string][]byte{},
+	}
 }
 
 // MemDrafts adapts MemDB to DraftRepo.

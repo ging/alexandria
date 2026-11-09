@@ -1,4 +1,4 @@
-// Route table of the client: listeners, gates, modes, segment matching and the CFG-2, CFG-3 and CFG-5 invariants.
+// Package domain provides the route table of the client: listeners, gates, modes, segment matching and the CFG-2, CFG-3 and CFG-5 invariants.
 // Includes the default DSP route annex in observe mode (§4.3, Anexo de rutas DSP, REQ-CLI-001, REQ-CLI-022, DP-10).
 package domain
 

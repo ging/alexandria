@@ -1,4 +1,4 @@
-// Release use case: approval runs the five ordered steps of REQ-HUB-004; rejection returns a candidate to draft.
+// Package app implements the release use case: approval runs the five ordered steps of REQ-HUB-004; rejection returns a candidate to draft.
 // Steps 1–4 change nothing visible until AppendRelease, so any failure leaves /pub and the listing untouched (REQ-HUB-003..006).
 package app
 
@@ -36,14 +36,14 @@ func (r *Release) Approve(p domain.Principal, id string, o ApproveOptions) ([]by
 		return nil, notFound(err, "candidate "+id)
 	}
 	if c.State != domain.Open {
-		return nil, codes.New(codes.ApiInvalidState, "candidate %s is %s", id, c.State)
+		return nil, codes.New(codes.APIInvalidState, "candidate %s is %s", id, c.State)
 	}
 	ctx, err := compileContext(r.d)
 	if err != nil {
 		return nil, err
 	}
 	if ctx.Latest != nil && !semver.Less(*ctx.Latest, c.Version) {
-		return nil, codes.New(codes.ApiInvalidState, "version %s is not greater than published %s", c.Version, *ctx.Latest)
+		return nil, codes.New(codes.APIInvalidState, "version %s is not greater than published %s", c.Version, *ctx.Latest)
 	}
 	pInstant := r.d.Clock.Now()
 	rec, err := r.steps(c, o, pInstant)
@@ -116,7 +116,7 @@ func (r *Release) Reject(p domain.Principal, id, comment string) (domain.Candida
 		return domain.Candidate{}, notFound(err, "candidate "+id)
 	}
 	if c.State != domain.Open {
-		return domain.Candidate{}, codes.New(codes.ApiInvalidState, "candidate %s is %s", id, c.State)
+		return domain.Candidate{}, codes.New(codes.APIInvalidState, "candidate %s is %s", id, c.State)
 	}
 	if err := r.d.Candidates.Reject(id, comment); err != nil {
 		return domain.Candidate{}, err

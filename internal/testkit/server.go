@@ -1,4 +1,4 @@
-// In-process alexandria-server built on the in-memory doubles, plus F6 drafts and principals.
+// Package testkit provides an in-process alexandria-server built on the in-memory doubles, plus F6 drafts and principals.
 // Server and client tests share it to publish real signed listings and packages without network (F8 §8.7).
 package testkit
 

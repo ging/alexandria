@@ -3,6 +3,7 @@
 package conformance
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -19,7 +20,7 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	binDir = dir
-	cmd := exec.Command("go", "build", "-o", dir+string(filepath.Separator), "./cmd/alexandria-server", "./cmd/alexandria-client", "./deploy/fake-connector")
+	cmd := exec.CommandContext(context.Background(), "go", "build", "-o", dir+string(filepath.Separator), "./cmd/alexandria-server", "./cmd/alexandria-client", "./deploy/fake-connector")
 	cmd.Dir = ".."
 	if out, err := cmd.CombinedOutput(); err != nil {
 		fmt.Fprintf(os.Stderr, "build: %v\n%s", err, out)

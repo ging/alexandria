@@ -1,4 +1,4 @@
-// Driving adapter for the public /pub API: head redirect, versioned artefacts, package files and blobs by hash.
+// Package http_pub is the driving adapter for the public /pub API: head redirect, versioned artefacts, package files and blobs by hash.
 // Versioned and hash-addressed routes are immutable with ETag = SHA-256 of the bytes (REQ-SYS-005, REQ-HUB-011, REQ-HUB-016, DP-15).
 package http_pub
 
@@ -36,7 +36,7 @@ func (h Handler) serve(w http.ResponseWriter, r *http.Request) {
 		b, mt, err := h.Pub.VersionedFile(seg[0], seg[1], strings.Join(seg[2:], "/"))
 		immutable(w, b, mt, err)
 	default:
-		httpx.WriteError(w, codes.New(codes.ApiNotFound, "%s not found", r.URL.Path))
+		httpx.WriteError(w, codes.New(codes.APINotFound, "%s not found", r.URL.Path))
 	}
 }
 
@@ -61,5 +61,5 @@ func immutable(w http.ResponseWriter, b []byte, mediaType string, err error) {
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	w.Header().Set("ETag", `"`+ni.HexSum(b)+`"`)
 	w.Header().Set("Content-Type", mediaType)
-	_, _ = w.Write(b)
+	_, _ = w.Write(b) // #nosec G705 -- immutable package bytes served with their declared media type.
 }

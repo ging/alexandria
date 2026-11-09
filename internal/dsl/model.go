@@ -1,4 +1,4 @@
-// Document model of the eunomia.profiles/v1 language: OdrlProfile and SpaceProfile (ConformanceSuite is out of scope).
+// Package dsl defines the document model of the eunomia.profiles/v1 language: OdrlProfile and SpaceProfile (ConformanceSuite is out of scope).
 // Typed view of a YAML document after it has passed the normative schema (Parte II §7–§11).
 package dsl
 

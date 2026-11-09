@@ -1,4 +1,4 @@
-// Emitters of context.jsonld and schema.json: one alias per term, and a self-contained Draft 2020-12 schema over the compact policy.
+// Package dsl provides the emitters of context.jsonld and schema.json: one alias per term, and a self-contained Draft 2020-12 schema over the compact policy.
 // The schema does not $ref the DSP schemas remotely, so gates never resolve anything against the network (§13.1, D6).
 package dsl
 

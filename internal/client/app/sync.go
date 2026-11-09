@@ -1,9 +1,10 @@
-// Sync: obtains the listing, applies S1–S13, persists continuity and publishes a new snapshot atomically.
+// Package app implements Sync: obtains the listing, applies S1–S13, persists continuity and publishes a new snapshot atomically.
 // Any failure keeps the previous snapshot and emits vhub.sync with its code; a bad package discards the whole listing (REQ-CLI-003..007).
 package app
 
 import (
 	"encoding/json"
+	"errors"
 	"sync"
 	"sync/atomic"
 
@@ -138,7 +139,7 @@ func (s *Sync) Run() *codes.Error {
 func (s *Sync) run(now timex.Instant) *codes.Error {
 	resp, err := s.Hub.Listing()
 	switch {
-	case err == ErrUnauthorized:
+	case errors.Is(err, ErrUnauthorized):
 		return codes.New(codes.SyncUnauthorized, "GET /v1/versions refused the credentials")
 	case err != nil:
 		return codes.New(codes.SyncUnreachable, "%v", err)
@@ -161,7 +162,7 @@ func (s *Sync) run(now timex.Instant) *codes.Error {
 	if err := json.Unmarshal(raw.Signed, &l); err != nil || l.Type != lifecycle.ListingType {
 		return codes.New(codes.SyncSignatureInvalid, "listing content: %v", err)
 	}
-	if !(now < l.ExpiresAt) {
+	if now >= l.ExpiresAt {
 		return codes.New(codes.SyncExpired, "expires_at %s is not after %s", l.ExpiresAt, now)
 	}
 	identical, cerr := lifecycle.CheckContinuity(s.accepted, l, resp.Body)

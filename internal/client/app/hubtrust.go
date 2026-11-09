@@ -1,4 +1,4 @@
-// HubTrust: cached hub DID document and signature verification following V1–V4 of §4.4.1.
+// Package app implements HubTrust: cached hub DID document and signature verification following V1–V4 of §4.4.1.
 // A failed verification triggers at most one re-resolution per minute; the latest resolution always replaces the cache (REQ-CLI-024, REQ-CLI-027).
 package app
 

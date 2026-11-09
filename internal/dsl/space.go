@@ -1,4 +1,4 @@
-// SpaceProfile levels N2 and N3: one binding per slot, gates for mandatory bindings, lifecycle invariants and binding resolution.
+// Package dsl implements the SpaceProfile levels N2 and N3: one binding per slot, gates for mandatory bindings, lifecycle invariants and binding resolution.
 // Internal bindings resolve against OdrlProfile releases in the bundle; vendored ones against a local vendor store (§11, §12).
 package dsl
 

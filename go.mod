@@ -1,6 +1,6 @@
 module github.com/ging/alexandria
 
-go 1.26.6
+go 1.26.10
 
 tool (
 	github.com/air-verse/air

@@ -1,4 +1,4 @@
-// In-process alexandria-client wired to an in-memory hub through fake HubAPI and DIDResolver adapters with fault injection.
+// Package testkit provides an in-process alexandria-client wired to an in-memory hub through fake HubAPI and DIDResolver adapters with fault injection.
 // Lets client tests replay F6 and corrupt listings, packages and DID documents without network (F8 §8.7).
 package testkit
 
@@ -323,8 +323,10 @@ func (noMetrics) Classified(string, string, string) {}
 
 // NewClient builds a client on the server's clock with the given routes.
 func NewClient(s *Server, routes []domain.Route) *Client {
-	c := &Client{Hub: &FakeHub{S: s}, Resolver: &FakeResolver{S: s}, Events: &Recorder{}, Upstream: &FakeUpstream{},
-		Continuity: &MemContinuity{}, Packages: &MemPackages{}, Repo: &MemAgreements{}, Clock: s.Clock}
+	c := &Client{
+		Hub: &FakeHub{S: s}, Resolver: &FakeResolver{S: s}, Events: &Recorder{}, Upstream: &FakeUpstream{},
+		Continuity: &MemContinuity{}, Packages: &MemPackages{}, Repo: &MemAgreements{}, Clock: s.Clock,
+	}
 	c.wire(routes, "forward", "forward")
 	return c
 }
@@ -337,10 +339,14 @@ func (c *Client) wire(routes []domain.Route, defaultAction, unknown string) {
 	c.Agreements = &app.Agreements{Repo: c.Repo, Events: c.Events, Clock: c.Clock, Space: Space}
 	c.Audit = &app.Audit{Window: 100, Evaluator: ev, Events: c.Events, Clock: c.Clock, Space: Space}
 	c.Status = &app.Status{Cell: c.Cell, Clock: c.Clock, Trust: c.Trust, Packages: c.Packages, Events: c.Events, Space: Space, HubDID: string(HubDID), Gates: map[domain.Gate]domain.Mode{}}
-	c.Sync = &app.Sync{Hub: c.Hub, Trust: c.Trust, Receipts: receipt_scitt_fake.Verifier{}, Continuity: c.Continuity, Packages: c.Packages,
-		Agreements: c.Agreements, Audit: c.Audit, Status: c.Status, Cell: c.Cell, Clock: c.Clock, Events: c.Events, Space: Space}
-	c.Edge = &app.Edge{Cell: c.Cell, Clock: c.Clock, Evaluator: ev, Upstream: c.Upstream, Agreements: c.Agreements, Audit: c.Audit,
-		Events: c.Events, Metrics: noMetrics{}, Routes: routes, DefaultAction: defaultAction, UnknownAgreement: unknown, Space: Space}
+	c.Sync = &app.Sync{
+		Hub: c.Hub, Trust: c.Trust, Receipts: receipt_scitt_fake.Verifier{}, Continuity: c.Continuity, Packages: c.Packages,
+		Agreements: c.Agreements, Audit: c.Audit, Status: c.Status, Cell: c.Cell, Clock: c.Clock, Events: c.Events, Space: Space,
+	}
+	c.Edge = &app.Edge{
+		Cell: c.Cell, Clock: c.Clock, Evaluator: ev, Upstream: c.Upstream, Agreements: c.Agreements, Audit: c.Audit,
+		Events: c.Events, Metrics: noMetrics{}, Routes: routes, DefaultAction: defaultAction, UnknownAgreement: unknown, Space: Space,
+	}
 }
 
 // Configure rebuilds the client with other policies, keeping its stores (simulates a restart).
@@ -358,12 +364,18 @@ func (c *Client) Send(l domain.Listener, method, path string, body []byte) *app.
 func F6Routes() []domain.Route {
 	sel := func(s string) *domain.Body { return &domain.Body{Select: s} }
 	return []domain.Route{
-		{Listener: domain.DSPIngress, Match: domain.Match{Method: "POST", Path: "/negotiations/request"}, Message: "ContractRequestMessage",
-			Gates: []domain.Gate{domain.GateDSP, domain.GatePolicy}, Mode: domain.Enforce, Body: sel("$.offer.permission[0]")},
-		{Listener: domain.DSPEgress, Match: domain.Match{Method: "POST", Path: "/negotiations/:consumerPid/agreement"}, Message: "ContractAgreementMessage",
-			Gates: []domain.Gate{domain.GateDSP, domain.GatePolicy}, Mode: domain.Enforce, Body: sel("$.agreement.permission[0]")},
-		{Listener: domain.DSPIngress, Match: domain.Match{Method: "POST", Path: "/transfers/request"}, Message: "TransferRequestMessage",
-			Gates: []domain.Gate{domain.GateDSP, domain.GateAdmission}, Mode: domain.Enforce},
+		{
+			Listener: domain.DSPIngress, Match: domain.Match{Method: "POST", Path: "/negotiations/request"}, Message: "ContractRequestMessage",
+			Gates: []domain.Gate{domain.GateDSP, domain.GatePolicy}, Mode: domain.Enforce, Body: sel("$.offer.permission[0]"),
+		},
+		{
+			Listener: domain.DSPEgress, Match: domain.Match{Method: "POST", Path: "/negotiations/:consumerPid/agreement"}, Message: "ContractAgreementMessage",
+			Gates: []domain.Gate{domain.GateDSP, domain.GatePolicy}, Mode: domain.Enforce, Body: sel("$.agreement.permission[0]"),
+		},
+		{
+			Listener: domain.DSPIngress, Match: domain.Match{Method: "POST", Path: "/transfers/request"}, Message: "TransferRequestMessage",
+			Gates: []domain.Gate{domain.GateDSP, domain.GateAdmission}, Mode: domain.Enforce,
+		},
 	}
 }
 
