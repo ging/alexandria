@@ -1,0 +1,103 @@
+{
+  "space": "https://example.com/spaces/demo/profile",
+  "trust": {
+    "hub_did": "did:web:hub.example.com",
+    "hub": "https://hub.example.com",
+    "credentials": "file:///etc/vhub-client/credentials.json"
+  },
+  "upstreams": {
+    "dsp": "http://connector:8282/protocol",
+    "management": "http://connector:8181/management"
+  },
+  "listeners": {
+    "dsp-ingress": {
+      "bind": "0.0.0.0:8443"
+    },
+    "mgmt-ingress": {
+      "bind": "127.0.0.1:9181"
+    },
+    "dsp-egress": {
+      "bind": "127.0.0.1:3128"
+    },
+    "admin": {
+      "bind": "127.0.0.1:9900"
+    }
+  },
+  "routes": [
+    {
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/negotiations/request"
+      },
+      "message": "ContractRequestMessage",
+      "gates": [
+        "dsp_message",
+        "policy_intake"
+      ],
+      "mode": "enforce"
+    },
+    {
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/transfers/request"
+      },
+      "message": "TransferRequestMessage",
+      "gates": [
+        "dsp_message",
+        "agreement_admission"
+      ],
+      "mode": "enforce"
+    },
+    {
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/catalog/request"
+      },
+      "message": "CatalogRequestMessage",
+      "gates": [
+        "dsp_message"
+      ],
+      "mode": "shadow",
+      "validate_response": {
+        "gate": "catalog_entry",
+        "mode": "shadow"
+      }
+    },
+    {
+      "listener": "dsp-egress",
+      "match": {
+        "method": "POST",
+        "path": "/negotiations/:consumerPid/agreement"
+      },
+      "message": "ContractAgreementMessage",
+      "gates": [
+        "dsp_message",
+        "policy_intake"
+      ],
+      "mode": "enforce"
+    },
+    {
+      "listener": "mgmt-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/v3/policydefinitions"
+      },
+      "message": "management",
+      "body": {
+        "select": "$.policy"
+      },
+      "gates": [
+        "policy_intake"
+      ],
+      "mode": "shadow"
+    }
+  ],
+  "default_action": "forward",
+  "unknown_agreement": "forward",
+  "events": {
+    "sink": "file:///var/log/vhub-client/events.jsonl"
+  }
+}
