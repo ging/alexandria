@@ -44,4 +44,6 @@ func TestDidTTLLookaheadEmulated(t *testing.T) {
 }
 
 // fmtS substitutes the single %s of a template.
-func fmtS(tpl, v string) string { return string(bytes.Replace([]byte(tpl), []byte("%s"), []byte(v), 1)) }
+func fmtS(tpl, v string) string {
+	return string(bytes.Replace([]byte(tpl), []byte("%s"), []byte(v), 1))
+}
