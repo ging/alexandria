@@ -1,0 +1,248 @@
+{
+  "space": "https://example.com/spaces/demo",
+  "trust": {
+    "hub_did": "did:web:localhost%3A8080",
+    "hub": "https://localhost:8080",
+    "credentials": "file:deploy/credentials.json"
+  },
+  "upstreams": {
+    "dsp": "http://127.0.0.1:8282/protocol"
+  },
+  "listeners": {
+    "dsp-ingress": {
+      "bind": "127.0.0.1:8443"
+    },
+    "dsp-egress": {
+      "bind": "127.0.0.1:3128"
+    },
+    "admin": {
+      "bind": "127.0.0.1:9900"
+    }
+  },
+  "routes": [
+    {
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/catalog/request"
+      },
+      "message": "CatalogRequestMessage",
+      "gates": [
+        "dsp_message"
+      ],
+      "mode": "observe",
+      "validate_response": {
+        "gate": "catalog_entry",
+        "mode": "shadow"
+      }
+    },
+    {
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "GET",
+        "path": "/catalog/datasets/:id"
+      },
+      "message": "DatasetRequestMessage",
+      "gates": [
+        "dsp_message"
+      ],
+      "mode": "observe",
+      "validate_response": {
+        "gate": "catalog_entry",
+        "mode": "shadow"
+      }
+    },
+    {
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/negotiations/request"
+      },
+      "message": "ContractRequestMessage",
+      "gates": [
+        "dsp_message",
+        "policy_intake"
+      ],
+      "mode": "enforce",
+      "body": {
+        "select": "$.offer.permission[0]"
+      }
+    },
+    {
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/negotiations/:providerPid/request"
+      },
+      "message": "ContractRequestMessage",
+      "gates": [
+        "dsp_message",
+        "policy_intake"
+      ],
+      "mode": "enforce",
+      "body": {
+        "select": "$.offer.permission[0]"
+      }
+    },
+    {
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/negotiations/:pid/events"
+      },
+      "message": "ContractNegotiationEventMessage",
+      "gates": [
+        "dsp_message"
+      ],
+      "mode": "observe"
+    },
+    {
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/negotiations/:providerPid/agreement/verification"
+      },
+      "message": "ContractAgreementVerificationMessage",
+      "gates": [
+        "dsp_message"
+      ],
+      "mode": "observe"
+    },
+    {
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/negotiations/:pid/termination"
+      },
+      "message": "ContractNegotiationTerminationMessage",
+      "gates": [
+        "dsp_message"
+      ],
+      "mode": "observe"
+    },
+    {
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/negotiations/offers"
+      },
+      "message": "ContractOfferMessage",
+      "gates": [
+        "dsp_message",
+        "policy_intake"
+      ],
+      "mode": "observe"
+    },
+    {
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/negotiations/:consumerPid/offers"
+      },
+      "message": "ContractOfferMessage",
+      "gates": [
+        "dsp_message",
+        "policy_intake"
+      ],
+      "mode": "observe"
+    },
+    {
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/negotiations/:consumerPid/agreement"
+      },
+      "message": "ContractAgreementMessage",
+      "gates": [
+        "dsp_message",
+        "policy_intake"
+      ],
+      "mode": "enforce",
+      "body": {
+        "select": "$.agreement.permission[0]"
+      }
+    },
+    {
+      "listener": "dsp-egress",
+      "match": {
+        "method": "POST",
+        "path": "/negotiations/:consumerPid/agreement"
+      },
+      "message": "ContractAgreementMessage",
+      "gates": [
+        "dsp_message",
+        "policy_intake"
+      ],
+      "mode": "enforce",
+      "body": {
+        "select": "$.agreement.permission[0]"
+      }
+    },
+    {
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/transfers/request"
+      },
+      "message": "TransferRequestMessage",
+      "gates": [
+        "dsp_message",
+        "agreement_admission"
+      ],
+      "mode": "enforce"
+    },
+    {
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/transfers/:pid/start"
+      },
+      "message": "TransferStartMessage",
+      "gates": [
+        "dsp_message"
+      ],
+      "mode": "observe"
+    },
+    {
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/transfers/:pid/completion"
+      },
+      "message": "TransferCompletionMessage",
+      "gates": [
+        "dsp_message"
+      ],
+      "mode": "observe"
+    },
+    {
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/transfers/:pid/suspension"
+      },
+      "message": "TransferSuspensionMessage",
+      "gates": [
+        "dsp_message"
+      ],
+      "mode": "observe"
+    },
+    {
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/transfers/:pid/termination"
+      },
+      "message": "TransferTerminationMessage",
+      "gates": [
+        "dsp_message"
+      ],
+      "mode": "observe"
+    }
+  ],
+  "default_action": "forward",
+  "unknown_agreement": "forward",
+  "events": {
+    "sink": "file:var/client/events.jsonl"
+  }
+}
