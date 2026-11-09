@@ -3,7 +3,7 @@
   "trust": {
     "hub_did": "did:web:hub.example.com",
     "hub": "https://hub.example.com",
-    "credentials": "file:///etc/vhub-client/credentials.json"
+    "credentials": "file:///etc/alexandria-client/credentials.json"
   },
   "upstreams": {
     "dsp": "http://connector:8282/protocol",
@@ -98,6 +98,6 @@
   "default_action": "forward",
   "unknown_agreement": "forward",
   "events": {
-    "sink": "file:///var/log/vhub-client/events.jsonl"
+    "sink": "file:///var/log/alexandria-client/events.jsonl"
   }
 }

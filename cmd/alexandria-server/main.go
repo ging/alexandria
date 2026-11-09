@@ -1,4 +1,4 @@
-// Composition root of vhub-server: loads server.json, wires internal/server.Module, and serves HTTP.
+// Composition root of alexandria-server: loads server.json, wires internal/server.Module, and serves HTTP.
 // Mounts /v1, /pub and /.well-known/did.json and starts the listing scheduler (REQ-HUB-008, DP-2, DP-3, DP-4, DP-8, DP-9, DP-12).
 package main
 
@@ -20,13 +20,13 @@ import (
 	"github.com/ging/alexandria/internal/server/config"
 )
 
-// main parses flags and starts the vhub-server process.
+// main parses flags and starts the alexandria-server process.
 func main() {
 	cfgPath := flag.String("config", "config/server.json", "path to server.json")
 	clockFile := flag.String("clock-file", "", "read the current instant from this file (PoC and tests only)")
 	flag.Parse()
 	if err := run(*cfgPath, *clockFile); err != nil {
-		fmt.Fprintln(os.Stderr, "vhub-server:", err)
+		fmt.Fprintln(os.Stderr, "alexandria-server:", err)
 		os.Exit(1)
 	}
 }
@@ -61,7 +61,7 @@ func run(cfgPath, clockFile string) error {
 		<-ctx.Done()
 		_ = srv.Shutdown(context.Background())
 	}()
-	log.Printf("vhub-server listening on %s as %s (PoC: not for production)", cfg.Listen, cfg.DID)
+	log.Printf("alexandria-server listening on %s as %s (PoC: not for production)", cfg.Listen, cfg.DID)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}

@@ -1,4 +1,4 @@
-// Loader of the normative vhub-client configuration (Appendix A.3) with the CFG-1..CFG-5 startup invariants in order.
+// Loader of the normative alexandria-client configuration (Appendix A.3) with the CFG-1..CFG-5 startup invariants in order.
 // JSON only in the PoC; YAML is not supported (agent decision). The first failing code is reported (§4.3, REQ-CLI-001, REQ-DOC-003).
 package config
 

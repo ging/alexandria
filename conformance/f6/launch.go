@@ -43,7 +43,7 @@ func Routes() []map[string]any {
 	}
 }
 
-// Launch starts fake-connector, vhub-server and vhub-client from binDir with state in work; stop kills them.
+// Launch starts fake-connector, alexandria-server and alexandria-client from binDir with state in work; stop kills them.
 func Launch(binDir, work string, log io.Writer) (Env, func(), error) {
 	var ports [5]int
 	for i := range ports {
@@ -68,7 +68,7 @@ func Launch(binDir, work string, log io.Writer) (Env, func(), error) {
 	tokens := map[string]any{
 		"editor-token":   map[string]any{"principal": "steward", "roles": []string{"editor"}},
 		"releaser-token": map[string]any{"principal": "releaser", "roles": []string{"releaser"}},
-		"member-token":   map[string]any{"principal": "vhub-client", "roles": []string{"member"}},
+		"member-token":   map[string]any{"principal": "alexandria-client", "roles": []string{"member"}},
 	}
 	_ = writeJSON(filepath.Join(work, "tokens.json"), tokens)
 	_ = writeJSON(filepath.Join(work, "server.json"), map[string]any{
@@ -108,8 +108,8 @@ func Launch(binDir, work string, log io.Writer) (Env, func(), error) {
 		ping string
 	}{
 		{"fake-connector", []string{"-listen", fmt.Sprintf("127.0.0.1:%d", conn)}, e.Connector + "/"},
-		{"vhub-server", []string{"-config", "server.json", "-clock-file", e.ClockFile}, e.HubURL + "/.well-known/did.json"},
-		{"vhub-client", []string{"-config", "config.json", "-state-dir", "client/state", "-clock-file", e.ClockFile, "-did.allow_insecure_localhost"}, e.ClientAdmin + "/healthz"},
+		{"alexandria-server", []string{"-config", "server.json", "-clock-file", e.ClockFile}, e.HubURL + "/.well-known/did.json"},
+		{"alexandria-client", []string{"-config", "config.json", "-state-dir", "client/state", "-clock-file", e.ClockFile, "-did.allow_insecure_localhost"}, e.ClientAdmin + "/healthz"},
 	}
 	for _, s := range steps {
 		if err := start(s.name, s.args...); err != nil {

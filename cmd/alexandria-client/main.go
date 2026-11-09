@@ -1,4 +1,4 @@
-// Composition root of vhub-client: checks CFG-1..CFG-5, wires internal/client.Module, and serves traffic and admin listeners.
+// Composition root of alexandria-client: checks CFG-1..CFG-5, wires internal/client.Module, and serves traffic and admin listeners.
 // Exits with status 2 and the failing code when the configuration is invalid (REQ-CLI-001, REQ-SYS-002, DP-5, DP-9).
 package main
 
@@ -21,20 +21,20 @@ import (
 	"github.com/ging/alexandria/internal/core/timex"
 )
 
-// main parses flags, validates configuration, and starts the vhub-client process.
+// main parses flags, validates configuration, and starts the alexandria-client process.
 func main() {
 	cfgPath := flag.String("config", "config/config.json", "path to the client configuration (Appendix A.3)")
-	stateDir := flag.String("state-dir", "vhub-client-state", "directory for continuity, packages and agreements")
+	stateDir := flag.String("state-dir", "alexandria-client-state", "directory for continuity, packages and agreements")
 	clockFile := flag.String("clock-file", "", "read the current instant from this file (PoC and tests only)")
 	insecure := flag.Bool("did.allow_insecure_localhost", false, "allow http:// for a localhost hub and its did:web (PoC only, DP-5)")
 	flag.Parse()
 	cfg, cerr := config.Load(*cfgPath)
 	if cerr != nil {
-		fmt.Fprintf(os.Stderr, "vhub-client: %s: %s\n", cerr.Code, cerr.Detail)
+		fmt.Fprintf(os.Stderr, "alexandria-client: %s: %s\n", cerr.Code, cerr.Detail)
 		os.Exit(2)
 	}
 	if err := run(cfg, *stateDir, *clockFile, *insecure); err != nil {
-		fmt.Fprintln(os.Stderr, "vhub-client:", err)
+		fmt.Fprintln(os.Stderr, "alexandria-client:", err)
 		os.Exit(1)
 	}
 }
@@ -76,7 +76,7 @@ func run(cfg *config.Config, stateDir, clockFile string, insecure bool) error {
 				errs <- fmt.Errorf("%s: %w", name, err)
 			}
 		}(name)
-		log.Printf("vhub-client %s listening on %s", name, l.Bind)
+		log.Printf("alexandria-client %s listening on %s", name, l.Bind)
 	}
 	if err := mod.Start(ctx); err != nil {
 		return err

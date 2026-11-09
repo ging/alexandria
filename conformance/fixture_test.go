@@ -32,7 +32,7 @@ func f6Run(t *testing.T) (f6.Env, []f6.Row, string) {
 		}
 	})
 	if shared.err != nil {
-		b, _ := os.ReadFile(filepath.Join(shared.work, "vhub-client.log"))
+		b, _ := os.ReadFile(filepath.Join(shared.work, "alexandria-client.log"))
 		t.Fatalf("%v\nclient log:\n%s", shared.err, b)
 	}
 	return shared.env, shared.rows, shared.work

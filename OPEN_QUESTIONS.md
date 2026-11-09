@@ -22,7 +22,7 @@ El único código no alcanzable en la PoC es:
 | **Q2** | Formato y verificación del recibo de transparencia (estilo SCITT) | Sí | **DP-8**: recibo JSON simulado `{digest, registered_at, log_id, sig}` firmado con la clave del hub en `scitt_fake` y verificado en `receipt_scitt_fake` tras los puertos `TransparencyLog` y `ReceiptVerifier`. |
 | **Q3** | Revisar la tabla de rutas por defecto contra DSP 2025-1 y extensiones EDC/FIWARE | Sí | **DP-10**: se cargan las 16 rutas del Anexo de rutas DSP en modo `observe` cuando `routes` está vacío (`internal/client/domain/routes.go`, `config/routes.default.json`). |
 | **Q4** | Campos obligatorios de `ContractNegotiationError` y `TransferError` cuando la petición inicial no trae `providerPid` | Sí | **DP-11**: cuando el cuerpo de entrada no contiene `providerPid` o `consumerPid`, se rellena con el centinela `"urn:uuid:00000000-0000-0000-0000-000000000000"` (`internal/client/domain/verdict.go`). |
-| **Q5** | Auditoría activa: identidad con la que el `vhub-client` pide el catálogo de su propio conector | No | Solo se implementa la auditoría pasiva de §4.10 (`internal/client/app/audit.go`, `REQ-CLI-023`). |
+| **Q5** | Auditoría activa: identidad con la que el `alexandria-client` pide el catálogo de su propio conector | No | Solo se implementa la auditoría pasiva de §4.10 (`internal/client/app/audit.go`, `REQ-CLI-023`). |
 | **Q6** | Agreements anteriores al despliegue (`import` frente a versión ficticia `pre-hub`) | No | Se implementa `POST /agreements:import` exigiendo que la versión exista en los paquetes conocidos (`REQ-CLI-026`). |
 | **Q7** | Compromiso de la clave del hub y ausencia de raíz sobre el DID document (`did:web`) | No | Se verifica en el momento de recepción (S2, S9, V1–V4) y nunca se reverifican documentos ya aceptados (`REQ-CLI-024`). |
 | **Q8** | Incorporar a la spec del lenguaje los parámetros delta de §2.10, `LIFECYCLE_*` y D-PVP-1 (`url` en contextos) | Sí | **DP-6**: `compiler_poc` valida los parámetros delta, emite los 7 códigos `LIFECYCLE_*` y exige `url` en cada entrada `application/ld+json`. |
@@ -32,8 +32,8 @@ El único código no alcanzable en la PoC es:
 | **Q12** | Alinear Gobernanza rev. 2 §16–§19 y `vhub_spec.html` con R10 (una sola clave en el DID document, sin `roles.json`) | Sí | **DP-13**: no existen `roles.json` ni `current.json` en ningún punto del código. |
 | **Q13** | `/pub` público frente a restringido a miembros | No | **DP-15**: `/pub` se sirve sin autenticación con cabeceras `immutable` y `ETag` SHA-256 (`REQ-HUB-011`). |
 | **Q14** | Métodos de DID distintos de `did:web` (`did:key`, `did:ebsi`) | No | El schema A.3 y `internal/core/did` restringen el DID del hub a `did:web`; el puerto `DIDResolver` permite inyectar otros métodos desde `internal/ssi-auth`. |
-| **Q15** | Quién sirve el DID document del hub y en qué ruta (`G1`) | No | **DP-4**: `vhub-server` sirve `GET /.well-known/did.json` generado desde `Signer.PublishedKeys()` (`internal/server/adapters/http_did`). |
-| **Q16** | Configuración del `vhub-server` (`G2`) | No | **DP-12**: `config/server.json` validado con `config/server.schema.json` (`internal/server/config`). |
+| **Q15** | Quién sirve el DID document del hub y en qué ruta (`G1`) | No | **DP-4**: `alexandria-server` sirve `GET /.well-known/did.json` generado desde `Signer.PublishedKeys()` (`internal/server/adapters/http_did`). |
+| **Q16** | Configuración del `alexandria-server` (`G2`) | No | **DP-12**: `config/server.json` validado con `config/server.schema.json` (`internal/server/config`). |
 | **Q17** | Interfaz de `TransparencyLog` y `ReceiptVerifier` (`G5`) | Sí | **DP-8**: puertos definidos en `internal/server/app/ports.go` e `internal/client/app/ports.go`. |
 
 ---

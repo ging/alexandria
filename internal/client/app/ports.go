@@ -1,4 +1,4 @@
-// Outbound ports of vhub-client and the request/response types that cross the proxy boundary (F8 §8.5).
+// Outbound ports of alexandria-client and the request/response types that cross the proxy boundary (F8 §8.5).
 // Edge never receives HubAPI or DIDResolver, which is how the hot path cannot call the hub (REQ-SYS-002, REQ-CLI-005, REQ-CLI-017).
 package app
 

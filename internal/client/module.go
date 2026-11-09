@@ -1,4 +1,4 @@
-// Package client wires the vhub-client bounded context and manages its background synchronization.
+// Package client wires the alexandria-client bounded context and manages its background synchronization.
 // Edge is constructed without HubAPI or DIDResolver so the hot path never contacts the hub (REQ-CLI-001, REQ-CLI-003, REQ-SYS-002, DP-5).
 package client
 
@@ -26,8 +26,8 @@ import (
 	"github.com/ging/alexandria/internal/core/timex"
 )
 
-// Name identifies the vhub-client bounded context in logs and startup reports.
-const Name = "vhub-client"
+// Name identifies the alexandria-client bounded context in logs and startup reports.
+const Name = "alexandria-client"
 
 // Deps groups the configuration and runtime dependencies for the client module.
 type Deps struct {
@@ -38,7 +38,7 @@ type Deps struct {
 	DIDResolver            app.DIDResolver
 }
 
-// Module is the assembled vhub-client context with its proxy/admin handlers and sync loop.
+// Module is the assembled alexandria-client context with its proxy/admin handlers and sync loop.
 type Module struct {
 	cfg        *config.Config
 	syncer     *app.Sync
@@ -52,7 +52,7 @@ type Module struct {
 	cancel     context.CancelFunc
 }
 
-// New assembles the vhub-client module and restores persisted continuity state.
+// New assembles the alexandria-client module and restores persisted continuity state.
 func New(deps Deps) (*Module, error) {
 	cfg := deps.Config
 	store, err := store_fs.Open(deps.StateDir)

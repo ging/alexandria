@@ -1,5 +1,5 @@
 // Negative battery for the client: one N-<CODE> case per code emitted by C-CLI.
-// Configuration codes run the real vhub-client binary; the others replay minimal scenarios in process (F5 §5.2, check D3).
+// Configuration codes run the real alexandria-client binary; the others replay minimal scenarios in process (F5 §5.2, check D3).
 package conformance
 
 import (
@@ -26,7 +26,7 @@ func TestN_ConfigCodesStopTheBinary(t *testing.T) {
 	for _, f := range files {
 		code := trimExt(filepath.Base(f))
 		t.Run("N-"+code, func(t *testing.T) {
-			cmd := exec.Command(filepath.Join(binDir, "vhub-client"), "-config", f, "-state-dir", t.TempDir())
+			cmd := exec.Command(filepath.Join(binDir, "alexandria-client"), "-config", f, "-state-dir", t.TempDir())
 			var stderr bytes.Buffer
 			cmd.Stderr = &stderr
 			err := cmd.Run()

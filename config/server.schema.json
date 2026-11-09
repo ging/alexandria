@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:vhub:poc:schema:server-config:v1",
-  "title": "vhub-server PoC configuration (DP-12, not normative)",
+  "title": "alexandria-server PoC configuration (DP-12, not normative)",
   "type": "object",
   "additionalProperties": false,
   "required": [

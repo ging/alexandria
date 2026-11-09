@@ -30,7 +30,7 @@ type Deps struct {
 	Defaults   lifecycle.Params
 }
 
-// Hub bundles the use cases of vhub-server.
+// Hub bundles the use cases of alexandria-server.
 type Hub struct {
 	Authoring   *Authoring
 	Release     *Release

@@ -1,4 +1,4 @@
-// In-process vhub-server built on the in-memory doubles, plus F6 drafts and principals.
+// In-process alexandria-server built on the in-memory doubles, plus F6 drafts and principals.
 // Server and client tests share it to publish real signed listings and packages without network (F8 §8.7).
 package testkit
 

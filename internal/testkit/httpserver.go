@@ -1,4 +1,4 @@
-// In-process vhub-server over the real adapters (SQLite, blob_fs, signer_file, auth_static) behind httptest.
+// In-process alexandria-server over the real adapters (SQLite, blob_fs, signer_file, auth_static) behind httptest.
 // Used by HTTP contract tests and by client tests that need a real hub over HTTP (F8 §8.7).
 package testkit
 

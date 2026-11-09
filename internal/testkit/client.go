@@ -1,4 +1,4 @@
-// In-process vhub-client wired to an in-memory hub through fake HubAPI and DIDResolver adapters with fault injection.
+// In-process alexandria-client wired to an in-memory hub through fake HubAPI and DIDResolver adapters with fault injection.
 // Lets client tests replay F6 and corrupt listings, packages and DID documents without network (F8 §8.7).
 package testkit
 
@@ -296,7 +296,7 @@ func (a *MemAgreements) All() ([]domain.Entry, error) {
 	return out, nil
 }
 
-// Client is an in-process vhub-client with its doubles exposed.
+// Client is an in-process alexandria-client with its doubles exposed.
 type Client struct {
 	Hub        *FakeHub
 	Resolver   *FakeResolver

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:eunomia:vhub:schema:client-config:v1",
-  "title": "Configuración del vhub-client v1",
+  "title": "Configuración del alexandria-client v1",
   "type": "object",
   "additionalProperties": false,
   "required": [

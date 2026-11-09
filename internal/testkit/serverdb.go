@@ -1,4 +1,4 @@
-// In-memory implementations of the vhub-server repositories with per-step fault injection.
+// In-memory implementations of the alexandria-server repositories with per-step fault injection.
 // Lets app tests inject failures at each REQ-HUB-004 step and run without SQLite (F8 §8.7).
 package testkit
 

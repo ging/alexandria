@@ -7,10 +7,10 @@ Este documento describe lo implementado y recoge la revisión de la especificaci
 ## 1. Cómo se usa
 
 ```bash
-go build -o bin/vhubc ./cmd/vhubc
-bin/vhubc validate internal/dsl/testdata/colors.profile.yaml
-bin/vhubc compile -o out internal/dsl/testdata/colors.profile.yaml
-bin/vhubc compile -o out -vendor vendor/ -previous release-1.0.0.yaml bundle.yaml
+go build -o bin/alexandriac ./cmd/alexandriac
+bin/alexandriac validate internal/dsl/testdata/colors.profile.yaml
+bin/alexandriac compile -o out internal/dsl/testdata/colors.profile.yaml
+bin/alexandriac compile -o out -vendor vendor/ -previous release-1.0.0.yaml bundle.yaml
 ```
 
 - **`validate`** imprime los hallazgos (`severidad CÓDIGO documento#n:línea ruta mensaje`) y sale con 1 si hay errores.
@@ -30,7 +30,7 @@ En el hub, `server.json` admite `"compiler": "dsl"` (por defecto `"poc"`) y `"ve
 | `schema.json` | `json-schema` | Draft 2020-12 autocontenido sobre la `Offer` compacta: perfil declarado, acciones, restricciones lógicas y atómicas, una condición por firma |
 | `cedar-mapping.json`, `cedar.schema` | `cedar-mapping`, `cedar-schema` | §13.4, solo si algún término tiene `enforcement` |
 | `prof.ttl`, `spec.html` | `prof`, `specification` | Manifiesto PROF y especificación legible |
-| `space/space-lock.json` | (fuera del manifiesto) | Por binding: versión resuelta, obligación, artefactos con SHA-256 y gates; además `lifecycle` y `profiles`, que lee vhub-client |
+| `space/space-lock.json` | (fuera del manifiesto) | Por binding: versión resuelta, obligación, artefactos con SHA-256 y gates; además `lifecycle` y `profiles`, que lee alexandria-client |
 | `space/shacl-union.ttl` | `shacl-union` | SHACL de los bindings `mandatory`, por gate |
 
 La salida es determinista: las mismas fuentes producen los mismos bytes.
@@ -89,7 +89,7 @@ Todos los hallazgos se han comprobado al implementar. Están ordenados por grave
 ### Incoherencias con vhub (spec 0.2.1)
 
 - **R13. La Parte III de la rev. 2 está superada por vhub.** `current.json`, las claves por rol (§19) y el PVP con `change`/`previous` (§16) contradicen R3, R10 y R11 de vhub. Además, las fechas de §26 (`enforced_from = published_at + ventana`) contradicen vhub §3.3 (`new_content_from = P + pw`). *Propuesta:* que la especificación del lenguaje remita a vhub para distribución y ciclo de vida (equivale a Q9 y Q12).
-- **R14. Gates distintos.** El lenguaje tiene `pdp_load` y `credential_presentation`. El esquema A.3 de vhub-client solo admite `dsp_message`, `policy_intake`, `catalog_entry` y `agreement_admission`. Los bindings en esos dos gates compilan, pero ningún vhub-client los aplica.
+- **R14. Gates distintos.** El lenguaje tiene `pdp_load` y `credential_presentation`. El esquema A.3 de alexandria-client solo admite `dsp_message`, `policy_intake`, `catalog_entry` y `agreement_admission`. Los bindings en esos dos gates compilan, pero ningún alexandria-client los aplica.
 - **R15. `space-lock.json` tiene dos formatos.** El del lenguaje (§13.2) va por binding, y el de vhub (5.2) apunta al manifiesto. *Aplicado:* un solo documento que contiene ambos.
 
 ### Límites de esta implementación
@@ -98,7 +98,7 @@ Todos los hallazgos se han comprobado al implementar. Están ordenados por grave
 - **Turtle y SHACL siguen con la comprobación estructural**, por decisión pendiente: en Go no hay librería estándar con licencia limpia.
   - `knakk/rdf`, la más usada, tiene por licencia una sola frase ("Do what thou wilt shall be the whole of the Law."), que no es una licencia OSI. Descartada.
   - Las referencias reales son pySHACL/RDFLib y Apache Jena. goRDFlib (BSD-3) es la opción en Go, pero es de un solo autor y reciente.
-  - Hasta decidir, no se ejecuta la semántica SHACL (las filas SHACL del §33), ni en el compilador ni en vhub-client (DP-7).
+  - Hasta decidir, no se ejecuta la semántica SHACL (las filas SHACL del §33), ni en el compilador ni en alexandria-client (DP-7).
 - **La copia de ODRL 2.2** (`internal/dsl/odrlvocab.go`) está escrita a mano. Hay que contrastarla con el TTL oficial.
 - **El tipo `datetime` de Cedar** depende de la versión de Cedar.
 
@@ -107,4 +107,4 @@ Todos los hallazgos se han comprobado al implementar. Están ordenados por grave
 1. `gopkg.in/yaml.v3`, ya dependencia directa del módulo, entra en la lista de DP-1 para `internal/dsl`. El test de arquitectura impide que el paquete importe server, client, clock o testkit.
 2. Códigos del lenguaje propios: `YAML`, `ALIAS_COLLISION`, `SIG_VALUE_KIND`, `ENFORCEMENT_WITHOUT_SIGNATURE`, `VIA_CYCLE`, `PROFILE_VERSION_CHANGED`, `NAMESPACE_CHANGED`, entre otros (`internal/dsl/findings.go`). En el adaptador: `BUNDLE_WITHOUT_SPACE` y `SPACE_MISMATCH`. Ninguno entra en el catálogo cerrado F5 de vhub.
 3. La versión de vhub es la del `SpaceProfile`. Un perfil ODRL intermedio (p. ej. 1.1.0, que depreca un término) viaja en el bundle de la release del espacio aunque no esté enlazado, para que N4 pueda exigir *deprecated → retired*.
-4. Los mensajes F6 declaran `profile` en la `Offer` y en el `Agreement` (regla de gobernanza del §5), y la ruta valida `$.offer`. En F6, el binding pone `json-schema` en `policy_intake`, porque vhub-client solo ejecuta JSON Schema.
+4. Los mensajes F6 declaran `profile` en la `Offer` y en el `Agreement` (regla de gobernanza del §5), y la ruta valida `$.offer`. En F6, el binding pone `json-schema` en `policy_intake`, porque alexandria-client solo ejecuta JSON Schema.

@@ -1,4 +1,4 @@
-// vhubc: command-line compiler of eunomia.profiles/v1 YAML into the profile and space artefacts.
+// alexandriac: command-line compiler of eunomia.profiles/v1 YAML into the profile and space artefacts.
 // "validate" reports N1–N5 findings; "compile" also writes the artefacts and space-lock.json (Parte II §12–§13).
 package main
 
@@ -23,7 +23,7 @@ func (m *multi) Set(v string) error { *m = append(*m, v); return nil }
 
 func main() {
 	if len(os.Args) < 2 || (os.Args[1] != "validate" && os.Args[1] != "compile") {
-		fmt.Fprintln(os.Stderr, "usage: vhubc validate|compile [-o dir] [-vendor dir] [-previous file]... file.yaml...")
+		fmt.Fprintln(os.Stderr, "usage: alexandriac validate|compile [-o dir] [-vendor dir] [-previous file]... file.yaml...")
 		os.Exit(2)
 	}
 	cmd := os.Args[1]
@@ -35,12 +35,12 @@ func main() {
 	_ = fl.Parse(os.Args[2:])
 	srcs, err := read(fl.Args())
 	if err != nil || len(srcs) == 0 {
-		fmt.Fprintln(os.Stderr, "vhubc: no input files", err)
+		fmt.Fprintln(os.Stderr, "alexandriac: no input files", err)
 		os.Exit(2)
 	}
 	prev, err := read(previous)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "vhubc:", err)
+		fmt.Fprintln(os.Stderr, "alexandriac:", err)
 		os.Exit(2)
 	}
 	opt := dsl.Options{Previous: prev}
@@ -52,7 +52,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, f)
 	}
 	if !r.OK() {
-		fmt.Fprintf(os.Stderr, "vhubc: %d errors\n", len(r.Findings.Errors()))
+		fmt.Fprintf(os.Stderr, "alexandriac: %d errors\n", len(r.Findings.Errors()))
 		os.Exit(1)
 	}
 	if cmd == "validate" {
@@ -60,7 +60,7 @@ func main() {
 		return
 	}
 	if err := write(*out, r); err != nil {
-		fmt.Fprintln(os.Stderr, "vhubc:", err)
+		fmt.Fprintln(os.Stderr, "alexandriac:", err)
 		os.Exit(1)
 	}
 }

@@ -171,8 +171,8 @@ func findRepoRoot() (string, error) {
 // scanProductionModules extracts REQ-* references from the two-line header comments of every vhub package.
 func scanProductionModules(root string) (map[string][]string, map[string][]string, []string, error) {
 	dirs := []string{
-		"cmd/vhub-server",
-		"cmd/vhub-client",
+		"cmd/alexandria-server",
+		"cmd/alexandria-client",
 		"internal/core",
 		"internal/server",
 		"internal/client",

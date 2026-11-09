@@ -1,4 +1,4 @@
-// Package server wires the vhub-server bounded context and manages its lifecycle.
+// Package server wires the alexandria-server bounded context and manages its lifecycle.
 // It connects persistence, signing, static or external authentication, and HTTP handlers (DP-2, DP-3, DP-4, DP-8, DP-12, REQ-HUB-008).
 package server
 
@@ -29,8 +29,8 @@ import (
 	"github.com/ging/alexandria/internal/server/config"
 )
 
-// Name identifies the vhub-server bounded context in logs and startup reports.
-const Name = "vhub-server"
+// Name identifies the alexandria-server bounded context in logs and startup reports.
+const Name = "alexandria-server"
 
 // Deps groups the configuration and optional port overrides for the server module.
 type Deps struct {
@@ -40,7 +40,7 @@ type Deps struct {
 	Auth   http_v1.Authenticator
 }
 
-// Module is the assembled vhub-server context with its HTTP surface and background scheduler.
+// Module is the assembled alexandria-server context with its HTTP surface and background scheduler.
 type Module struct {
 	hub     *app.Hub
 	handler http.Handler
@@ -52,7 +52,7 @@ type Module struct {
 	cancel  context.CancelFunc
 }
 
-// New assembles the vhub-server module from its configuration and dependencies.
+// New assembles the alexandria-server module from its configuration and dependencies.
 func New(deps Deps) (*Module, error) {
 	cfg := deps.Config
 	for _, p := range []string{cfg.SQLitePath, cfg.SigningKeyPath} {

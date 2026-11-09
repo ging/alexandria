@@ -1,5 +1,5 @@
 // Command demo runs the end-to-end F6 scenario against the compiled binaries and prints the verdict table.
-// Launches fake-connector, vhub-server, and vhub-client with a shared file clock (Part 4 M9, DoD item 6).
+// Launches fake-connector, alexandria-server, and alexandria-client with a shared file clock (Part 4 M9, DoD item 6).
 package main
 
 import (
@@ -15,7 +15,7 @@ import (
 
 // main parses flags and runs the F6 demo scenario.
 func main() {
-	binDir := flag.String("bin-dir", "bin", "directory containing vhub-server, vhub-client, and fake-connector")
+	binDir := flag.String("bin-dir", "bin", "directory containing alexandria-server, alexandria-client, and fake-connector")
 	flag.Parse()
 	if err := run(*binDir); err != nil {
 		fmt.Fprintln(os.Stderr, "demo:", err)
@@ -62,9 +62,9 @@ func run(binDir string) error {
 // ensureBinaries checks if the three binaries exist in binDir and builds them into fallbackDir if missing.
 func ensureBinaries(binDir, fallbackDir string) (string, error) {
 	targets := map[string]string{
-		"vhub-server":    "./cmd/vhub-server",
-		"vhub-client":    "./cmd/vhub-client",
-		"fake-connector": "./deploy/fake-connector",
+		"alexandria-server": "./cmd/alexandria-server",
+		"alexandria-client": "./cmd/alexandria-client",
+		"fake-connector":    "./deploy/fake-connector",
 	}
 	allExist := true
 	for name := range targets {

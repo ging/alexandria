@@ -1,4 +1,4 @@
-// Outbound ports of vhub-server, declared by the application that needs them (F8 §8.4).
+// Outbound ports of alexandria-server, declared by the application that needs them (F8 §8.4).
 // sqlite, blob_fs, signer_file, scitt_fake and compiler_poc implement them; testkit provides in-memory doubles (REQ-HUB-004, REQ-HUB-013).
 package app
 

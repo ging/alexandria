@@ -55,7 +55,7 @@ type LockBinding struct {
 	Artifacts  []LockArtifact `json:"artifacts"`
 }
 
-// Lock is space-lock.json; Lifecycle and Profiles are the fields vhub-client also reads (S7, §4.9).
+// Lock is space-lock.json; Lifecycle and Profiles are the fields alexandria-client also reads (S7, §4.9).
 type Lock struct {
 	Space     string              `json:"space"`
 	Version   string              `json:"version"`

@@ -10,16 +10,16 @@ import (
 	"testing"
 )
 
-// binDir holds vhub-server, vhub-client and fake-connector built for this run.
+// binDir holds alexandria-server, alexandria-client and fake-connector built for this run.
 var binDir string
 
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "vhub-bin-")
+	dir, err := os.MkdirTemp("", "alexandria-bin-")
 	if err != nil {
 		panic(err)
 	}
 	binDir = dir
-	cmd := exec.Command("go", "build", "-o", dir+string(filepath.Separator), "./cmd/vhub-server", "./cmd/vhub-client", "./deploy/fake-connector")
+	cmd := exec.Command("go", "build", "-o", dir+string(filepath.Separator), "./cmd/alexandria-server", "./cmd/alexandria-client", "./deploy/fake-connector")
 	cmd.Dir = ".."
 	if out, err := cmd.CombinedOutput(); err != nil {
 		fmt.Fprintf(os.Stderr, "build: %v\n%s", err, out)

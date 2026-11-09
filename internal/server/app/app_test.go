@@ -1,4 +1,4 @@
-// Tests of the vhub-server use cases against the in-memory doubles of testkit.
+// Tests of the alexandria-server use cases against the in-memory doubles of testkit.
 // Realise T-HUB-001..004, 007, 008, 010, 014, 015, 020 and 021 at application level (F8 §8.7).
 package app_test
 
