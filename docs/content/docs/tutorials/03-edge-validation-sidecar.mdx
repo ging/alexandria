@@ -1,0 +1,267 @@
+---
+title: "3. Edge DSP Validation with alexandria-client"
+description: Deploy alexandria-client in front of a Dataspace Connector, verify S1–S13 background synchronization, and validate DSP messages at the edge.
+---
+
+import { Steps } from 'fumadocs-ui/components/steps';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Tutorial 3: Edge DSP Validation with `alexandria-client`
+
+In a sovereign dataspace, connectors cannot afford to query a central Vocabulary Hub synchronously on every Dataspace Protocol (DSP) message—doing so would introduce a single point of failure and leak participant traffic metadata.
+
+Instead, **`alexandria-client`** runs as an edge sidecar alongside your Connector:
+1. **Background Sync (`S1`–`S13`):** Periodically downloads and cryptographically verifies signed listings and PVP packages (`ni:///sha-256;...`) from `alexandria-server`, persisting them to disk.
+2. **Hot-Path Isolation (`REQ-SYS-002`):** Validates inbound (`dsp-ingress`) and outbound (`dsp-egress`) DSP traffic strictly in memory from verified local packages.
+3. **Byte-for-Byte Proxy (`REQ-SYS-003`):** Forwards valid requests untouched and rejects non-compliant requests with normative DSP error bodies (`ContractNegotiationError`, `TransferError`, `CatalogError`) and an RFC 9651 `VHub-Verdict` header.
+
+---
+
+<Steps>
+
+### Step 1: Launch `fake-connector` and `alexandria-server` with a Shared Clock
+
+To control time deterministically without waiting days for propagation windows (`new_content_from`), `alexandria-server` and `alexandria-client` support an injectable file clock (`-clock-file`, `DP-9`).
+
+Create `/tmp/vhub-edge` and initialize the clock at `2026-09-01T10:00:00Z`:
+
+```bash
+make build
+mkdir -p /tmp/vhub-edge
+echo "2026-09-01T10:00:00Z" > /tmp/vhub-edge/clock
+```
+
+Start the simulated upstream connector (`bin/fake-connector`) on port `18282`:
+
+```bash
+./bin/fake-connector -listen 127.0.0.1:18282 &
+```
+
+Write `tokens.json` and `server.json` and start `alexandria-server` on port `18080` reading `/tmp/vhub-edge/clock`:
+
+```bash
+cat << 'EOF' > /tmp/vhub-edge/tokens.json
+{
+  "editor-token":   {"principal": "steward",  "roles": ["editor"]},
+  "releaser-token": {"principal": "releaser", "roles": ["releaser"]},
+  "member-token":   {"principal": "client",   "roles": ["member"]}
+}
+EOF
+
+cat << 'EOF' > /tmp/vhub-edge/server.json
+{
+  "listen": "127.0.0.1:18080",
+  "public_base_url": "http://127.0.0.1:18080",
+  "did": "did:web:127.0.0.1%3A18080",
+  "sqlite_path": "/tmp/vhub-edge/hub.db",
+  "blob_dir": "/tmp/vhub-edge/blobs",
+  "signing_key_path": "/tmp/vhub-edge/hub.key",
+  "tokens_path": "/tmp/vhub-edge/tokens.json",
+  "compiler": "dsl"
+}
+EOF
+
+./bin/alexandria-server -config /tmp/vhub-edge/server.json -clock-file /tmp/vhub-edge/clock &
+```
+
+### Step 2: Publish Release `1.0.0` on the Hub and Advance Past Propagation Window
+
+Publish `conformance/f6/drafts/v1.0.0.yaml` (which defines `odrl:use` and `ex:access` as the only valid actions in `https://example.com/odrl/profile/f6`):
+
+```bash
+DRAFT_ID=$(curl -s -X POST http://127.0.0.1:18080/v1/drafts \
+  -H "Authorization: Bearer editor-token" \
+  --data-binary @conformance/f6/drafts/v1.0.0.yaml | jq -r .id)
+
+CAND_ID=$(curl -s -X POST http://127.0.0.1:18080/v1/drafts/${DRAFT_ID}:propose \
+  -H "Authorization: Bearer editor-token" | jq -r .id)
+
+curl -s -X POST http://127.0.0.1:18080/v1/candidates/${CAND_ID}:approve \
+  -H "Authorization: Bearer releaser-token" -d '{}' | jq .
+```
+
+Notice in the approval response that:
+- `published_at` is `2026-09-01T10:00:00Z`
+- `new_content_from` and `enforced_from` are `2026-09-03T10:00:00Z` (after the 48-hour propagation window).
+
+Advance the file clock to `2026-09-05T12:00:00Z` so version `1.0.0` is in the **`Enforced`** state:
+
+```bash
+echo "2026-09-05T12:00:00Z" > /tmp/vhub-edge/clock
+```
+
+### Step 3: Configure and Start `alexandria-client`
+
+Create the client's credentials file (`credentials.json`) and configuration (`config.json`):
+
+```bash
+echo '{"token":"member-token"}' > /tmp/vhub-edge/credentials.json
+chmod 600 /tmp/vhub-edge/credentials.json
+
+cat << 'EOF' > /tmp/vhub-edge/config.json
+{
+  "space": "https://example.com/spaces/demo",
+  "trust": {
+    "hub_did": "did:web:127.0.0.1%3A18080",
+    "hub": "https://127.0.0.1:18080",
+    "credentials": "file:///tmp/vhub-edge/credentials.json"
+  },
+  "upstreams": {
+    "dsp": "http://127.0.0.1:18282"
+  },
+  "listeners": {
+    "dsp-ingress": { "bind": "127.0.0.1:18443" },
+    "dsp-egress":  { "bind": "127.0.0.1:13128" },
+    "admin":       { "bind": "127.0.0.1:19900" }
+  },
+  "routes": [
+    {
+      "listener": "dsp-ingress",
+      "match": { "method": "POST", "path": "/negotiations/request" },
+      "message": "ContractRequestMessage",
+      "gates": ["dsp_message", "policy_intake"],
+      "mode": "enforce",
+      "body": { "select": "$.offer" }
+    }
+  ],
+  "events": {
+    "sink": "file:///tmp/vhub-edge/events.jsonl"
+  }
+}
+EOF
+```
+
+Launch `alexandria-client` (passing `-did.allow_insecure_localhost` because our lab Hub runs over cleartext `http://127.0.0.1:18080`, per `DP-5`):
+
+```bash
+./bin/alexandria-client \
+  -config /tmp/vhub-edge/config.json \
+  -state-dir /tmp/vhub-edge/state \
+  -clock-file /tmp/vhub-edge/clock \
+  -did.allow_insecure_localhost &
+```
+
+### Step 4: Inspect Client Status & Synchronized Versions (`admin` Port)
+
+Query the local Admin API on port `19900` (which is strictly isolated from DSP traffic listeners per `REQ-CLI-019`):
+
+```bash
+curl -s http://127.0.0.1:19900/status | jq .
+curl -s http://127.0.0.1:19900/versions | jq .
+```
+
+You will see:
+- Operational `state`: `"normal"`
+- `last_accepted_listing.sequence`: `1` (or `2` after scheduler re-issuance)
+- Retained package `1.0.0` in state `"Enforced"`
+
+### Step 5: Send Valid and Invalid DSP Messages Through `dsp-ingress`
+
+Now send two `ContractRequestMessage` payloads to `alexandria-client`'s `dsp-ingress` listener (`http://127.0.0.1:18443/negotiations/request`):
+
+#### 1. Compliant Offer (`ex:access` is defined in `1.0.0`)
+
+```bash
+curl -i -s -X POST http://127.0.0.1:18443/negotiations/request \
+  -H "Content-Type: application/json" \
+  -d '{
+    "@context": [
+      "https://w3id.org/dspace/2025/1/context.jsonld",
+      "https://example.com/odrl/profile/f6/context.jsonld"
+    ],
+    "@type": "ContractRequestMessage",
+    "consumerPid": "urn:uuid:c-1",
+    "offer": {
+      "@id": "urn:uuid:offer-1",
+      "@type": "Offer",
+      "profile": "https://example.com/odrl/profile/f6",
+      "target": "urn:uuid:ds-1",
+      "permission": [{ "action": "ex:access" }]
+    },
+    "callbackAddress": "http://consumer/cb"
+  }'
+```
+
+Result: **`HTTP/1.1 200 OK`** — Forwarded byte-for-byte to `fake-connector` without adding a `VHub-Verdict` header (`REQ-CLI-013`).
+
+#### 2. Non-Compliant Offer (`odrl:read` is NOT defined in `1.0.0`)
+
+```bash
+curl -i -s -X POST http://127.0.0.1:18443/negotiations/request \
+  -H "Content-Type: application/json" \
+  -d '{
+    "@context": [
+      "https://w3id.org/dspace/2025/1/context.jsonld",
+      "https://example.com/odrl/profile/f6/context.jsonld"
+    ],
+    "@type": "ContractRequestMessage",
+    "consumerPid": "urn:uuid:c-1",
+    "offer": {
+      "@id": "urn:uuid:offer-1",
+      "@type": "Offer",
+      "profile": "https://example.com/odrl/profile/f6",
+      "target": "urn:uuid:ds-1",
+      "permission": [{ "action": "odrl:read" }]
+    },
+    "callbackAddress": "http://consumer/cb"
+  }'
+```
+
+Result: **`HTTP/1.1 400 Bad Request`** — Blocked at the edge! Notice the RFC 9651 `VHub-Verdict` header and the normative DSP `ContractNegotiationError` body:
+
+```http
+HTTP/1.1 400 Bad Request
+Content-Type: application/json
+Vhub-Verdict: violation;gate=policy_intake;code="VERDICT_VIOLATION"
+
+{
+  "@context": "https://w3id.org/dspace/2025/1/context.jsonld",
+  "@type": "ContractNegotiationError",
+  "providerPid": "urn:uuid:00000000-0000-0000-0000-000000000000",
+  "consumerPid": "urn:uuid:c-1",
+  "code": "VERDICT_VIOLATION",
+  "reason": ["..."]
+}
+```
+
+#### 3. Untrusted `@context` Injection (`CONTEXT_NOT_IN_PACKAGE`)
+
+If a caller tries to inject an external JSON-LD `@context` not listed in the signed package manifest (`REQ-CLI-010`), `alexandria-client` immediately blocks it without making any network call:
+
+```bash
+curl -i -s -X POST http://127.0.0.1:18443/negotiations/request \
+  -H "Content-Type: application/json" \
+  -d '{
+    "@context": ["https://evil.example/ctx.jsonld"],
+    "@type": "ContractRequestMessage",
+    "consumerPid": "urn:uuid:c-1",
+    "offer": {"@id":"urn:uuid:o1","@type":"Offer","profile":"https://example.com/odrl/profile/f6","target":"urn:uuid:ds-1","permission":[{"action":"ex:access"}]}
+  }'
+```
+
+Result: **`HTTP/1.1 400 Bad Request`** with `VHub-Verdict: violation;gate=policy_intake;code="CONTEXT_NOT_IN_PACKAGE"`.
+
+### Step 6: Inspect Verdict Events & Prometheus Metrics
+
+Every non-`observe` evaluation emits a structured JSON event conforming to Appendix A.4 (`verdict-event.schema.json`) and increments Prometheus counters:
+
+```bash
+# View structured JSONL verdict events:
+cat /tmp/vhub-edge/events.jsonl | jq .
+
+# Query Prometheus metrics on the admin port:
+curl -s http://127.0.0.1:19900/metrics
+```
+
+When finished experimenting, clean up background processes:
+```bash
+pkill -f "alexandria-client|alexandria-server|fake-connector" || true
+```
+
+</Steps>
+
+---
+
+## Next Tutorial
+
+In **[Tutorial 4: Version Transitions, Grace Windows & Revocations (Scenario F6)](./04-breaking-changes-and-f6)**, you will see how `alexandria-server` and `alexandria-client` handle breaking releases (`1.0.0` -> `2.0.0`), transition grace windows (`sunset`), contract agreement leases, and emergency revocations!

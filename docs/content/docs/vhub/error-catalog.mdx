@@ -1,0 +1,122 @@
+---
+title: Error & Verdict Code Catalog (F5)
+description: Complete reference of the 64 normative error, synchronization, lifecycle, configuration, and verdict codes in Vocabulary Hub v0.2.1.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Closed Error & Verdict Code Catalog (F5)
+
+The Vocabulary Hub v0.2.1 specification defines a **closed catalog of 64 normative codes** (`internal/core/codes/catalog.tsv`). Every HTTP problem response (`application/problem+json`), DSP rejection payload, startup configuration error, synchronization error, and verdict event uses a code from this catalog.
+
+<Callout type="info">
+**Automated Negative Test Coverage (`N-<CODE>`):** 63 out of the 64 codes are verified by dedicated negative conformance tests in `conformance/negative_hub_test.go` and `conformance/negative_client_test.go`. The sole unreachable code in the PoC is `VERDICT_SHACL_WARNING` (documented in [`OPEN_QUESTIONS.md`](https://github.com/ging/alexandria/blob/feat/vhub-poc/OPEN_QUESTIONS.md) under `DP-7`, because `evaluator_poc` evaluates JSON Schema Draft 2020-12 and skips RDF SHACL graph execution).
+</Callout>
+
+---
+
+## 1. Hub API & Governance Codes (`C-HUB`)
+
+| Code | Channel | Severity | Requirement | Trigger Condition |
+|:---|:---|:---:|:---|:---|
+| `API_FORBIDDEN_ROLE` | `problem` | `error` | `REQ-HUB-017` | Missing/invalid Bearer token (`401`) or principal lacks required role for endpoint (`403`, e.g., `editor` calling `:approve`). |
+| `API_PRECONDITION_REQUIRED` | `problem` | `error` | `REQ-HUB-018` | `PUT /v1/drafts/{id}` called without an `If-Match` header (`428`). |
+| `API_PRECONDITION_FAILED` | `problem` | `error` | `REQ-HUB-018` | `PUT /v1/drafts/{id}` called with a stale `ETag` (`412`). |
+| `API_NOT_FOUND` | `problem` | `error` | `REQ-HUB-019`, `REQ-CLI-026` | Requested draft, candidate, version, blob, agreement, or endpoint does not exist (`404`). |
+| `API_INVALID_STATE` | `problem` | `error` | `REQ-HUB-002` | Attempting to `:approve` or `:reject` a candidate that was already approved or rejected (`409`). |
+| `RELEASE_ABORTED` | `problem` | `error` | `REQ-HUB-004` | Fault during release pipeline (e.g., transparency log failure); transaction rolled back with no partial release visible (`500`). |
+
+---
+
+## 2. Lifecycle Date & Revocation Codes (`C-HUB`)
+
+| Code | Channel | Severity | Requirement | Trigger Condition |
+|:---|:---|:---:|:---|:---|
+| `DATES_GRACE_ON_COMPATIBLE` | `problem` | `error` | `REQ-HUB-005` | Approving a `compatible` (`MINOR`/`PATCH`) version with an explicit `grace_window`. |
+| `DATES_EMERGENCY_ON_COMPATIBLE` | `problem` | `error` | `REQ-HUB-005` | Approving a `compatible` version with `emergency: true`. |
+| `DATES_ZERO_GRACE_WITHOUT_EMERGENCY` | `problem` | `error` | `REQ-HUB-005` | Approving a `breaking` (`MAJOR`) version with `grace_window: P0D` and `emergency: false`. |
+| `DATES_EMERGENCY_WITH_GRACE` | `problem` | `error` | `REQ-HUB-005` | Approving a `breaking` version with both `emergency: true` and `grace_window > 0`. |
+| `DATES_JUSTIFICATION_REQUIRED` | `problem` | `error` | `REQ-HUB-005`, `REQ-HUB-014` | Approving an emergency release or revoking a version without a non-empty `justification`. |
+| `DATES_NON_MONOTONIC` | `problem` | `error` | `REQ-HUB-006` | `DATE-1`: New release's `enforced_from` is earlier than the `enforced_from` of a version currently in grace. |
+| `DATES_TOO_MANY_VERSIONS` | `problem` | `error` | `REQ-HUB-006` | `DATE-2`: Release would exceed `max_concurrent_versions` in the effective set `V_t`. |
+| `DATES_REVOCATION_TOO_EARLY` | `problem` | `error` | `REQ-HUB-014` | `REV-3`: Explicit `revoked_from` is earlier than `R + propagation_window`. |
+| `DATES_REVOKE_LEAVES_NO_HEAD` | `problem` | `error` | `REQ-HUB-014` | `REV-4`: Revoking the only active version when no replacement version is in force. |
+| `DATES_ALREADY_REVOKED` | `problem` | `error` | `REQ-HUB-014` | `REV-1`: Revoking a version that is already revoked. |
+
+---
+
+## 3. Draft Lifecycle Parameter Invariants (`C-HUB`)
+
+| Code | Channel | Severity | Requirement | Trigger Condition |
+|:---|:---|:---:|:---|:---|
+| `LIFECYCLE_STALENESS_LT_TTL` | `problem` | `error` | `N2` | `freshness.max_staleness` is shorter than `freshness.ttl`. |
+| `LIFECYCLE_GRACE_ZERO` | `problem` | `error` | `REQ-HUB-001` | `lifecycle.grace_window` is `P0D`. |
+| `LIFECYCLE_SYNC_INTERVAL` | `problem` | `error` | `REQ-HUB-001` | `sync_interval` exceeds `ttl / 2`. |
+| `LIFECYCLE_CLOCK_SKEW` | `problem` | `error` | `REQ-HUB-001` | `clock_skew` is zero (`PT0S`). |
+| `LIFECYCLE_LEASE` | `problem` | `error` | `REQ-HUB-001` | `lease_margin` is less than `2 * clock_skew`. |
+| `LIFECYCLE_PROPAGATION` | `problem` | `error` | `REQ-HUB-001` | `propagation_window` is less than `2 * ttl`. |
+| `LIFECYCLE_MAX_VERSIONS` | `problem` | `error` | `REQ-HUB-001` | `max_concurrent_versions` is `< 2`. |
+
+---
+
+## 4. Client Startup Configuration Codes (`C-CLI`)
+
+When any `CONFIG_*` check fails, `alexandria-client` prints the code to `stderr` and exits with status `2` (`REQ-CLI-001`):
+
+| Code | Invariant | Trigger Condition |
+|:---|:---:|:---|
+| `CONFIG_SCHEMA` | `CFG-1` | Client `config.json` violates the Appendix A.3 JSON Schema (`conformance/schemas/config.schema.json`). |
+| `CONFIG_ROUTE_OVERLAP` | `CFG-2` | Two routes on the same listener have ambiguous/overlapping HTTP method + path templates. |
+| `CONFIG_GATE_MESSAGE_MISMATCH` | `CFG-3` | A route attaches a gate incompatible with its DSP message type (e.g., `agreement_admission` on `ContractRequestMessage`). |
+| `CONFIG_CREDENTIALS_UNREADABLE` | `CFG-4` | The file referenced in `trust.credentials` does not exist or cannot be read. |
+| `CONFIG_UPSTREAM_MISSING` | `CFG-5` | A route uses `dsp-ingress` or `mgmt-ingress` without the corresponding `upstreams.dsp` or `upstreams.management` URL. |
+
+---
+
+## 5. Client Synchronization & Trust Codes (`C-CLI`)
+
+| Code | Step | Severity | Requirement | Trigger Condition |
+|:---|:---:|:---:|:---|:---|
+| `SYNC_UNREACHABLE` | `S1` | `error` | `REQ-CLI-004` | Network failure or HTTP 5xx when polling `GET /v1/versions`. |
+| `SYNC_UNAUTHORIZED` | `S1` | `error` | `REQ-CLI-004` | Hub returns `401` or `403` to `GET /v1/versions`. |
+| `SYNC_SIGNATURE_INVALID` | `S2` | `error` | `REQ-CLI-004`, `REQ-CLI-024` | JCS Ed25519 signature on `eunomia.versions/v1` fails verification or `kid` is unknown after refresh. |
+| `SYNC_DID_UNRESOLVABLE` | `S2` | `error` | `REQ-CLI-027` | First boot (no cached DID document) and `/.well-known/did.json` cannot be resolved or fails `V1`–`V4`. |
+| `DID_KEY_ROTATED` | `S2` | `info` | `REQ-CLI-024` | Listing is signed with a new `kid` not in cache, which resolves validly after refreshing the Hub's DID document. |
+| `DID_REFRESH_FAILED` | `S2` | `info` | `REQ-CLI-027` | `did_ttl` elapsed and refreshing `/.well-known/did.json` failed; client continues using cached DID document. |
+| `SYNC_EXPIRED` | `S3` | `error` | `REQ-CLI-004` | Listing `expires_at` is earlier than current client time `t`. |
+| `SYNC_ROLLBACK` | `S4` | `error` | `REQ-CLI-004` | Listing `sequence` is strictly less than the last accepted `sequence`. |
+| `SYNC_SEQUENCE_CONFLICT` | `S4` | `error` | `REQ-CLI-004` | Listing has the same `sequence` as the last accepted listing but different canonical bytes. |
+| `SYNC_REVOCATION_DROPPED` | `S5` | `error` | `REQ-CLI-004` | A previously revoked version disappears or has `revoked_from: null` in the new listing. |
+| `SYNC_DATES_CHANGED` | `S6` | `error` | `REQ-CLI-004` | `published_at`, `new_content_from`, or `enforced_from` of a known version was altered. |
+| `SYNC_DATES_INVALID` | `S7` | `error` | `REQ-CLI-004` | A version entry violates lifecycle date ordering or `propagation_window`. |
+| `SYNC_MANIFEST_DIGEST_MISMATCH` | `S8` | `error` | `REQ-CLI-006` | Downloaded `manifest.json` bytes do not match the `ni:///sha-256;...` digest in the listing. |
+| `SYNC_MANIFEST_SIGNATURE_INVALID` | `S9` | `error` | `REQ-CLI-006`, `REQ-CLI-024` | Ed25519 JCS signature on `manifest.json` is invalid. |
+| `SYNC_RECEIPT_INVALID` | `S10` | `error` | `REQ-CLI-006` | Transparency log receipt (`manifest.receipt`) fails verification. |
+| `SYNC_FILE_HASH_MISMATCH` | `S11` | `error` | `REQ-CLI-007` | Downloaded package artifact bytes do not match the SHA-256 digest in `manifest.files[]`. |
+| `SYNC_FILE_SET_MISMATCH` | `S12` | `error` | `REQ-CLI-007` | Package contains an extra unreferenced file or is missing a required file. |
+| `SYNC_INCOHERENT` | `S13` | `error` | `REQ-CLI-007` | Mismatch in `space` or `version` between the listing entry, `manifest.json`, and `space-lock.json`. |
+
+---
+
+## 6. Edge Classification, Agreement & Audit Codes (`C-CLI`)
+
+| Code | Channel | Severity | Requirement | Trigger Condition |
+|:---|:---|:---:|:---|:---|
+| `CLIENT_NOT_READY` | `classification` | `error` | `REQ-CLI-002` | Request arrives on an `enforce` route while the client is still in `onboarding` (before first sync). |
+| `CLIENT_DEGRADED_REJECT` | `classification` | `error` | `REQ-CLI-018` | Client is in `degraded` state and `lifecycle.degraded[gate]` is configured as `"reject"`. |
+| `CLIENT_FAIL_CLOSED` | `classification` | `error` | `REQ-CLI-018`, `REQ-SYS-008` | Client is in `fail_closed` state (`t >= expires_at + max_staleness`). |
+| `NO_VERSION_IN_FORCE` | `classification` | `error` | `REQ-CLI-011` | Effective version set `V_t` is empty at instant `t` (e.g., only version is still `Announced`). |
+| `MESSAGE_UNPARSEABLE` | `classification` | `error` | `REQ-CLI-011` | DSP message body is malformed JSON or missing required JSONPath selection target. |
+| `CONTEXT_NOT_IN_PACKAGE` | `classification` | `error` | `REQ-CLI-010` | Message `@context` references a profile URI not declared in the verified package manifest. |
+| `VERDICT_VIOLATION` | `classification` | `error` | `REQ-CLI-011` | Payload fails validation against a `mandatory` slot in all versions of `V_t`. |
+| `VERDICT_NOT_IN_HEAD` | `classification` | `warning` | `REQ-CLI-011` | Payload fails in the head version but passes in a prior `Transition` (in-grace) version of `V_t`. |
+| `VERDICT_RECOMMENDED_NONCONFORMANT` | `classification` | `info` | `REQ-CLI-011` | Payload fails validation in a slot whose binding obligation is `recommended`. |
+| `VERDICT_SHACL_WARNING` | `classification` | `info` | `REQ-CLI-011` | Payload passes `mandatory` shapes in head but triggers a `sh:Warning` (e.g., uses a `deprecated` term). |
+| `ROUTE_DEFAULT_REJECT` | `classification` | `error` | `REQ-CLI-022` | Request path matches no configured route and `default_action` is `"reject"`. |
+| `AGREEMENT_VERSION_REVOKED` | `classification` | `error` | `REQ-CLI-016` | Transfer request references an agreement whose vocabulary version has reached `revoked_from + lease_margin`. |
+| `AGREEMENT_UNKNOWN` | `classification` | `error`\|`info` | `REQ-CLI-016` | Transfer request references an unknown `agreementId` (`reject` if `unknown_agreement: "reject"`, `info` if `"forward"`). |
+| `AGREEMENT_PROFILE_MISMATCH` | `event` | `info` | `REQ-CLI-015` | Captured agreement declares an `odrl:profile` version that differs from `space-lock.json`. |
+| `AGREEMENT_REVOCATION_SCHEDULED` | `event` | `info` | `REQ-CLI-016` | Synced listing introduces a revocation for a version that has active registered agreements. |
+| `AUDIT_WILL_WARN` | `event` | `info` | `REQ-CLI-023` | Passive catalog audit detects a dataset offer using a term that an upcoming version deprecates. |
+| `AUDIT_WILL_REJECT` | `event` | `info` | `REQ-CLI-023` | Passive catalog audit detects a dataset offer that fails against an upcoming `Announced` version. |
+| `CLOCK_SKEW_EXCEEDED` | `event` | `info` | `REQ-CLI-025` | Estimated clock offset between `alexandria-client` and `alexandria-server` exceeds `clock_skew`. |

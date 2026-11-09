@@ -1,56 +1,51 @@
 ---
 title: Getting Started
-description: Overview of the Alexandria Vocabulary Hub and core capabilities.
+description: Overview of the Alexandria Vocabulary Hub ecosystem, components, and capabilities.
 ---
 
 import { Card, Cards } from 'fumadocs-ui/components/card';
 import { Callout } from 'fumadocs-ui/components/callout';
 
-# Alexandria: The Vocabulary Hub
+# Alexandria: The Vocabulary Hub Ecosystem
 
-**Alexandria** is a **Vocabulary Hub**: the essential semantic intermediary in modern dataspaces that enables true semantic interoperability and automated conformance verification across participants.
-
----
-
-## The Role of a Vocabulary Hub in Modern Dataspaces
-
-In a dataspace, sovereign data exchange between autonomous Connectors requires a shared understanding of data structures, service offerings, and usage policies. While baseline information models define foundational data exchange concepts, domain-specific vocabularies are essential to describe specialized industrial data (mobility, manufacturing, healthcare, energy).
-
-Alexandria serves three foundational functions in the dataspace:
-
-### 1. Vocabulary Lifecycle & Publishing
-- **Single Source of Truth:** A central repository where domain experts author, document, version, and publish domain ontologies, RDF vocabularies, and dataset profiles.
-- **Extending Baseline Models:** Bridges standard dataspace namespaces with domain-specific Linked Data schemas without requiring advance bilateral agreements.
-
-### 2. Runtime Semantic Dereferencing
-- **Dynamic Term Lookups:** When a Connector encounters an unfamiliar attribute IRI in a participant's Self-Description or contract offer, it dereferences that IRI against Alexandria.
-- **Machine-Readable Response:** Alexandria immediately responds with the term's RDF definition, class hierarchy, multilingual labels, and semantic relations.
-- **Namespace Caching:** Connectors can query whole namespaces to cache entire vocabularies locally, reducing runtime latency.
-
-### 3. Remote Conformance Testing
-- **Automated Semantic Verification:** Data providers and connectors can run remote conformance tests against the hub using **SHACL (Shapes Constraint Language)** validation shapes.
-- **Payload & Profile Compliance:** Verifies that dataset schemas, catalog records, and connector payloads conform to published dataspace specifications before transactions occur.
-- **Semantic Integrity:** Prevents malformed or non-compliant data models from degrading dataspace interoperability.
+**Alexandria** is a sovereign dataspace **Vocabulary Hub** and **Identity Gateway**. It enables dataspace authorities to author and govern semantic profiles in YAML, distribute cryptographically signed vocabulary packages, validate Dataspace Protocol (DSP) traffic at the connector edge without runtime network latency, and manage decentralized identities (DIDs) and verifiable credentials.
 
 ---
 
-## Identity & SSI: The Trust Anchor
+## Core Binaries & Components
 
-<Callout type="info">
-**Current Implementation Milestone:** Alexandria's initial development milestone establishes the **Identity and Access Layer**. 
-</Callout>
+The repository provides four main entrypoints under `cmd/` and `deploy/`:
 
-Before participants can publish vocabularies or execute remote conformance validations, the hub requires robust, cryptographically verifiable trust:
-- **Decentralized Identifier (DID):** Alexandria holds an autonomous DID and serves its resolvable DID Document at `/.well-known/did.json`.
-- **Delegated Key Custody:** Cryptographic signing keys are held externally via the `wallet.Wallet` port, supporting **Fafnir** and **Eclipse EDC IdentityHub**.
-- **Node-Terminated Authentication:** APIs are protected behind **Zitadel** using OIDC and PKCE, issuing encrypted `HttpOnly` session cookies.
+| Binary | Source | Role in the Dataspace |
+|:---|:---|:---|
+| **`alexandriac`** | `cmd/alexandriac` | **Profile Language Compiler CLI:** Validates `eunomia.profiles/v1` YAML documents (`OdrlProfile`, `SpaceProfile`) across N1–N5 and deterministically compiles RDF/OWL/SKOS, JSON-LD `@context`, SHACL shapes, JSON Schema Draft 2020-12, Cedar schemas, W3C PROF, HTML specs, and `space-lock.json`. |
+| **`alexandria-server`** | `cmd/alexandria-server` | **Vocabulary Hub Server (`C-HUB`):** Exposes `/v1` governance APIs (drafts, candidates, releases, revocations, events), signs `eunomia.versions/v1` listings with Ed25519 over JCS, serves `/.well-known/did.json`, and publishes immutable content-addressed artifacts under `/pub/`. |
+| **`alexandria-client`** | `cmd/alexandria-client` | **Edge Validation & Sync Sidecar (`C-CLI`):** Runs alongside a dataspace Connector. Synchronizes and verifies signed packages in the background (`S1`–`S13`), proxies DSP ingress/egress traffic (`observe`, `shadow`, `enforce`), emits `VHub-Verdict` headers, tracks contract agreements, and exposes a local Admin & Prometheus metrics API. |
+| **`alexandria`** | `cmd/alexandria` | **Identity, SSI & Auth Gateway:** Modular monolith providing node-terminated **Zitadel** OIDC + PKCE login, interactive Swagger UI (`/docs`), and the unified `wallet.Wallet` REST API (`/api/v1/wallet/*`) backed by **Fafnir** or **Eclipse EDC IdentityHub**. |
+
+---
+
+## How the Pieces Fit Together
+
+### 1. Authoring & Governance (`alexandriac` + `alexandria-server`)
+A dataspace authority defines allowed policy actions, constraints, and slot bindings in YAML (`eunomia.profiles/v1`). When proposed and approved on `alexandria-server`, the Hub compiles the deterministic artifacts, calculates lifecycle transition dates (`published_at`, `new_content_from`, `enforced_from`), registers a transparency receipt, and signs the version listing (`eunomia.versions/v1`) with its Ed25519 key published at `/.well-known/did.json`.
+
+### 2. Edge Synchronization & Zero-Latency Enforcement (`alexandria-client`)
+Each participant runs `alexandria-client` as a sidecar proxy in front of their Dataspace Connector:
+- **Background Sync Loop:** Periodically polls `GET /v1/versions`, verifies the Hub's `did:web` key, checks anti-rollback continuity (`S1`–`S13`), and downloads content-addressed PVP packages (`ni:///sha-256;...`) to local disk.
+- **Hot-Path L7 Proxy:** Intercepts inbound and outbound DSP messages (`ContractRequestMessage`, `ContractAgreementMessage`, `TransferRequestMessage`, `CatalogRequestMessage`) and evaluates them strictly against local verified packages—**never contacting the Hub on the request path** (`REQ-SYS-002`).
+- **Graceful Version Transitions:** During a breaking release's transition window, offers using deprecated/retired terms from the previous version are forwarded with an RFC 9651 `VHub-Verdict: warning;gate=policy_intake;code="VERDICT_NOT_IN_HEAD";sunset=...` header, and only rejected after `enforced_from + lease_margin`.
+
+### 3. Decentralized Identity & Delegated Wallets (`alexandria`)
+Through `internal/ssi-auth` and `internal/auth-proxy`, Alexandria delegates private key storage, DID document management, W3C Verifiable Credential storage, OID4VCI/OID4VP flows, and DCP credential requests to external wallets (**Fafnir** or **Eclipse EDC IdentityHub**), while protecting management APIs with **Zitadel** OIDC sessions.
 
 ---
 
 ## Next Steps
 
 <Cards>
-  <Card title="Prerequisites" href="./getting-started/prerequisites" description="Required tools, runtimes, and local port allocations." />
-  <Card title="Quickstart" href="./getting-started/quickstart" description="Step-by-step setup to launch Alexandria locally with Taskfile." />
-  <Card title="Configuration" href="./getting-started/configuration" description="Learn about config.yaml, environment overrides, and secrets." />
+  <Card title="Prerequisites" href="./getting-started/prerequisites" description="Required tools, runtimes, and port allocations for both vhub and alexandria." />
+  <Card title="Quickstart" href="./getting-started/quickstart" description="Run the vhub F6 demo in 3 commands or boot the full Docker + Zitadel + Wallet stack." />
+  <Card title="Configuration Reference" href="./getting-started/configuration" description="Complete reference for server.json, client config.json, and node config.yaml." />
+  <Card title="Incremental Tutorials" href="./tutorials" description="Follow the 5-step hands-on tutorial series from beginner to advanced." />
 </Cards>

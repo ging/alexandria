@@ -1,6 +1,6 @@
 ---
 title: Configuration Reference
-description: Complete reference for config.yaml, environment variable overrides with Viper, and secret management.
+description: Complete configuration reference for alexandria-server (server.json), alexandria-client (config.json), and the Alexandria node (config.yaml).
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -8,168 +8,193 @@ import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 
 # Configuration Reference
 
-Alexandria implements the **One Configuration Document** pattern documented in [ADR 0002](../adr/0002-one-configuration-document). Rather than maintaining separate configuration documents per environment (laptop, Docker host, Kubernetes), the node reads a single baseline YAML file and overrides values through environment variables.
+This guide documents all configuration files used across the Alexandria repository:
+1. **`config/server.json` & `config/tokens.json`:** Configuration for `alexandria-server` (`C-HUB`).
+2. **`config/config.json` & `config/routes.default.json`:** Configuration for `alexandria-client` (`C-CLI`), validated against Appendix A.3 (`conformance/schemas/config.schema.json`).
+3. **`config/config.yaml` & `config/config-ih.yaml`:** Configuration for `cmd/alexandria` (Identity, Zitadel OIDC, and Fafnir/IdentityHub wallets).
 
 ---
 
-## File Discovery & Structure Flexibility
+## 1. `alexandria-server` Configuration (`config/server.json`)
 
-The node automatically locates `config.yaml` by evaluating the following paths in order:
+`alexandria-server` validates its configuration file against `config/server.schema.json` on startup (`DP-12`). Pass `-config <path>` to specify a custom path.
 
-1. CLI flag: `--config <path>`
-2. Current working directory: `./config.yaml`
-3. Repository configuration path: `./config/config.yaml`
-4. Production filesystem path: `/etc/alexandria/config.yaml`
+```json
+{
+  "listen": "127.0.0.1:8080",
+  "public_base_url": "http://localhost:8080",
+  "did": "did:web:localhost%3A8080",
+  "sqlite_path": "../var/hub/hub.db",
+  "blob_dir": "../var/hub/blobs",
+  "signing_key_path": "../var/hub/hub.key",
+  "tokens_path": "tokens.json",
+  "compiler": "dsl",
+  "vendor_dir": "vendor"
+}
+```
 
-### Standalone vs. Shared Dataspace Deployments
+### Field Reference (`server.schema.json`)
 
-The loader supports two layouts interchangeably:
-- **Standalone Node:** Sections sit directly at the root of `config.yaml` (default in this repository).
-- **Shared Dataspace Document:** In multi-service deployments (where catalog, contracts, transfer, and gateway share a single specification), these identical sections can be nested under an `ssi_auth:` key. The loader automatically detects and unpacks either structure without code changes.
+| Field | Type | Required | Description |
+|:---|:---|:---:|:---|
+| `listen` | `string` (`host:port`) | Yes | TCP address where `alexandria-server` binds (`/v1`, `/pub`, `/.well-known/did.json`). |
+| `public_base_url` | `string` (`http(s)://...`) | Yes | External base URL used when constructing public artifact links. |
+| `did` | `string` (`did:web:...`) | Yes | The Hub's W3C `did:web` identifier (e.g., `did:web:localhost%3A8080`). |
+| `sqlite_path` | `string` | Yes | Path to the SQLite database file (created automatically with immutability triggers). |
+| `blob_dir` | `string` | Yes | Content-addressed directory (`<blob_dir>/sha256/<hex>`) for compiled package blobs. |
+| `signing_key_path` | `string` | Yes | Path to the Ed25519 PKCS#8 PEM signing key (auto-generated on first boot if absent). |
+| `tokens_path` | `string` | Yes | Path to the static Bearer token map (`config/tokens.json`). |
+| `compiler` | `"poc"` \| `"dsl"` | No | Draft compiler mode: `"dsl"` compiles `eunomia.profiles/v1` YAML bundles; `"poc"` compiles simplified JSON drafts (default: `"poc"`). |
+| `vendor_dir` | `string` | No | Directory holding local copies of vendored profiles (`<slot>/<version>/vendor.json`) for `compiler: "dsl"`. |
+| `clock_file` | `string` | No | Path to an RFC 3339 timestamp file for deterministic testing (`DP-9`; can also be set via `-clock-file`). |
+| `lifecycle` | `object` | No | Default lifecycle durations (`freshness.ttl`, `freshness.max_staleness`, `grace_window`, `sync_interval`, `clock_skew`, `lease_margin`, `propagation_window`, `max_concurrent_versions`, `degraded`). |
+
+### Static Authentication (`config/tokens.json`)
+
+Maps Bearer tokens to a `principal` name and an array of governance `roles` (`editor`, `reviewer`, `authority` / `releaser`, `member`, `operator`):
+
+```json
+{
+  "editor-token":   {"principal": "steward",     "roles": ["editor"]},
+  "releaser-token": {"principal": "releaser",    "roles": ["releaser"]},
+  "member-token":   {"principal": "alexandria-client", "roles": ["member"]}
+}
+```
 
 ---
 
-## Full `config.yaml` Reference
+## 2. `alexandria-client` Configuration (`config/config.json`)
 
-Below is the annotated reference of all configuration blocks and settings:
+On startup, `alexandria-client` validates `config/config.json` against five strict invariants (`CFG-1` to `CFG-5`, `REQ-CLI-001`) and exits with code `2` if any check fails:
+- **`CFG-1` (`CONFIG_SCHEMA`):** Conforms to the normative Appendix A.3 JSON Schema (`conformance/schemas/config.schema.json`).
+- **`CFG-2` (`CONFIG_ROUTE_OVERLAP`):** No two routes on the same listener have overlapping HTTP method and path patterns (e.g., `:a` vs `:b` in the same segment).
+- **`CFG-3` (`CONFIG_GATE_MESSAGE_MISMATCH`):** Gates assigned to a route are compatible with its DSP `message` type (e.g., `agreement_admission` is only valid on `TransferRequestMessage`).
+- **`CFG-4` (`CONFIG_CREDENTIALS_UNREADABLE`):** The token file referenced by `trust.credentials` exists and is readable.
+- **`CFG-5` (`CONFIG_UPSTREAM_MISSING`):** Every listener used by a route has its corresponding upstream URL configured (`upstreams.dsp` or `upstreams.management`).
 
-### 1. `common_config`
-Network addresses, database persistence, and runtime flags.
+### Example `config/config.json`
 
+```json
+{
+  "space": "https://example.com/spaces/demo",
+  "trust": {
+    "hub_did": "did:web:localhost%3A8080",
+    "hub": "https://localhost:8080",
+    "credentials": "file:config/credentials.json",
+    "did_ttl": "PT1H"
+  },
+  "upstreams": {
+    "dsp": "http://127.0.0.1:8282/protocol"
+  },
+  "listeners": {
+    "dsp-ingress": { "bind": "127.0.0.1:8443" },
+    "dsp-egress":  { "bind": "127.0.0.1:3128" },
+    "admin":       { "bind": "127.0.0.1:9900" }
+  },
+  "routes": [
+    {
+      "listener": "dsp-ingress",
+      "match": { "method": "POST", "path": "/negotiations/request" },
+      "message": "ContractRequestMessage",
+      "gates": ["dsp_message", "policy_intake"],
+      "mode": "enforce",
+      "body": { "select": "$.offer.permission[0]" }
+    },
+    {
+      "listener": "dsp-ingress",
+      "match": { "method": "POST", "path": "/transfers/request" },
+      "message": "TransferRequestMessage",
+      "gates": ["dsp_message", "agreement_admission"],
+      "mode": "enforce"
+    }
+  ],
+  "default_action": "forward",
+  "unknown_agreement": "forward",
+  "events": {
+    "sink": "file:var/client/events.jsonl"
+  }
+}
+```
+
+<Callout type="info">
+**Default DSP Routes (`DP-10`):** If `routes` is omitted or empty, `alexandria-client` automatically loads the 16 standard DSP 2025-1 routes (`config/routes.default.json`) in `observe` mode.
+</Callout>
+
+---
+
+## 3. Identity & Auth Node Configuration (`config/config.yaml`)
+
+`cmd/alexandria` implements the **One Configuration Document** pattern ([ADR 0002](../adr/0002-one-configuration-document)), reading `config/config.yaml` (or `config/config-ih.yaml` for IdentityHub) and allowing any key to be overridden via `ALEXANDRIA_<SECTION>_<KEY>` environment variables.
+
+### `common_config`
 ```yaml
 common_config:
   hosts:
     http:
       protocol: "https"
       url: "alexandria.127.0.0.1.nip.io"
-      port: "8443"            # Port external callers and Caddy proxy address
-      internal_port: "1234"   # Cleartext HTTP port the Go process listens on behind Caddy
-    grpc: null
-    graphql: null
+      port: "8443"            # External Caddy TLS port
+      internal_port: "1234"   # Internal cleartext HTTP port
   db:
-    db_type: Postgres         # Relational database engine
+    db_type: Postgres
     url: "127.0.0.1"
     port: "1500"
     user: "alexandria"
-    password: "alexandria"    # Development default; production passwords injected via env
+    password: "alexandria"
     name: "alexandria"
   api:
     version: "v1"
     openapi_path: "./static/specs/openapi/merged_openapi.json"
   connection:
-    is_local: true            # Running in local workstation environment
+    is_local: true
     is_prod: false
-    is_vault_real: false      # Set to true when running with HashiCorp Vault
-    has_tls_proxy: true       # Caddy terminates TLS in front of internal_port
+    is_vault_real: false
+    has_tls_proxy: true
 ```
 
-### 2. `wallet_config`
-Cryptographic key custody and DID delegation.
-
+### `wallet_config`
 ```yaml
 wallet_config:
-  wallet: Fafnir              # Pluggable backend: Fafnir | IdentityHub
+  wallet: Fafnir              # Fafnir | IdentityHub
   api:
     http:
       protocol: "http"
       url: "127.0.0.1"
-      port: "7003"            # Port published by docker-compose for Fafnir
-    grpc: null
-    graphql: null
-  startup_link_timeout: "10s" # Grace period waiting for wallet before booting degraded
+      port: "7003"            # 7003 for Fafnir, 8181 for IdentityHub
+  startup_link_timeout: "10s"
 ```
 
-### 3. `auth_config`
-Authentication boundary, Zitadel OIDC settings, and session encryption.
-
+### `auth_config` & `observability`
 ```yaml
 auth_config:
-  enabled: true               # Enforces authentication on all /api/v1 routes
-  issuer: "https://auth.127.0.0.1.nip.io:8443" # Must match Zitadel's discovery doc
-  internal_issuer: ""         # Alternate container network address (e.g. http://zitadel:8080)
-  client_id: ""               # Generated by Zitadel; injected dynamically via .env
-  client_secret: ""           # Generated by Zitadel; injected dynamically via .env
-  audiences: []               # Expected audience; empty accepts any valid tenant token
-  scopes: ["openid", "profile", "email", "offline_access"]
+  enabled: true
+  issuer: "https://auth.127.0.0.1.nip.io:8443"
+  client_id: ""               # Injected via .env by task auth:bootstrap
+  client_secret: ""           # Injected via .env by task auth:bootstrap
   redirect_url: "https://alexandria.127.0.0.1.nip.io:8443/api/v1/auth/callback"
   app_url: "https://alexandria.127.0.0.1.nip.io:8443/"
-  post_logout_url: ""
-  introspect: "fallback"      # never | fallback | always (validates JWT locally or queries IAM)
-  roles_claim: "urn:zitadel:iam:org:project:roles"
-  required_roles: []          # Mandatory roles required for all callers
-  jwks_refresh: "15m"         # Frequency to refresh Zitadel public JWKS key set
-  http_timeout: "10s"
-  startup_discovery_timeout: "10s" # Boot grace period for IAM discovery
+  introspect: "fallback"      # never | fallback | always
   session:
     name: "alexandria_session"
-    domain: ""
-    path: "/"
-    secure: true              # Cookie requires HTTPS (enforced by Caddy)
+    secure: true
     same_site: "lax"
     ttl: "12h"
-    key: ""                   # 32-byte session sealing key generated into .env
-```
 
-### 4. `observability`
-Telemetry, structured logging, and internal profiling.
-
-```yaml
 observability:
-  log_level: "info"           # debug | info | warn | error
-  log_format: "auto"          # auto (colored text in terminal, JSON in pipes) | text | json
-  metrics: true               # Exposes Prometheus metrics at /metrics
-  pprof: false                # Exposes Go heap/cpu profiler at /debug/pprof
-  port: "2112"                # Dedicated internal telemetry listener
+  log_level: "info"
+  log_format: "auto"
+  metrics: true
+  pprof: false
+  port: "2112"
 ```
 
-### 5. `did_config` & `verify_req_config`
-DID format and verifiable presentation requirements.
-
-```yaml
-did_config:
-  type: Jwk                   # Decentralized Identifier format (did:jwk)
-
-verify_req_config:
-  is_cert_allowed: false
-  auto_approve_cert: false
-  vcs_requested:
-    - DataSpaceParticipant   # Required Verifiable Credential types
-```
-
----
-
-## Hierarchical Environment Overrides (Viper)
-
-Every value in `config.yaml` can be overridden at runtime without modifying the file. Viper builds the environment variable name using:
-`ALEXANDRIA_` + `<DOTTED_PATH_IN_UPPERCASE>` (dots replaced by underscores).
-
-### Common Examples:
-
+### Common Environment Variable Overrides
 ```bash
-# Point Alexandria to a different wallet port (e.g. IdentityHub or Eunomia):
-ALEXANDRIA_WALLET_CONFIG_API_HTTP_PORT=8181 task dev
+# Switch to Eclipse EDC IdentityHub on port 8181:
+ALEXANDRIA_WALLET_CONFIG_WALLET=IdentityHub \
+ALEXANDRIA_WALLET_CONFIG_API_HTTP_PORT=8181 \
+task dev
 
-# Switch wallet provider dynamically:
-ALEXANDRIA_WALLET_CONFIG_WALLET=IdentityHub task dev
-
-# Disable authentication during headless test execution:
-ALEXANDRIA_AUTH_CONFIG_ENABLED=false task dev
-
-# Enable verbose debug logging:
-ALEXANDRIA_OBSERVABILITY_LOG_LEVEL=debug task dev
-
-# Override production database password:
-ALEXANDRIA_COMMON_CONFIG_DB_PASSWORD=my_secure_prod_password ./bin/alexandria
+# Disable OIDC authentication for automated testing:
+ALEXANDRIA_AUTH_CONFIG_ENABLED=false task test
 ```
-
----
-
-## Secrets vs. Committed Files (`.env`)
-
-<Callout type="warn">
-`config/config.yaml` is committed to git and must **never** contain secrets, private keys, or production passwords.
-</Callout>
-
-- **In Local Development:** `task auth:bootstrap` writes generated secrets (Zitadel client credentials and the 32-byte session sealing key) to `.env`, which is loaded automatically by `Taskfile.yaml` and ignored by git.
-- **In Production (Kubernetes/Docker):** Secrets are mounted as environment variables or injected from secret managers (e.g., HashiCorp Vault or Kubernetes Secrets).
-EOF

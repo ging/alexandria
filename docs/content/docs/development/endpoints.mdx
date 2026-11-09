@@ -1,60 +1,145 @@
 ---
 title: REST API Endpoints
-description: Reference catalog of HTTP endpoints exposed by the Alexandria node.
+description: Complete reference catalog of HTTP endpoints exposed by Alexandria (Wallet, Auth, OpenAPI), alexandria-server (/v1, /pub), and alexandria-client (Admin & Proxy).
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
 # REST API Reference
 
-Alexandria serves endpoints divided into root specifications, authentication management, and identity/wallet operations.
+This page catalogs every HTTP endpoint exposed across **`alexandria`**, **`alexandria-server`**, and **`alexandria-client`**.
+
+<Callout type="info">
+**Interactive Swagger UI:** When running `cmd/alexandria`, navigate to **`/docs`** (or `/swagger`, `/api/v1/openapi/docs`) in your browser to explore the full OpenAPI 3.0 specification (`api/openapi.yaml`) interactively. Raw specs are served at `/openapi.json` and `/openapi.yaml`.
+</Callout>
 
 ---
 
-## Root & Probes
+## Part 1: `alexandria` Node Endpoints (`cmd/alexandria`)
 
-| Method | Path | Auth Required | Description |
+### Root, OpenAPI & Health Probes
+
+| Method | Path | Auth | Description |
 |:---|:---|:---:|:---|
-| `GET` | `/.well-known/did.json` | No | Public W3C DID Document resolving the node's decentralized identifier. |
-| `GET` | `/healthz` | No | Basic liveness probe confirming the HTTP server is responsive. |
-| `GET` | `/livez` | No | Kubernetes liveness probe. |
-| `GET` | `/readyz` | No | Kubernetes readiness probe confirming database and wallet connections. |
-| `GET` | `/metrics` | No (Internal port `2112`) | Prometheus formatted metrics. |
+| `GET` | `/.well-known/did.json` | No | Public W3C DID Document resolving the node's active decentralized identifier. |
+| `GET` | `/docs` (`/swagger`) | No | Interactive Swagger UI rendering the OpenAPI 3.0 specification. |
+| `GET` | `/openapi.json` / `/openapi.yaml` | No | Raw OpenAPI 3.0 specification in JSON or YAML format (also under `/api/v1/openapi/*`). |
+| `GET` | `/healthz` / `/livez` | No | Liveness probes confirming the HTTP server is responsive. |
+| `GET` | `/readyz` | No | Readiness probe confirming database and wallet connections. |
+| `GET` | `/metrics` | No (`:2112`) | Prometheus metrics endpoint on the internal telemetry listener. |
+
+### Authentication Endpoints (`/api/v1/auth`)
+
+| Method | Path | Auth | Description |
+|:---|:---|:---:|:---|
+| `GET` | `/api/v1/auth/login` | No | Initiates OIDC authorization code flow + PKCE with Zitadel. |
+| `GET` | `/api/v1/auth/callback` | No | Completes OAuth2 callback and issues sealed `HttpOnly` cookie (`alexandria_session`). |
+| `GET` | `/api/v1/auth/userinfo` | Yes | Returns identity claims and roles of the authenticated caller. |
+| `GET` | `/api/v1/auth/logout` | Yes | Invalidates the user session and clears session cookies. |
+
+### Wallet, Key & DID Endpoints (`/api/v1/wallet`)
+
+All `/api/v1/wallet/*` routes require authentication when `auth_config.enabled: true`. Mutating endpoints implement the **Mutation-and-Query Pattern** ([ADR 0008](../adr/0008-enriched-domain-models-mutation-queries-and-structured-errors)) and return the updated entity.
+
+#### Wallet Link & Info
+| Method | Path | Success Status | Description |
+|:---|:---|:---:|:---|
+| `GET` | `/api/v1/wallet/is-linked` | `200` / `404` | Checks whether the wallet has an active linked DID. |
+| `POST` | `/api/v1/wallet/link` | `200 OK` | Links/refreshes the active wallet identity and returns the `Did` entity. |
+| `GET` | `/api/v1/wallet/info` | `200 OK` | Returns wallet provider metadata (`Fafnir` or `IdentityHub`). |
+
+#### Cryptographic Keys (`/api/v1/wallet/keys`)
+| Method | Path | Success Status | Description |
+|:---|:---|:---:|:---|
+| `GET` | `/api/v1/wallet/keys` | `200 OK` | Lists all keys in the wallet (`keyResp[]`, including JWK/PEM metadata). |
+| `POST` | `/api/v1/wallet/keys` | `201 Created` | Registers a new keypair (PEM or JWK) and returns the created `keyResp`. |
+| `DELETE` | `/api/v1/wallet/keys/:id` | `202 Accepted` | Deletes a key by ID. |
+| `POST` | `/api/v1/wallet/keys/:id/rotate` | `200 OK` | Rotates a key (optional `{"duration": "24h"}`) and returns the updated `keyResp`. |
+| `POST` | `/api/v1/wallet/keys/:id/revoke` | `202 Accepted` | Revokes a compromised key. |
+
+#### Decentralized Identifiers (`/api/v1/wallet/did`)
+| Method | Path | Success Status | Description |
+|:---|:---|:---:|:---|
+| `GET` | `/api/v1/wallet/did` | `200 OK` | Returns the active default DID string (`{"did": "..."}`). |
+| `GET` | `/api/v1/wallet/did/all` | `200 OK` | Lists all DID records held by the wallet. |
+| `POST` | `/api/v1/wallet/did` | `201 Created` | Registers a new DID (`did:jwk` or `did:web`) with keys and services. |
+| `GET` | `/api/v1/wallet/did/:id` | `200 OK` | Retrieves a specific DID record by ID. |
+| `DELETE` | `/api/v1/wallet/did/:id` | `202 Accepted` | Deletes a DID record. |
+| `POST` | `/api/v1/wallet/did/:id/default` | `200 OK` | Promotes `:id` to be the wallet's default DID. |
+| `POST` | `/api/v1/wallet/did/:id/key/:key_id` | `200 OK` | Binds a key into a DID's verification methods. |
+| `DELETE` | `/api/v1/wallet/did/:id/key/:key_id` | `200 OK` | Unbinds a key from a DID's verification methods. |
+| `POST` | `/api/v1/wallet/did/:id/key/:key_id/default` | `200 OK` | Sets `:key_id` as the default verification method of DID `:id`. |
+| `POST` | `/api/v1/wallet/did/:id/publish` | `200 OK` | Publishes the DID Document (`{"did": "...", "state": "PUBLISHED"}`). |
+| `POST` | `/api/v1/wallet/did/:id/unpublish` | `200 OK` | Unpublishes the DID Document. |
+| `GET` | `/api/v1/wallet/did/:id/state` | `200 OK` | Returns current publication state of the DID. |
+| `POST` | `/api/v1/wallet/did/:id/endpoints` | `201 Created` | Adds a service endpoint (`{id, type, url}`) to the DID Document. |
+| `DELETE` | `/api/v1/wallet/did/:id/endpoints/:endpoint_id` | `200 OK` | Removes a service endpoint from the DID Document. |
+
+#### Verifiable Credentials, OID4VC & DCP (`/api/v1/wallet`)
+| Method | Path | Success Status | Description |
+|:---|:---|:---:|:---|
+| `GET` | `/api/v1/wallet/vcs` | `200 OK` | Lists held Verifiable Credentials (supports optional `?type=` filter). |
+| `POST` | `/api/v1/wallet/credential` | `201 Created` | Stores a W3C Verifiable Credential (VC 1.0 JWT or VC 2.0 JOSE container). |
+| `DELETE` | `/api/v1/wallet/credential/:id` | `202 Accepted` | Deletes a stored Verifiable Credential. |
+| `POST` | `/api/v1/wallet/oid4vci` | `200 OK` | Processes an OpenID4VCI credential offer (`{"uri": "..."}`). |
+| `POST` | `/api/v1/wallet/oid4vp` | `200 OK` | Processes an OpenID4VP presentation request (`{"uri": "..."}`). |
+| `POST` | `/api/v1/wallet/dcp/request` | `202 Accepted` | Initiates a Dataspace Credential Protocol (DCP) credential request (`{"requestId": "..."}`). |
+| `GET` | `/api/v1/wallet/dcp/request/:id` | `200 OK` | Retrieves the status of a DCP credential request. |
+
+#### IdentityHub Participant Contexts (`/api/v1/wallet/participants`)
+| Method | Path | Success Status | Description |
+|:---|:---|:---:|:---|
+| `POST` | `/api/v1/wallet/participants` | `201 Created` | Provisions a new IdentityHub participant context with DID and key descriptor. |
+| `GET` | `/api/v1/wallet/participants/:id` | `200 OK` | Retrieves participant context details. |
+| `POST` | `/api/v1/wallet/participants/:id/state` | `200 OK` | Activates or deactivates a participant context (`{"active": true}`). |
+| `POST` | `/api/v1/wallet/participants/:id/token` | `200 OK` | Regenerates the participant's API token in IdentityHub. |
+| `PUT` | `/api/v1/wallet/participants/:id/token` | `200 OK` | Updates the participant's cached API token in Alexandria memory. |
 
 ---
 
-## Authentication Endpoints (`/api/v1/auth`)
+## Part 2: `alexandria-server` Endpoints (`cmd/alexandria-server`)
+
+### Governance API (`/v1/*` — Requires Bearer Token)
+
+| Method | Path | Roles | Description |
+|:---|:---|:---|:---|
+| `POST` | `/v1/drafts` | `editor`, `releaser` | Creates a new draft (returns `201 Created`, `Location`, and `ETag`). |
+| `GET` | `/v1/drafts/{id}` | `editor`, `reviewer`, `releaser` | Returns raw draft document and current `ETag`. |
+| `PUT` | `/v1/drafts/{id}` | `editor`, `releaser` | Replaces draft content (`If-Match: <ETag>` header required). |
+| `POST` | `/v1/drafts/{id}:validate` | `editor`, `reviewer`, `releaser` | Runs `N1`–`N5` validation and returns structured findings. |
+| `POST` | `/v1/drafts/{id}:propose` | `editor`, `releaser` | Compiles draft into an immutable Candidate and writes content-addressed blobs (`201`). |
+| `GET` | `/v1/candidates/{id}` | `editor`, `reviewer`, `releaser` | Returns Candidate metadata, state, and manifest digest. |
+| `POST` | `/v1/candidates/{id}:approve` | `releaser` (`authority`) | Approves candidate, computes lifecycle dates, signs `eunomia.version/v1`, and issues listing (`201`). |
+| `POST` | `/v1/candidates/{id}:reject` | `reviewer`, `releaser` | Rejects a pending candidate with `{"comment": "..."}`. |
+| `GET` | `/v1/versions` | `member`, `editor`, `reviewer`, `releaser`, `operator` | Returns JCS-signed `eunomia.versions/v1` listing (`Cache-Control: private, no-cache`). |
+| `GET` | `/v1/versions/{id}` | `member`, `editor`, `reviewer`, `releaser`, `operator` | Returns JCS-signed `eunomia.version/v1` record for version `{id}`. |
+| `POST` | `/v1/versions/{id}:revoke` | `releaser` (`authority`) | Revokes version `{id}` (`{"justification": "...", "revoked_from": "..."}`) and re-issues listing. |
+| `GET` | `/v1/events?after=<seq>` | `editor`, `reviewer`, `releaser`, `operator` | Returns up to 100 immutable governance events after sequence `<seq>`. |
+
+### Public Distribution & Trust (`/pub/*` & `/.well-known/did.json` — Public)
+
+| Method | Path | Cache-Control | Description |
+|:---|:---|:---|:---|
+| `GET` | `/.well-known/did.json` | — | Serves the Hub's W3C `did:web` Document with published Ed25519 verification keys. |
+| `GET` | `/pub/{slug}` | `no-cache` | `303 See Other` redirect to `/pub/{slug}/{head}/manifest.json`. |
+| `GET` | `/pub/spaces/{slug}` | `no-cache` | `303 See Other` redirect to `/pub/{slug}/{head}/manifest.json`. |
+| `GET` | `/pub/packages/{version}/{file}` | `public, max-age=31536000, immutable` | Serves `manifest.json` or `space-lock.json` for `{version}` with `ETag: "<sha256>"`. |
+| `GET` | `/pub/blobs/sha256/{hex}` | `public, max-age=31536000, immutable` | Serves raw content-addressed blob by SHA-256 hex digest. |
+| `GET` | `/pub/{slug}/{version}/{path...}` | `public, max-age=31536000, immutable` | Serves versioned artifact (`vocab.ttl`, `context.jsonld`, `shapes.ttl`, `schema.json`, etc.). |
+
+---
+
+## Part 3: `alexandria-client` Admin & Observability Endpoints (`cmd/alexandria-client`)
+
+Mounted exclusively on the `admin` listener (`listeners.admin.bind`, default `127.0.0.1:9900`, `REQ-CLI-019`):
 
 | Method | Path | Description |
 |:---|:---|:---|
-| `GET` | `/api/v1/auth/login` | Initiates OIDC authorization flow with Zitadel (redirects browser). |
-| `GET` | `/api/v1/auth/callback` | Handles OAuth2 redirect callback and sets sealed session cookie. |
-| `GET` | `/api/v1/auth/userinfo` | Returns the identity and claims of the currently authenticated caller. |
-| `GET` | `/api/v1/auth/logout` | Terminates user session and invalidates session cookies. |
-
----
-
-## Identity & Wallet Endpoints (`/api/v1/wallet`)
-
-All endpoints below require authentication.
-
-### Keys
-- `GET /api/v1/wallet/keys`: Lists cryptographic keys registered in the wallet.
-- `POST /api/v1/wallet/keys`: Registers a new asymmetric keypair.
-- `DELETE /api/v1/wallet/keys/:id`: Purges a registered key.
-- `POST /api/v1/wallet/keys/:id/rotate`: Initiates key rotation.
-- `POST /api/v1/wallet/keys/:id/revoke`: Revokes a key.
-
-### DIDs
-- `GET /api/v1/wallet/dids`: Lists managed Decentralized Identifiers.
-- `GET /api/v1/wallet/dids/:id`: Retrieves details for a specific DID.
-- `POST /api/v1/wallet/dids`: Provisions a new DID.
-- `DELETE /api/v1/wallet/dids/:id`: Deletes a DID.
-- `POST /api/v1/wallet/dids/:id/publish`: Publishes the DID document.
-- `POST /api/v1/wallet/dids/:id/unpublish`: Unpublishes the DID document.
-
-### Verifiable Credentials & Exchanges
-- `GET /api/v1/wallet/credentials`: Lists held Verifiable Credentials.
-- `DELETE /api/v1/wallet/credentials/:id`: Purges a Verifiable Credential.
-- `POST /api/v1/wallet/oid4vci`: Processes an OpenID for Verifiable Credential Issuance offer.
-- `POST /api/v1/wallet/oid4vp`: Handles an OpenID for Verifiable Presentations presentation request.
+| `GET` | `/status` | Returns client operational state (`onboarding`, `normal`, `degraded`, `fail_closed`), `last_accepted_listing`, clock skew estimate, and retained package versions (`REQ-CLI-020`). |
+| `GET` | `/versions` | Returns currently synchronized versions and their computed lifecycle states at the current instant. |
+| `GET` | `/agreements/{id...}` | Returns registration details and revocation status for a captured contract agreement (`404 API_NOT_FOUND` if unknown). |
+| `POST` | `/agreements:import` | Bulk-imports pre-existing agreements (`[{"agreement_id": "...", "version": "1.0.0"}]`, `REQ-CLI-026`). |
+| `GET` | `/audit/reports/latest` | Returns the latest passive catalog audit report (`AUDIT_WILL_WARN`, `AUDIT_WILL_REJECT`, `REQ-CLI-023`). |
+| `GET` | `/healthz` | Liveness probe (`200 OK`). |
+| `GET` | `/readyz` | Readiness probe (`200 OK` when synchronized in `normal`/`degraded`; `503` in `onboarding`/`fail_closed`). |
+| `GET` | `/metrics` | Prometheus metrics (`vhub_client_requests_total`, `vhub_client_request_duration_seconds`, `vhub_client_sync_total`, `vhub_client_listing_age_seconds`). |

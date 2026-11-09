@@ -1,0 +1,253 @@
+---
+title: "2. Publishing & Governance on alexandria-server"
+description: Step-by-step tutorial on running alexandria-server, creating drafts, proposing candidates, approving signed releases, and dereferencing /pub artifacts.
+---
+
+import { Steps } from 'fumadocs-ui/components/steps';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Tutorial 2: Publishing & Governing Vocabularies on `alexandria-server`
+
+In this tutorial, you will launch a standalone **`alexandria-server`** instance configured with the `eunomia.profiles/v1` YAML compiler (`"compiler": "dsl"`) and walk through the complete governance lifecycle:
+1. Resolve the Hub's public W3C `did:web` Document (`/.well-known/did.json`).
+2. Create and update a vocabulary draft as an **`editor`** with optimistic concurrency (`ETag` / `If-Match`).
+3. Propose an immutable candidate (`:propose`), triggering `N1`–`N5` compilation and content-addressed storage.
+4. Approve the candidate as a **`releaser` / `authority`** (`:approve`) and inspect how role separation blocks unauthorized callers (`API_FORBIDDEN_ROLE`).
+5. Fetch the JCS-canonicalized, Ed25519-signed version listing (`GET /v1/versions`) and dereference immutable public artifacts (`GET /pub/...`).
+
+---
+
+<Steps>
+
+### Step 1: Prepare a Clean Workspace and Start `alexandria-server`
+
+First, ensure `bin/alexandria-server` is compiled:
+
+```bash
+make build
+```
+
+Create a temporary lab directory `/tmp/vhub-lab` with `tokens.json` and `server.json` configured to use the `"dsl"` YAML compiler:
+
+```bash
+mkdir -p /tmp/vhub-lab
+
+cat << 'EOF' > /tmp/vhub-lab/tokens.json
+{
+  "editor-token":   {"principal": "alice-steward",  "roles": ["editor"]},
+  "releaser-token": {"principal": "bob-authority",  "roles": ["releaser"]},
+  "member-token":   {"principal": "connector-edge", "roles": ["member"]}
+}
+EOF
+
+cat << 'EOF' > /tmp/vhub-lab/server.json
+{
+  "listen": "127.0.0.1:18080",
+  "public_base_url": "http://127.0.0.1:18080",
+  "did": "did:web:127.0.0.1%3A18080",
+  "sqlite_path": "/tmp/vhub-lab/hub.db",
+  "blob_dir": "/tmp/vhub-lab/blobs",
+  "signing_key_path": "/tmp/vhub-lab/hub.key",
+  "tokens_path": "/tmp/vhub-lab/tokens.json",
+  "compiler": "dsl"
+}
+EOF
+```
+
+Start `alexandria-server` in a terminal (or in the background):
+
+```bash
+./bin/alexandria-server -config /tmp/vhub-lab/server.json
+```
+
+You will see:
+```text
+alexandria-server listening on 127.0.0.1:18080 as did:web:127.0.0.1%3A18080 (PoC: not for production)
+```
+
+### Step 2: Inspect the Hub's W3C DID Document
+
+On first startup, `signer_file` automatically generates an Ed25519 keypair at `/tmp/vhub-lab/hub.key` and publishes the public verification method at `/.well-known/did.json` (`REQ-HUB-010`, `DP-4`):
+
+```bash
+curl -s http://127.0.0.1:18080/.well-known/did.json | jq .
+```
+
+Output:
+```json
+{
+  "@context": [
+    "https://www.w3.org/ns/did/v1",
+    "https://w3id.org/security/suites/jws-2020/v1"
+  ],
+  "id": "did:web:127.0.0.1%3A18080",
+  "verificationMethod": [
+    {
+      "id": "did:web:127.0.0.1%3A18080#key-1",
+      "type": "JsonWebKey2020",
+      "controller": "did:web:127.0.0.1%3A18080",
+      "publicKeyJwk": {
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "x": "..."
+      }
+    }
+  ],
+  "assertionMethod": [
+    "did:web:127.0.0.1%3A18080#key-1"
+  ]
+}
+```
+
+### Step 3: Create and Validate a Draft (`editor` Role)
+
+Using `editor-token`, upload the F6 `v1.0.0.yaml` profile bundle as a new draft via `POST /v1/drafts`:
+
+```bash
+curl -i -s -X POST http://127.0.0.1:18080/v1/drafts \
+  -H "Authorization: Bearer editor-token" \
+  --data-binary @conformance/f6/drafts/v1.0.0.yaml
+```
+
+Response headers and body:
+```http
+HTTP/1.1 201 Created
+ETag: "rev-1"
+Location: /v1/drafts/draft-1
+
+{"id":"draft-1","rev":1,"etag":"\"rev-1\""}
+```
+
+<Callout type="info">
+**Optimistic Concurrency (`REQ-HUB-018`):** Updating a draft via `PUT /v1/drafts/draft-1` requires passing `If-Match: "rev-1"`. Omitting `If-Match` returns `428 Precondition Required` (`API_PRECONDITION_REQUIRED`), and passing a stale ETag returns `412 Precondition Failed` (`API_PRECONDITION_FAILED`).
+</Callout>
+
+You can explicitly validate the draft before proposing it:
+
+```bash
+curl -s -X POST http://127.0.0.1:18080/v1/drafts/draft-1:validate \
+  -H "Authorization: Bearer editor-token" | jq .
+```
+
+### Step 4: Propose a Release Candidate (`:propose`)
+
+Now freeze and compile `draft-1` into an immutable Release Candidate:
+
+```bash
+curl -s -X POST http://127.0.0.1:18080/v1/drafts/draft-1:propose \
+  -H "Authorization: Bearer editor-token" | jq .
+```
+
+Output:
+```json
+{
+  "id": "cand-1",
+  "draft_id": "draft-1",
+  "draft_rev": 1,
+  "space": "https://example.com/spaces/demo",
+  "version": "1.0.0",
+  "state": "pending",
+  "manifest_digest": "ni:///sha-256;..."
+}
+```
+
+Once created, `cand-1` is completely decoupled from `draft-1` (`REQ-HUB-002`)—subsequent edits to `draft-1` never alter `cand-1`.
+
+### Step 5: Verify Role Separation and Approve the Release (`:approve`)
+
+First, verify that an `editor` **cannot** approve their own candidate (`REQ-HUB-003`, `REQ-HUB-017`):
+
+```bash
+curl -i -s -X POST http://127.0.0.1:18080/v1/candidates/cand-1:approve \
+  -H "Authorization: Bearer editor-token" \
+  -d '{}'
+```
+
+The Hub rejects the request with `403 Forbidden` and an RFC 9457 `application/problem+json` body carrying the normative code `API_FORBIDDEN_ROLE`:
+
+```json
+{
+  "type": "urn:vhub:problem:API_FORBIDDEN_ROLE",
+  "title": "API_FORBIDDEN_ROLE",
+  "status": 403,
+  "detail": "principal \"alice-steward\" lacks required role for approve",
+  "code": "API_FORBIDDEN_ROLE",
+  "severity": "error"
+}
+```
+
+Now approve the candidate using `releaser-token`:
+
+```bash
+curl -s -X POST http://127.0.0.1:18080/v1/candidates/cand-1:approve \
+  -H "Authorization: Bearer releaser-token" \
+  -d '{}' | jq .
+```
+
+Output (`201 Created`):
+```json
+{
+  "signed": {
+    "type": "eunomia.version/v1",
+    "space": "https://example.com/spaces/demo",
+    "issued_at": "2026-11-09T21:30:00Z",
+    "record": {
+      "version": "1.0.0",
+      "manifest": "ni:///sha-256;...",
+      "class": "initial",
+      "emergency": false,
+      "published_at": "2026-11-09T21:30:00Z",
+      "new_content_from": "2026-11-11T21:30:00Z",
+      "enforced_from": "2026-11-11T21:30:00Z",
+      "revoked_from": null
+    }
+  },
+  "signature": {
+    "kid": "did:web:127.0.0.1%3A18080#key-1",
+    "alg": "EdDSA",
+    "sig": "..."
+  }
+}
+```
+
+### Step 6: Fetch the Signed Version Listing & Public Artifacts (`/pub`)
+
+Members (`member-token`) and `alexandria-client` sidecars poll `GET /v1/versions` to obtain the signed listing:
+
+```bash
+curl -s http://127.0.0.1:18080/v1/versions \
+  -H "Authorization: Bearer member-token" | jq .
+```
+
+And anyone can dereference the public, immutable artifacts under `/pub/` without authentication (`REQ-HUB-011`, `REQ-HUB-016`):
+
+```bash
+# 1. Head redirect (303 See Other -> /pub/demo/1.0.0/manifest.json):
+curl -i http://127.0.0.1:18080/pub/demo
+
+# 2. Fetch the signed package manifest (Cache-Control: public, max-age=31536000, immutable):
+curl -s http://127.0.0.1:18080/pub/packages/1.0.0/manifest.json | jq .
+
+# 3. Fetch the generated space-lock.json:
+curl -s http://127.0.0.1:18080/pub/packages/1.0.0/space-lock.json | jq .
+
+# 4. Fetch the generated JSON Schema or OWL/SKOS Turtle directly:
+curl -s http://127.0.0.1:18080/pub/demo/1.0.0/profiles/odrl/f6/1.0.0/vocab.ttl
+```
+
+### Step 7: Inspect the Immutable Governance Audit Log
+
+Query `GET /v1/events` to inspect the append-only governance event log stored in SQLite:
+
+```bash
+curl -s http://127.0.0.1:18080/v1/events \
+  -H "Authorization: Bearer editor-token" | jq .
+```
+
+</Steps>
+
+---
+
+## Next Tutorial
+
+Keep `alexandria-server` running (or see how to pair it with a connector) in **[Tutorial 3: Edge DSP Traffic Validation with `alexandria-client`](./03-edge-validation-sidecar)**!

@@ -1,6 +1,6 @@
 ---
 title: API & Development Overview
-description: Overview of Alexandria REST APIs, remote conformance testing, authentication boundary, and developer workflows.
+description: Overview of REST APIs, interactive OpenAPI/Swagger UI, conformance testing, authentication, and developer workflows across Alexandria and vhub.
 ---
 
 import { Card, Cards } from 'fumadocs-ui/components/card';
@@ -8,39 +8,34 @@ import { Callout } from 'fumadocs-ui/components/callout';
 
 # API & Development
 
-Alexandria provides versioned REST APIs built on **Gin** to support vocabulary lifecycle management, remote conformance testing, and cryptographic identity operations, all guarded by OpenID Connect (OIDC) authentication.
+Alexandria exposes cleanly separated HTTP surfaces across its components:
+1. **Identity & Wallet Gateway (`cmd/alexandria`):** Mounted under `/api/v1` (`auth` and `wallet`), guarded by Zitadel OIDC session cookies or Bearer tokens, plus interactive **Swagger UI** at `/docs` (`/openapi.json`, `/openapi.yaml`) and root W3C DID Document resolution at `/.well-known/did.json`.
+2. **Vocabulary Hub Server (`cmd/alexandria-server`):** Exposes the `/v1/*` Governance API (protected by role-based Bearer authentication), the public immutable `/pub/*` artifact distribution API, and `/.well-known/did.json`.
+3. **Edge Validation Sidecar (`cmd/alexandria-client`):** Exposes L7 DSP reverse/forward proxy listeners (`dsp-ingress`, `dsp-egress`, `mgmt-ingress`) and an isolated local Admin & Prometheus telemetry API (`admin` port: `/status`, `/versions`, `/agreements`, `/audit`, `/metrics`).
 
 ---
 
-## Architecture of the HTTP Layer
-
-- **Prefix & Versioning:** All bounded context APIs are mounted under `/api/v1`.
-- **The Guard Interface:** Contexts needing public ingress (like login and callback) register routes before the authentication guard. All subsequent `/api/v1` routes require either a valid authenticated session cookie or bearer token.
-- **Root Escape Hatches:** Fixed specifications like `/.well-known/did.json` and health probes (`/healthz`, `/livez`, `/readyz`) mount directly at the root of the engine via `RootModule`.
-
----
-
-## Topics
+## Developer Guides & References
 
 <Cards>
   <Card
-    title="Remote Conformance Testing"
-    href="./development/conformance"
-    description="Automated semantic verification using SHACL constraint shapes for connector and payload compliance."
-  />
-  <Card
-    title="Authentication & Sessions"
-    href="./development/authentication"
-    description="Zitadel OIDC flows, PKCE, sealed session cookies, and token introspection."
-  />
-  <Card
     title="REST API Endpoints"
     href="./development/endpoints"
-    description="Catalog of endpoints for identity, DID documents, and wallet operations."
+    description="Complete HTTP endpoint catalog for Alexandria Wallet/Auth, alexandria-server (/v1 & /pub), alexandria-client Admin, and Swagger UI."
   />
   <Card
-    title="Testing & CI/CD"
+    title="Conformance & Traceability"
+    href="./development/conformance"
+    description="61 normative requirements (REQ-*), 64 closed F5 codes (N-*), Scenario F6 E2E reproduction, and TRACEABILITY.md generation."
+  />
+  <Card
+    title="Authentication & Authorization"
+    href="./development/authentication"
+    description="Node-terminated Zitadel OIDC + PKCE sessions in alexandria and role-based Bearer authentication in alexandria-server."
+  />
+  <Card
+    title="Testing, Archtest & CI/CD"
     href="./development/testing-and-ci"
-    description="Running unit and integration test suites, linting, Task commands, and GitHub Actions."
+    description="Makefile and Taskfile workflows, unit and live integration suites, AST architectural gates (archtest), and GitHub Actions."
   />
 </Cards>

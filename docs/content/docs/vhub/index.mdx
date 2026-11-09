@@ -1,0 +1,109 @@
+---
+title: Vocabulary Hub Overview (v0.2.1)
+description: Complete architectural overview of the Vocabulary Hub v0.2.1 specification implementation (alexandria-server, alexandria-client, and alexandriac).
+---
+
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Vocabulary Hub (`vhub`) — Specification v0.2.1
+
+Alexandria includes the complete reference implementation of the **Vocabulary Hub System v0.2.1** (`F2`–`F8`, Appendices A and B) and the **`eunomia.profiles/v1`** YAML profile compiler.
+
+It is engineered around two strict architectural guarantees:
+1. **Deterministic Convergence (`REQ-SYS-001`):** Any two `alexandria-client` instances that have synchronized the same signed listing (`eunomia.versions/v1`) and evaluate the same DSP message at the same instant `t` produce the exact same classification, HTTP action, and `VHub-Verdict` header.
+2. **Zero Hub Contact on the Hot Path (`REQ-SYS-002`):** The edge validation sidecar (`alexandria-client`) never contacts `alexandria-server` or resolves `did:web` while processing a Connector's DSP traffic. All cryptographic verification (`S1`–`S13`) happens asynchronously in the background.
+
+---
+
+## System Topology
+
+```
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │                       alexandria-server (C-HUB)                               │
+  │                                                                         │
+  │  ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────┐  │
+  │  │ /v1 Governance API  │  │  /pub Distribution  │  │ /.well-known/   │  │
+  │  │ Draft -> Candidate  │  │  Immutable Blobs &  │  │ did.json        │  │
+  │  │ -> Release / Revoke │  │  303 Head Redirects │  │ (Ed25519 JWK)   │  │
+  │  └──────────┬──────────┘  └──────────▲──────────┘  └────────▲────────┘  │
+  │             │                        │                      │           │
+  │             ▼                        │                      │           │
+  │  ┌───────────────────────────────────┴──────────────────────┴────────┐  │
+  │  │ compiler_dsl (eunomia.profiles/v1) · SQLite (immutable triggers)  │  │
+  │  │ JCS + EdDSA Signer · TransparencyLog (SCITT) · Listing Scheduler  │  │
+  │  └───────────────────────────────────────────────────────────────────┘  │
+  └───────────────────────────▲──────────────────────▲──────────────────────┘
+                              │                      │
+             Background Sync  │ GET /v1/versions     │ GET /.well-known/did.json
+             (S1–S13, V1–V4)  │ GET /pub/packages/.. │ (cached by did_ttl)
+                              │                      │
+  ┌───────────────────────────┴──────────────────────┴──────────────────────┐
+  │                       alexandria-client (C-CLI Sidecar)                       │
+  │                                                                         │
+  │  ┌────────────────────────────────────┐  ┌───────────────────────────┐  │
+  │  │ Background Sync & Atomic Store     │  │ Admin & Telemetry (:9900) │  │
+  │  │ Continuity · PVP Digest Verify     │  │ /status · /versions       │  │
+  │  │ Retained Packages · Agreements     │  │ /agreements · /metrics    │  │
+  │  └─────────────────┬──────────────────┘  └───────────────────────────┘  │
+  │                    │ In-Memory Snapshot (app.Cell)                      │
+  │                    ▼                                                    │
+  │  ┌───────────────────────────────────────────────────────────────────┐  │
+  │  │ Hot-Path L7 DSP Proxy (dsp-ingress :8443 / dsp-egress :3128)      │  │
+  │  │ 16 Default DSP Routes · 4 Gates (dsp_message, policy_intake,      │  │
+  │  │ catalog_entry, agreement_admission) · VHub-Verdict RFC 9651       │  │
+  │  └─────────────────────────────────┬─────────────────────────────────┘  │
+  └────────────────────────────────────┼────────────────────────────────────┘
+                                       │ Byte-for-byte HTTP Forward
+                                       ▼
+                        ┌──────────────────────────────┐
+                        │  Dataspace Connector (DSP)   │
+                        └──────────────────────────────┘
+```
+
+---
+
+## Pure Shared Core (`internal/core`)
+
+Both `alexandria-server` and `alexandria-client` share a zero-network, deterministic core (`internal/core`):
+
+| Package | Responsibility |
+|:---|:---|
+| `internal/core/timex` | Injectable `Clock` interface and ISO 8601 duration parser (`P30D`, `PT24H`, `PT10S`). |
+| `internal/core/semver` | Strict SemVer 2.0 parsing, ordering, and bump classification (`initial`, `compatible`, `breaking`). |
+| `internal/core/canon` | RFC 8785 JSON Canonicalization Scheme (**JCS**) for deterministic signing payloads. |
+| `internal/core/ni` | RFC 6920 Named Information (`ni:///sha-256;<base64url>`) digest calculation and verification. |
+| `internal/core/did` | `did:web` parsing, URL transformation (`%3A` port decoding), and W3C DID Document verification (`V1`–`V4`). |
+| `internal/core/sign` | Normative `{signed, signature: {kid, alg: "EdDSA", sig}}` envelope signing and verification over `JCS(signed)`. |
+| `internal/core/lifecycle` | 9-row release date calculator (`REQ-HUB-005`), date invariants (`DATE-1`, `DATE-2`), revocation invariants (`REV-1`..`REV-4`), state machine (`Announced`, `Effective`, `Enforced`, `Transition`, `Retired`, `Revoked`), and effective version set `V_t`. |
+| `internal/core/pkgv` | Profile Vocabulary Package (**PVP**) verifier (`manifest.json`, `space-lock.json`, file digest completeness). |
+| `internal/core/codes` | Closed catalog of 64 normative error and verdict codes (`catalog.tsv`). |
+| `internal/core/problem` | RFC 9457 `application/problem+json` serializer for HTTP errors. |
+| `internal/core/schemas` | Embedded JSON Schema Draft 2020-12 validators for Appendix A.1 (`versions`), A.2 (`version`), A.3 (`config`), and A.4 (`verdict-event`). |
+
+---
+
+## Deep-Dive Guides
+
+<Cards>
+  <Card
+    title="eunomia.profiles/v1 DSL & Compiler"
+    href="./vhub/profiles-dsl"
+    description="YAML syntax for OdrlProfile and SpaceProfile, N1–N5 validation rules, SemVer bump governance, and generated artifacts."
+  />
+  <Card
+    title="alexandria-server Reference (C-HUB)"
+    href="./vhub/server"
+    description="Authoring workflow, role matrix, 9-row lifecycle date calculation, SQLite immutability triggers, and /pub content addressing."
+  />
+  <Card
+    title="alexandria-client Reference (C-CLI)"
+    href="./vhub/client"
+    description="S1–S13 synchronization checks, operational state machine, L7 DSP proxy, 4 gates, VHub-Verdict headers, and agreement tracking."
+  />
+  <Card
+    title="F5 Error & Verdict Code Catalog"
+    href="./vhub/error-catalog"
+    description="Complete reference of all 64 normative error, sync, config, lifecycle, and verdict codes."
+  />
+</Cards>

@@ -1,37 +1,38 @@
 ---
 title: Wallet Adapters
-description: Comparing and configuring Fafnir and Eclipse EDC IdentityHub wallet adapters.
+description: Comparing and configuring the Fafnir and Eclipse EDC IdentityHub wallet adapters in Alexandria.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
 # Wallet Adapters
 
-Alexandria includes first-class support for multiple wallet backends implementing the `wallet.Wallet` port.
+Alexandria provides two production-grade driven adapters implementing the `wallet.Wallet` port under `internal/ssi-auth/`.
 
 ---
 
-## Supported Backends
+## Feature Comparison
 
-### 1. Fafnir (`internal/ssi-auth/fafnir`)
-**Fafnir** is the lightweight default wallet used in local development:
-- Embedded in `docker-compose.dev.yaml` on port `7003`.
-- Provides rapid startup, minimal resource overhead, and comprehensive test harness support.
-- Ideal for development, CI unit/integration runs, and standalone deployments.
-
-### 2. Eclipse EDC IdentityHub (`internal/ssi-auth/identityhub`)
-**Eclipse EDC IdentityHub** provides enterprise-grade dataspace interoperability conforming to the Eclipse Dataspace Components (EDC) standard:
-- Implements the IdentityHub REST API specification for participant credentials and DIDs.
-- Designed for production dataspace deployments interoperating with Tractus-X, Catena-X, or IDS dataspaces.
-- Can be launched locally via `task identityhub:up`.
+| Capability | Fafnir (`internal/ssi-auth/fafnir`) | Eclipse EDC IdentityHub (`internal/ssi-auth/identityhub`) |
+|:---|:---:|:---:|
+| **DID Methods** | `did:jwk`, `did:web` | `did:web` (multi-participant) |
+| **Key Formats** | PEM (RSA, ECDSA, Ed25519) | JWK (`publicKeyJwk`), PEM (`publicKeyPem`), & Vault aliases |
+| **Key Rotation & Revocation** | Stubbed (`ErrUnsupported`) | Full support (`RotateKey` with overlap duration, `RevokeKey`) |
+| **DID Service Endpoints** | Stubbed (`ErrUnsupported`) | Full support (`AddServiceEndpoint`, `RemoveServiceEndpoint`) |
+| **Credential Formats** | W3C VC (OID4VCI / OID4VP) | VC 1.0 (JWT) & VC 2.0 (JOSE), normalized via `normalize.go` |
+| **Credential Issuance Protocol** | OID4VCI & OID4VP | Dataspace Credential Protocol (**DCP**) & direct storage |
+| **Participant Contexts** | Single-tenant | Full multi-participant lifecycle (`CreateParticipant`, tokens, states) |
+| **Default Port** | `7003` | `8181` (Identity API) / `8182` (DID / Credentials) |
 
 ---
 
-## Switching Adapters
+## 1. Fafnir (`internal/ssi-auth/fafnir`)
 
-Switching backends is entirely configuration-driven via `wallet_config.wallet`:
+**Fafnir** is a lightweight sovereign wallet focused on rapid local development and OID4VCI/OID4VP credential flows:
+- Configured by default in `config/config.yaml` on port `7003`.
+- Bootstrapped automatically via `task wallet:bootstrap` (`scripts/fafnir-bootstrap.sh`).
+- Can store keys on a local Docker volume or inside **HashiCorp Vault** (`task vault:up`).
 
-### Using Fafnir:
 ```yaml
 wallet_config:
   wallet: Fafnir
@@ -42,18 +43,24 @@ wallet_config:
       port: "7003"
 ```
 
-### Using IdentityHub:
-```yaml
-wallet_config:
-  wallet: IdentityHub
-  api:
-    http:
-      protocol: "http"
-      url: "127.0.0.1"
-      port: "8181"
-```
+---
 
-Alternatively, override via environment variable:
+## 2. Eclipse EDC IdentityHub (`internal/ssi-auth/identityhub`)
+
+**Eclipse EDC IdentityHub** is the enterprise dataspace identity manager used across Eclipse Dataspace Components (EDC), Tractus-X, and Catena-X ecosystems:
+- Communicates with the IdentityHub Management & Identity APIs (`edc_client.go`).
+- Automatically base64url-encodes participant context IDs where required by the EDC REST specification.
+- Normalizes heterogeneous credential representations (compact JWTs, JSON-LD credentials, and VC 2.0 JOSE envelopes) in `internal/ssi-auth/identityhub/normalize.go`.
+- Comes with a dedicated configuration file `config/config-ih.yaml` and a comprehensive Postman collection under `postman/collections/Alexandria/Ssi-auth/IdentityHub/`.
+
+### Running with IdentityHub
+
 ```bash
-ALEXANDRIA_WALLET_CONFIG_WALLET=IdentityHub ALEXANDRIA_WALLET_CONFIG_API_HTTP_PORT=8181 task dev
+# 1. Start the IdentityHub container:
+task identityhub:up
+
+# 2. Run Alexandria using IdentityHub:
+ALEXANDRIA_WALLET_CONFIG_WALLET=IdentityHub \
+ALEXANDRIA_WALLET_CONFIG_API_HTTP_PORT=8181 \
+task dev
 ```

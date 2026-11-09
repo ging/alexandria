@@ -1,6 +1,6 @@
 ---
 title: Introduction
-description: Official documentation for the Alexandria Vocabulary Hub.
+description: Official documentation, incremental tutorials, and specification reference for the Alexandria Vocabulary Hub ecosystem.
 ---
 
 import { Card, Cards } from 'fumadocs-ui/components/card';
@@ -8,44 +8,56 @@ import { Callout } from 'fumadocs-ui/components/callout';
 
 # Alexandria Documentation
 
-Welcome to the **Alexandria** documentation portal. Alexandria is a **Vocabulary Hub** engineered to deliver semantic interoperability, runtime term dereferencing, and remote conformance testing for sovereign dataspaces.
+Welcome to the **Alexandria** documentation portal. Alexandria is a **Vocabulary Hub and Sovereign Identity Ecosystem** engineered to deliver semantic interoperability, profile compilation, runtime term dereferencing, edge DSP traffic validation, and delegated cryptographic trust for modern dataspaces.
 
 <Callout type="info">
-Alexandria implements the Vocabulary Hub pattern for dataspaces. Its architecture couples an in-process Go modular monolith with decentralized identity (DID / SSI), pluggable wallet ports, and Zitadel OIDC authentication.
+Alexandria combines two complementary planes in a single Go repository:
+1. **Vocabulary Hub & Edge Sidecar (`alexandria-server`, `alexandria-client`, `alexandriac`):** Complete reference implementation of the *Vocabulary Hub v0.2.1* specification and the `eunomia.profiles/v1` YAML profile language.
+2. **Identity, SSI & Auth Gateway (`cmd/alexandria`):** Decentralized Identity (`did:web` / `did:jwk`), unified external wallet management (**Fafnir** and **Eclipse EDC IdentityHub**), DCP credential flows, and node-terminated **Zitadel** OIDC authentication.
 </Callout>
 
 ---
 
-## Core Missions of the Vocabulary Hub
+## Core Capabilities
 
-1. **Vocabulary Lifecycle Management:** Author, version, and publish domain ontologies, RDF vocabularies, and dataset profiles extending shared dataspace models.
-2. **Runtime Semantic Dereferencing:** Real-time IRI resolution for dataspace Connectors parsing Self-Descriptions and data agreements.
-3. **Remote Conformance Testing:** Automated validation of connector payloads, dataset schemas, and SHACL constraint shapes to certify dataspace compliance.
-4. **Trust & SSI Anchor:** Cryptographically secured with DIDs and delegated wallet key custody for verifiable vocabulary attestation.
+1. **Profile Language & Deterministic Compiler (`alexandriac`):** Author ODRL policy profiles (`OdrlProfile`) and dataspace governance bindings (`SpaceProfile`) in YAML (`eunomia.profiles/v1`). Automatically validate across 5 normative levels (`N1`–`N5`) and generate `vocab.ttl`, `context.jsonld`, `shapes.ttl`, `schema.json`, `cedar.schema`, `prof.ttl`, `spec.html`, and `space-lock.json`.
+2. **Vocabulary Hub Server (`alexandria-server`):** Authoring, candidate proposal, multi-role release approval (`editor`, `releaser`, `member`), lifecycle window calculation (`published_at`, `new_content_from`, `enforced_from`, `revoked_from`), JCS + Ed25519 cryptographic signing, SQLite immutability triggers, and content-addressed `/pub` distribution.
+3. **Edge Validation & Sync Sidecar (`alexandria-client`):** Zero-hub-latency L7 Dataspace Protocol (DSP) reverse and forward proxy. Continuously synchronizes and verifies signed listings (`S1`–`S13`), enforces policy and schema gates (`observe`, `shadow`, `enforce`), attaches RFC 9651 `VHub-Verdict` headers, and tracks active contract agreements across version transitions and revocations.
+4. **Sovereign Identity & Unified Wallet Port (`alexandria`):** Cryptographic keys never reside in the application node. Key custody, DID lifecycle, service endpoints, participant contexts, OID4VCI/OID4VP, and DCP requests are delegated via `wallet.Wallet` to **Fafnir** or **Eclipse EDC IdentityHub**, guarded by **Zitadel** OIDC + PKCE.
 
 ---
 
-## Documentation Sections
+## Explore the Documentation
 
 <Cards>
   <Card
     title="Getting Started"
     href="./getting-started"
-    description="Overview of the Vocabulary Hub, prerequisites, local setup with Taskfile, and configuration."
+    description="System overview, prerequisites, 60-second quickstarts for both vhub and the full SSI stack, and configuration reference."
+  />
+  <Card
+    title="Incremental Tutorials"
+    href="./tutorials"
+    description="Step-by-step hands-on learning path: from compiling your first YAML profile to running the full F6 lifecycle and managing wallets."
+  />
+  <Card
+    title="Vocabulary Hub & DSL (vhub)"
+    href="./vhub"
+    description="Deep-dive into the eunomia.profiles/v1 DSL, alexandria-server governance, alexandria-client edge proxy, and the F5 error catalog."
   />
   <Card
     title="Architecture & Wallets"
     href="./architecture"
-    description="Hexagonal architecture, in-process bounded contexts, unified wallet port, and Fafnir vs IdentityHub."
+    description="Hexagonal architecture, bounded contexts, archtest enforcement, unified wallet port, and Fafnir vs IdentityHub."
   />
   <Card
-    title="API & Development"
+    title="API Reference & Conformance"
     href="./development"
-    description="REST API reference, remote conformance testing, node-terminated OIDC, and CI/CD pipelines."
+    description="Complete REST API catalog, interactive Swagger UI, conformance test suite (61 REQ-*, 64 F5 codes), and CI/CD."
   />
   <Card
     title="Architecture Decisions (ADRs)"
     href="./adr"
-    description="Formal record of accepted architectural decisions (0001 through 0007) and decision rationale."
+    description="Accepted ADRs (0001 through 0008), PoC design decisions (DP-1 to DP-15), and open specification questions (Q1 to Q17)."
   />
 </Cards>

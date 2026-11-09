@@ -1,6 +1,6 @@
 ---
 title: Quickstart
-description: Step-by-step tutorial to launch Alexandria, its supporting services, and verify endpoints.
+description: Fast-track guides to run the Vocabulary Hub F6 demo in 3 commands or launch the full Alexandria Identity & Wallet stack.
 ---
 
 import { Steps } from 'fumadocs-ui/components/steps';
@@ -9,20 +9,78 @@ import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 
 # Quickstart Guide
 
-This tutorial guides you through launching Alexandria, verifying local TLS certificates, bootstrapping the Zitadel IAM and cryptographic wallet, and running the node.
+Alexandria offers two quickstart paths depending on whether you want to explore the **Vocabulary Hub & Edge Validation Sidecar (`vhub`)** or the **Full Identity, OIDC & External Wallet Stack (`cmd/alexandria`)**.
 
 ---
 
-## The Fast Path: One-Command Startup
+## Path A: Vocabulary Hub & Edge Sidecar in 3 Commands (`Makefile`)
 
-For day-to-day development, Alexandria provides `task dev:auto`. It automatically:
-1. Checks and generates the root Certificate Authority (CA) in `/.certs/`.
-2. Terminates any stale node processes holding internal port `1234`.
-3. Starts all Docker containers (`postgres`, `caddy`, `zitadel`, `fafnir-wallet`).
-4. Executes `scripts/zitadel-bootstrap.sh` to provision OIDC clients and update `.env`.
-5. Executes `scripts/fafnir-bootstrap.sh` to provision the signing key and default DID.
-6. Verifies local CA trust against the Zitadel discovery document.
-7. Starts the Alexandria Go process with hot-reload enabled via `air`.
+You can compile the Vocabulary Hub binaries, run the full conformance battery, and execute the end-to-end **Scenario F6** (which launches real `alexandria-server`, `alexandria-client`, and `fake-connector` processes and replays a two-month vocabulary lifecycle in seconds) with zero container dependencies:
+
+<Steps>
+
+### 1. Build the Binaries and DSL Compiler
+
+Compile `bin/alexandria-server`, `bin/alexandria-client`, `bin/fake-connector`, and `bin/alexandriac`:
+
+```bash
+make build
+go build -o bin/alexandriac ./cmd/alexandriac
+```
+
+### 2. Compile a YAML Profile with `alexandriac`
+
+Validate and compile the sample `colors.profile.yaml` (`eunomia.profiles/v1`) into RDF/Turtle, JSON-LD `@context`, SHACL shapes, JSON Schema, Cedar policy mappings, and HTML documentation:
+
+```bash
+./bin/alexandriac validate internal/dsl/testdata/colors.profile.yaml
+./bin/alexandriac compile -o /tmp/colors-out internal/dsl/testdata/colors.profile.yaml
+```
+
+### 3. Run the End-to-End F6 Demo
+
+Run `make demo` to spin up `alexandria-server`, `alexandria-client`, and `fake-connector` with a shared injectable clock, publish releases `1.0.0` and `2.0.0` from YAML bundles, and print the live verdict table:
+
+```bash
+make demo
+```
+
+You will see the complete chronological table of DSP messages (`m1 odrl:use`, `m2 ex:access`, `m3 odrl:read`, `A1 agreement`, `A1 transfer`, and `revoke 1.0.0`) transitioning across `ok (forward)`, `warning (forward-notice)`, and `violation (reject)`:
+
+```text
+INSTANT                MESSAGE                      CLASS      ACTION          HTTP   VERDICT / CODE
+------------------------------------------------------------------------------------------------------------------------
+2026-10-02T12:00:00Z   m1 odrl:use                  ok         forward         200  -
+2026-10-02T12:00:00Z   m2 ex:access                 ok         forward         200  -
+2026-10-02T12:00:00Z   m3 odrl:read                 violation  reject          400  violation;gate=policy_intake;code="VERDICT_VIOLATION" VERDICT_VIOLATION
+2026-10-03T09:59:55Z   m1 odrl:use                  ok         forward         200  -
+2026-10-03T09:59:55Z   m2 ex:access                 warning    forward-notice  200  warning;gate=policy_intake;code="VERDICT_NOT_IN_HEAD";version="1.0.0";sunset=@1793613600
+2026-10-03T09:59:55Z   m3 odrl:read                 ok         forward         200  -
+...
+2026-11-12T00:00:10Z   A1 transfer                  violation  reject          400  violation;gate=agreement_admission;code="AGREEMENT_VERSION_REVOKED" AGREEMENT_VERSION_REVOKED
+------------------------------------------------------------------------------------------------------------------------
+F6 scenario completed: 19/19 rows verified.
+```
+
+### 4. Run Unit, Conformance & Traceability Suites
+
+Verify all 61 normative requirements (`REQ-*`) and 63 negative catalog codes (`N-*`):
+
+```bash
+make test conformance trace
+```
+
+</Steps>
+
+<Callout type="info">
+Want to run `alexandria-server` and `alexandria-client` step by step by hand? Jump to the **[Incremental Tutorials](../tutorials)** section!
+</Callout>
+
+---
+
+## Path B: Full Identity, OIDC & Wallet Stack (`Taskfile`)
+
+For developing with `cmd/alexandria`, Zitadel OIDC, Caddy TLS, PostgreSQL, and external wallets (**Fafnir** or **Eclipse EDC IdentityHub**), use `task dev:auto`:
 
 ```bash
 # 1. On a fresh machine, trust the local CA once (requires sudo):
@@ -32,81 +90,13 @@ task tls:trust
 task dev:auto
 ```
 
----
-
-## Step-by-Step Manual Setup
-
-If you prefer to understand each moving piece or start services independently, follow these granular steps:
-
-<Steps>
-
-### 1. Trust the Local Certificate Authority
-
-Alexandria generates an internal root CA in `/.certs/` so local HTTPS and mTLS work transparently across browsers, curl, and Go trust stores without security warnings:
-
-```bash
-task tls:trust
-```
-
-<Callout type="info">
-On macOS, this enrolls the certificate into the System Keychain. On Linux, it installs it into `/usr/local/share/ca-certificates/` and runs `update-ca-certificates`.
-</Callout>
-
-### 2. Start PostgreSQL Database
-
-Bring up the relational database:
-
-```bash
-task db:up
-```
-
-PostgreSQL 17 starts on port `1500` (user: `alexandria`, password: `alexandria`, db: `alexandria`). To open a `psql` shell at any time: `task db:psql`.
-
-### 3. Start Caddy Reverse Proxy
-
-Launch the TLS terminator in front of all services:
-
-```bash
-task tls:up
-```
-
-Caddy binds to port `8443` on your host and terminates TLS using wildcard resolution via `127.0.0.1.nip.io`.
-
-### 4. Bootstrap Zitadel IAM
-
-Provision the identity provider and register Alexandria as an authorized relying-party application:
-
-```bash
-task auth:bootstrap
-```
-
-This task starts Zitadel on container port `8080` (published on host `1600`), creates the default organization, registers the OIDC client, and writes `ALEXANDRIA_AUTH_CONFIG_CLIENT_ID` and `ALEXANDRIA_AUTH_CONFIG_CLIENT_SECRET` into `.env`.
-
-- **Default Administrator:** `admin@alexandria.auth.127.0.0.1.nip.io`
-- **Default Password:** `Password1!`
-- **Zitadel Console:** `task auth:console` -> opens `http://127.0.0.1:1600/ui/console`.
-
-### 5. Bootstrap the Cryptographic Wallet
-
-Start the default wallet backend (Fafnir) and provision its signing key:
-
-```bash
-task wallet:bootstrap
-```
-
-This starts Fafnir on port `7003` and runs `scripts/fafnir-bootstrap.sh` to generate the default Ed25519 signing key and DID (`did:jwk`).
-
-### 6. Run the Alexandria Node
-
-Start the Go application with hot-reloading:
-
-```bash
-task dev
-```
-
-The node connects to PostgreSQL, links with the wallet, registers routes under Gin, and binds to cleartext port `1234` behind Caddy.
-
-</Steps>
+`task dev:auto` automatically:
+1. Generates and verifies the root Certificate Authority (CA) in `/.certs/`.
+2. Frees internal port `1234` if held by a stale process.
+3. Starts Docker containers (`postgres`, `caddy`, `zitadel`, `fafnir-wallet`).
+4. Runs `scripts/zitadel-bootstrap.sh` to provision OIDC clients and populate `.env`.
+5. Runs `scripts/fafnir-bootstrap.sh` to provision the default Ed25519 key and DID.
+6. Starts `cmd/alexandria` with live reload via `air`.
 
 ---
 
@@ -116,13 +106,13 @@ The node connects to PostgreSQL, links with the wallet, registers routes under G
 
 <Tab value="Eclipse EDC IdentityHub">
 
-Alexandria supports **Eclipse EDC IdentityHub** for enterprise dataspace compliance:
+Alexandria supports **Eclipse EDC IdentityHub** (including participant management, JWK/PEM keypairs, VC 1.0/2.0 normalization, and DCP credential requests):
 
 ```bash
 # 1. Start the IdentityHub container on ports 8181 and 8182:
 task identityhub:up
 
-# 2. Launch Alexandria pointing to IdentityHub:
+# 2. Launch Alexandria pointing to IdentityHub (or use config/config-ih.yaml):
 ALEXANDRIA_WALLET_CONFIG_WALLET=IdentityHub \
 ALEXANDRIA_WALLET_CONFIG_API_HTTP_PORT=8181 \
 task dev
@@ -134,7 +124,7 @@ To stop IdentityHub: `task identityhub:down`.
 
 <Tab value="Fafnir with HashiCorp Vault">
 
-By default, Fafnir stores keys on a Docker volume. To run Fafnir backed by a real **HashiCorp Vault**:
+By default, Fafnir stores keys on a Docker volume. To run Fafnir backed by **HashiCorp Vault**:
 
 ```bash
 # 1. Start Vault and seed root tokens:
@@ -155,37 +145,29 @@ Vault UI is available at `http://127.0.0.1:8200` with root token `alexandria-dev
 
 ---
 
-## Verifying the Stack
+## Verifying the Identity & API Stack
 
-Once services are running, verify each endpoint:
+Once `task dev:auto` is running, verify the endpoints:
 
-### 1. Web Portal & Authentication Login
-Open your browser and navigate to:
+### 1. Interactive Swagger / OpenAPI UI
+Open the built-in Swagger UI in your browser:
+```text
+https://alexandria.127.0.0.1.nip.io:8443/docs
 ```
+Raw specifications are served at `/openapi.json` and `/openapi.yaml`.
+
+### 2. Web Portal & Authentication Login
+Navigate to:
+```text
 https://alexandria.127.0.0.1.nip.io:8443/api/v1/auth/login
 ```
 Log in using:
 - **Username:** `admin@alexandria.auth.127.0.0.1.nip.io`
 - **Password:** `Password1!`
 
-After successful authentication, you are redirected back to `https://alexandria.127.0.0.1.nip.io:8443/` carrying a sealed, `HttpOnly` session cookie (`alexandria_session`).
-
-### 2. User Info Endpoint
-Verify your session claims:
-```bash
-curl -k https://alexandria.127.0.0.1.nip.io:8443/api/v1/auth/userinfo \
-  -H "Cookie: alexandria_session=<YOUR_COOKIE>"
-```
-
-### 3. DID Document Resolution
-Alexandria exposes its Decentralized Identifier document publicly without authentication:
+### 3. DID Document & Health Probes
 ```bash
 curl -k https://alexandria.127.0.0.1.nip.io:8443/.well-known/did.json
-```
-
-### 4. Health & Readiness
-Check node health directly:
-```bash
 curl -k https://alexandria.127.0.0.1.nip.io:8443/healthz
 curl -k https://alexandria.127.0.0.1.nip.io:8443/readyz
 ```
@@ -196,13 +178,12 @@ curl -k https://alexandria.127.0.0.1.nip.io:8443/readyz
 
 | Action | Command |
 |:---|:---|
-| **View Caddy Logs** | `task tls:logs` |
-| **View Zitadel Logs** | `task auth:logs` |
-| **View Wallet Logs** | `task wallet:logs` |
-| **View Database Logs** | `task db:logs` |
+| **Build `vhub` binaries** | `make build` |
+| **Run F6 interactive demo** | `make demo` |
+| **Run conformance & traceability** | `make conformance trace` |
+| **Start full SSI stack (`alexandria`)** | `task dev:auto` |
+| **Start local Fumadocs server** | `task docs:dev` |
+| **View Caddy / Zitadel / Wallet logs** | `task tls:logs` / `task auth:logs` / `task wallet:logs` |
 | **Open Postgres Shell** | `task db:psql` |
 | **Open Zitadel Console** | `task auth:console` |
-| **Reset Database Data** | `task db:reset` |
-| **Reset Zitadel IAM Data**| `task auth:reset` |
-| **Reset Wallet Data** | `task wallet:reset` |
-EOF
+| **Reset Database / Auth / Wallet** | `task db:reset` / `task auth:reset` / `task wallet:reset` |
