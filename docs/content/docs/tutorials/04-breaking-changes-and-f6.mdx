@@ -1,0 +1,111 @@
+---
+title: "4. Breaking Changes, Grace Windows & F6"
+description: "Walk through the complete normative Scenario F6: breaking profile upgrades, transition warnings, contract agreement leases, and version revocations."
+---
+
+import { Steps } from 'fumadocs-ui/components/steps';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Tutorial 4: Version Transitions, Grace Windows & Revocations (Scenario F6)
+
+What happens in a live dataspace when a vocabulary authority publishes a **breaking version (`2.0.0`)** that retires an action (`ex:access`) and adopts a replacement (`odrl:read`)?
+
+If every connector immediately rejected `1.0.0` messages at the instant `2.0.0` was published, in-flight contract negotiations and existing data transfer agreements would break across the dataspace. Conversely, if `1.0.0` remained valid forever, the dataspace could never evolve.
+
+The *Vocabulary Hub v0.2.1* specification solves this with **deterministic lifecycle frontiers** and **agreement-scoped retention**, verified end-to-end by **Scenario F6**.
+
+---
+
+## Understanding the F6 Timeline
+
+In Scenario F6 (`conformance/f6/`):
+- **Release `1.0.0`** (`conformance/f6/drafts/v1.0.0.yaml`) is published on **`2026-09-01T10:00:00Z`**:
+  - Allows actions `odrl:use` (`m1`) and `ex:access` (`m2`).
+  - Does **not** include `odrl:read` (`m3`).
+- **Release `2.0.0`** (`conformance/f6/drafts/v2.0.0.yaml`) is published on **`2026-10-01T10:00:00Z`**:
+  - Bundles intermediate profile `1.1.0` (which marks `ex:access` as `status: deprecated` with `replaced_by: odrl:read`) and profile `2.0.0` (which marks `ex:access` as `status: retired` and adopts `odrl:read`).
+  - Because `1.0.0 -> 2.0.0` is a **MAJOR (`breaking`)** release with a 2-day propagation window (`P2D`) and a 30-day grace window (`P30D`):
+    - `published_at` = `2026-10-01T10:00:00Z`
+    - `new_content_from` = `2026-10-03T10:00:00Z`
+    - `enforced_from` = `2026-11-02T10:00:00Z`
+  - Client `lease_margin` (`L`) = `PT10S` (`10 seconds`).
+
+```
+2026-09-01         2026-10-01         2026-10-03                  2026-11-02 (+10s L)     2026-11-10         2026-11-12 (+10s L)
+    │                  │                  │                             │                     │                  │
+    ▼                  ▼                  ▼                             ▼                     ▼                  ▼
+ [1.0.0 Published]  [2.0.0 Published]  [2.0.0 Effective / IGW Open]  [2.0.0 Enforced + L]  [1.0.0 Revoked]    [revoked_from + L]
+  Only 1.0.0 active  2.0.0 Announced    m3 (odrl:read) -> OK          m2 (ex:access) ->     Schedules A1       A1 transfer ->
+  m1, m2 -> OK       (propagation)      m2 (ex:access) -> WARNING     REJECT (400)          revocation event   REJECT (400)
+  m3 -> REJECT       m3 still REJECT    (sunset=2026-11-02T10:00:00Z) A1 transfer -> OK!    A1 still works     AGREEMENT_VERSION_REVOKED
+```
+
+---
+
+<Steps>
+
+### Step 1: Run the Complete F6 Scenario with `make demo`
+
+Run `make demo` (or `make e2e`) to launch the real `alexandria-server`, `alexandria-client`, and `fake-connector` binaries and execute all 19 checkpoints of Scenario F6:
+
+```bash
+make demo
+```
+
+Let's examine each phase of the output in detail!
+
+### Step 2: Phase 1 — Propagation Window (`2026-10-02T12:00:00Z`)
+
+On `2026-10-01T10:00:00Z`, `2.0.0` is published, but its `new_content_from` is `2026-10-03T10:00:00Z`.
+At `2026-10-02T12:00:00Z`, `2.0.0` is still in the **`Announced`** state (not yet in the effective set `V_t`):
+
+| Instant | Message | Classification | Action | HTTP | Verdict / Code |
+|:---|:---|:---|:---|:---:|:---|
+| `2026-10-02T12:00:00Z` | `m1 odrl:use` | `ok` | `forward` | `200` | `-` |
+| `2026-10-02T12:00:00Z` | `m2 ex:access` | `ok` | `forward` | `200` | `-` |
+| `2026-10-02T12:00:00Z` | `m3 odrl:read` | `violation` | `reject` | `400` | `VERDICT_VIOLATION` |
+
+### Step 3: Phase 2 — Transition / In-Grace Window (`2026-10-03` to `2026-11-02`)
+
+Because of the 10-second `lease_margin` (`L`), `2.0.0` enters the effective set `V_t` at `new_content_from - L` (`2026-10-03T09:59:50Z`).
+At **`2026-10-03T09:59:55Z`** and **`2026-10-10T12:00:00Z`**, both `2.0.0` (head) and `1.0.0` (in-grace) are in `V_t`:
+- **`m1` (`odrl:use`):** Valid in head (`2.0.0`) -> `ok` (`forward`).
+- **`m3` (`odrl:read`):** Valid in head (`2.0.0`) -> `ok` (`forward`).
+- **`m2` (`ex:access`):** Fails in head (`2.0.0`, where `ex:access` is retired), so `alexandria-client` falls back to `1.0.0` (`Transition` state), where `ex:access` passes! It forwards the message (`200 OK`) with an RFC 9651 warning header telling the caller the exact `sunset` timestamp (`1793613600` = `2026-11-02T10:00:00Z`):
+
+```http
+VHub-Verdict: warning;gate=policy_intake;code="VERDICT_NOT_IN_HEAD";version="1.0.0";sunset=@1793613600
+```
+
+### Step 4: Phase 3 — Capturing Contract Agreement `A1` (`2026-10-10T12:00:00Z`)
+
+While `1.0.0` is still in its grace window (`2026-10-10T12:00:00Z`), the provider sends a `ContractAgreementMessage` (`A1`, using `ex:access` under profile `1.0.0`) through `dsp-egress`.
+- `alexandria-client` validates `A1` (`warning` / `forward-notice`) and, upon seeing the connector's `200 OK` response, **automatically records Agreement `A1` bound to version `1.0.0`** (`REQ-CLI-015`).
+
+### Step 5: Phase 4 — Lease Margin & Enforcement (`2026-11-02` to `2026-11-05`)
+
+The grace window of `2.0.0` ends at `enforced_from` = `2026-11-02T10:00:00Z`.
+- At **`2026-11-02T10:00:05Z`** (5 seconds after `enforced_from`, still inside the 10-second `lease_margin` `L`), `m2 ex:access` is **still accepted with a warning** (`REQ-SYS-007`: a version only stops accepting new negotiations after `enforced_from + L`).
+- At **`2026-11-05T12:00:00Z`** (well past `enforced_from + L`), `1.0.0` is **`Retired`** for new offers:
+  - Sending `m2 ex:access` in a new `ContractRequestMessage` is **rejected (`400 Bad Request`, `VERDICT_VIOLATION`)**.
+  - **However**, sending a `TransferRequestMessage` for the already-signed **`A1` agreement** (`POST /transfers/request`) **succeeds (`200 OK`)**! Why? Because `1.0.0` was only *retired* (not *revoked*), and `alexandria-client` retains package `1.0.0` for all active agreements (`REQ-CLI-016`, `REQ-CLI-017`).
+
+### Step 6: Phase 5 — Revoking `1.0.0` & Stopping `A1` Transfers (`2026-11-10` to `2026-11-12`)
+
+What if a severe legal or security flaw is discovered in `1.0.0` and even existing agreements must be halted?
+1. At **`2026-11-10T00:00:00Z`**, the authority calls `POST /v1/versions/1.0.0:revoke` with `{"justification": "superseded by 2.0.0"}`.
+   - With a 2-day propagation window (`P2D`), the Hub sets `revoked_from = 2026-11-12T00:00:00Z`.
+   - As soon as `alexandria-client` syncs the new listing, it detects that active agreement `A1` depends on `1.0.0` and emits the verdict event **`AGREEMENT_REVOCATION_SCHEDULED`**.
+2. At **`2026-11-12T00:00:05Z`** (inside `revoked_from + L`), `A1 transfer` is still allowed (`200 OK`) to respect the 10-second clock-skew/lease margin.
+3. At **`2026-11-12T00:00:10Z`** (at `revoked_from + L`), `alexandria-client` **blocks `A1 transfer` (`400 Bad Request`)** with:
+   ```http
+   VHub-Verdict: violation;gate=agreement_admission;code="AGREEMENT_VERSION_REVOKED"
+   ```
+
+</Steps>
+
+---
+
+## Next Tutorial
+
+You have mastered the entire Vocabulary Hub lifecycle (`alexandriac`, `alexandria-server`, and `alexandria-client`). Proceed to **[Tutorial 5: Sovereign Wallets — Fafnir & Eclipse EDC IdentityHub](./05-wallets-and-identityhub)** to learn how `cmd/alexandria` manages keys, DIDs, participants, and verifiable credentials!

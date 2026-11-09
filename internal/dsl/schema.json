@@ -1,0 +1,699 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://w3id.org/eunomia/dsl/profiles/v1/schema.json",
+  "title": "Eunomia profile DSL v1 (Appendix A, revision 2 alignment; ConformanceSuite omitted)",
+  "type": "object",
+  "required": [
+    "dsl",
+    "kind"
+  ],
+  "properties": {
+    "dsl": {
+      "const": "eunomia.profiles/v1"
+    },
+    "kind": {
+      "enum": [
+        "OdrlProfile",
+        "SpaceProfile"
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/OdrlProfile"
+    },
+    {
+      "$ref": "#/$defs/SpaceProfile"
+    }
+  ],
+  "$defs": {
+    "Iri": {
+      "type": "string",
+      "pattern": "^https?://\\S+$"
+    },
+    "Curie": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]*:[A-Za-z0-9_.-]+$"
+    },
+    "LocalId": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_]*$"
+    },
+    "Semver": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?$"
+    },
+    "Duration": {
+      "type": "string",
+      "pattern": "^P(?=[0-9]|T[0-9])([0-9]+D)?(T([0-9]+H)?([0-9]+M)?([0-9]+S)?)?$"
+    },
+    "LangMap": {
+      "type": "object",
+      "required": [
+        "en"
+      ],
+      "propertyNames": {
+        "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "Operator": {
+      "type": "string",
+      "anyOf": [
+        {
+          "enum": [
+            "eq",
+            "neq",
+            "lt",
+            "lteq",
+            "gt",
+            "gteq",
+            "isA",
+            "hasPart",
+            "isPartOf",
+            "isAllOf",
+            "isAnyOf",
+            "isNoneOf"
+          ]
+        },
+        {
+          "$ref": "#/$defs/Curie"
+        }
+      ]
+    },
+    "Signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operators"
+      ],
+      "properties": {
+        "operators": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/Operator"
+          }
+        },
+        "datatype": {
+          "$ref": "#/$defs/Curie"
+        },
+        "value_kind": {
+          "enum": [
+            "literal",
+            "iri"
+          ]
+        },
+        "values": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "scheme": {
+          "$ref": "#/$defs/Curie"
+        },
+        "allow_reference": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "not": {
+        "required": [
+          "values",
+          "scheme"
+        ]
+      }
+    },
+    "Enforcement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cedar_path"
+      ],
+      "properties": {
+        "cedar_path": {
+          "type": "string",
+          "pattern": "^(context|resource|principal)(\\.[A-Za-z_][A-Za-z0-9_]*)+$"
+        },
+        "pdp_level": {
+          "type": "string",
+          "pattern": "^PDP-[0-8]$"
+        },
+        "eval_timing": {
+          "enum": [
+            "once",
+            "continuous"
+          ]
+        }
+      }
+    },
+    "AdoptedEntry": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Curie"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "term"
+          ],
+          "properties": {
+            "term": {
+              "$ref": "#/$defs/Curie"
+            },
+            "signature": {
+              "$ref": "#/$defs/Signature"
+            },
+            "enforcement": {
+              "$ref": "#/$defs/Enforcement"
+            }
+          }
+        }
+      ]
+    },
+    "AdoptedList": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/AdoptedEntry"
+      }
+    },
+    "Term": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "label",
+        "definition"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/LocalId"
+        },
+        "kind": {
+          "enum": [
+            "action",
+            "left_operand",
+            "operator",
+            "right_operand",
+            "conflict_term",
+            "party_function",
+            "asset_relation",
+            "logical_operand",
+            "rule_subclass",
+            "policy_subclass",
+            "constraint_subclass"
+          ]
+        },
+        "label": {
+          "$ref": "#/$defs/LangMap"
+        },
+        "definition": {
+          "$ref": "#/$defs/LangMap"
+        },
+        "note": {
+          "$ref": "#/$defs/LangMap"
+        },
+        "included_in": {
+          "$ref": "#/$defs/Curie"
+        },
+        "subclass_of": {
+          "$ref": "#/$defs/Curie"
+        },
+        "signature": {
+          "$ref": "#/$defs/Signature"
+        },
+        "enforcement": {
+          "$ref": "#/$defs/Enforcement"
+        },
+        "status": {
+          "enum": [
+            "active",
+            "deprecated",
+            "retired"
+          ],
+          "default": "active"
+        },
+        "replaced_by": {
+          "$ref": "#/$defs/Curie"
+        },
+        "extra_turtle": {
+          "type": "string"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "rule_subclass",
+                  "policy_subclass",
+                  "constraint_subclass"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "subclass_of"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "not": {
+                  "const": "action"
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "included_in"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "not": {
+                  "const": "left_operand"
+                }
+              }
+            }
+          },
+          "then": {
+            "allOf": [
+              {
+                "not": {
+                  "required": [
+                    "signature"
+                  ]
+                }
+              },
+              {
+                "not": {
+                  "required": [
+                    "enforcement"
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "OdrlProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dsl",
+        "kind",
+        "profile",
+        "namespaces"
+      ],
+      "properties": {
+        "dsl": true,
+        "kind": {
+          "const": "OdrlProfile"
+        },
+        "profile": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "version",
+            "title",
+            "publisher",
+            "license",
+            "base_url"
+          ],
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/Iri"
+            },
+            "version": {
+              "$ref": "#/$defs/Semver"
+            },
+            "title": {
+              "$ref": "#/$defs/LangMap"
+            },
+            "description": {
+              "$ref": "#/$defs/LangMap"
+            },
+            "publisher": {
+              "type": "string"
+            },
+            "license": {
+              "$ref": "#/$defs/Iri"
+            },
+            "base_url": {
+              "$ref": "#/$defs/Iri"
+            }
+          }
+        },
+        "namespaces": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+            "not": {
+              "enum": [
+                "odrl",
+                "xsd",
+                "rdf",
+                "rdfs",
+                "owl",
+                "skos",
+                "dct",
+                "sig",
+                "eu"
+              ]
+            }
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^https?://\\S+[#/]$"
+          }
+        },
+        "adopted": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "actions": {
+              "$ref": "#/$defs/AdoptedList"
+            },
+            "left_operands": {
+              "$ref": "#/$defs/AdoptedList"
+            },
+            "operators": {
+              "$ref": "#/$defs/AdoptedList"
+            },
+            "right_operands": {
+              "$ref": "#/$defs/AdoptedList"
+            },
+            "party_functions": {
+              "$ref": "#/$defs/AdoptedList"
+            },
+            "asset_relations": {
+              "$ref": "#/$defs/AdoptedList"
+            }
+          }
+        },
+        "terms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Term"
+          }
+        },
+        "rules": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "actions": {
+              "enum": [
+                "closed",
+                "open"
+              ],
+              "default": "closed"
+            },
+            "left_operands": {
+              "enum": [
+                "closed",
+                "open"
+              ],
+              "default": "closed"
+            }
+          }
+        }
+      }
+    },
+    "Lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "grace_window": {
+          "$ref": "#/$defs/Duration"
+        },
+        "freshness": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ttl": {
+              "$ref": "#/$defs/Duration"
+            },
+            "max_staleness": {
+              "$ref": "#/$defs/Duration"
+            }
+          }
+        },
+        "degraded": {
+          "type": "object",
+          "propertyNames": {
+            "enum": [
+              "catalog_entry",
+              "policy_intake",
+              "pdp_load",
+              "dsp_message",
+              "credential_presentation",
+              "agreement_admission"
+            ]
+          },
+          "additionalProperties": {
+            "enum": [
+              "continue",
+              "reject"
+            ]
+          }
+        },
+        "conformance_required": {
+          "enum": [
+            "none",
+            "syntactic",
+            "semantic",
+            "behavioral"
+          ]
+        },
+        "sync_interval": {
+          "$ref": "#/$defs/Duration"
+        },
+        "clock_skew": {
+          "$ref": "#/$defs/Duration"
+        },
+        "lease_margin": {
+          "$ref": "#/$defs/Duration"
+        },
+        "propagation_window": {
+          "$ref": "#/$defs/Duration"
+        },
+        "max_concurrent_versions": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "SpaceProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dsl",
+        "kind",
+        "space",
+        "bindings"
+      ],
+      "properties": {
+        "dsl": true,
+        "kind": {
+          "const": "SpaceProfile"
+        },
+        "space": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "version",
+            "title",
+            "operator",
+            "base_url"
+          ],
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/Iri"
+            },
+            "version": {
+              "$ref": "#/$defs/Semver"
+            },
+            "title": {
+              "$ref": "#/$defs/LangMap"
+            },
+            "description": {
+              "$ref": "#/$defs/LangMap"
+            },
+            "operator": {
+              "$ref": "#/$defs/Iri"
+            },
+            "base_url": {
+              "$ref": "#/$defs/Iri"
+            }
+          }
+        },
+        "lifecycle": {
+          "$ref": "#/$defs/Lifecycle"
+        },
+        "bindings": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/Binding"
+          }
+        }
+      }
+    },
+    "Binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "slot",
+        "profile",
+        "source",
+        "version",
+        "obligation"
+      ],
+      "properties": {
+        "slot": {
+          "enum": [
+            "odrl",
+            "dcat",
+            "dsp",
+            "dcp"
+          ]
+        },
+        "profile": {
+          "$ref": "#/$defs/Iri"
+        },
+        "source": {
+          "enum": [
+            "internal",
+            "vendored"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "obligation": {
+          "enum": [
+            "mandatory",
+            "recommended",
+            "optional"
+          ]
+        },
+        "via": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/Iri"
+          }
+        },
+        "conformance": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "role",
+              "applies_to"
+            ],
+            "properties": {
+              "role": {
+                "enum": [
+                  "shacl",
+                  "json-schema",
+                  "cedar-mapping",
+                  "cedar-schema"
+                ]
+              },
+              "applies_to": {
+                "enum": [
+                  "catalog_entry",
+                  "policy_intake",
+                  "pdp_load",
+                  "dsp_message",
+                  "credential_presentation"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source": {
+                "const": "vendored"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "version": {
+                "pattern": "^=\\S+$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "source": {
+                "const": "internal"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "version": {
+                "pattern": "^(=|\\^|~)?\\d+(\\.\\d+){0,2}$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "obligation": {
+                "const": "mandatory"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "conformance"
+            ],
+            "properties": {
+              "conformance": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

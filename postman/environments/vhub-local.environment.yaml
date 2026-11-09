@@ -1,0 +1,37 @@
+name: vhub-local
+values:
+  - key: hubUrl
+    value: 'http://127.0.0.1:8080'
+    enabled: true
+    type: default
+    description: vhub-server listen address of config/server.json
+  - key: hubDid
+    value: 'did:web:localhost%3A8080'
+    enabled: true
+    type: default
+    description: Hub DID of config/server.json
+  - key: clientDsp
+    value: 'http://127.0.0.1:8443'
+    enabled: true
+    type: default
+    description: vhub-client dsp-ingress listener of config/config.json
+  - key: clientAdmin
+    value: 'http://127.0.0.1:9900'
+    enabled: true
+    type: default
+    description: vhub-client admin listener of config/config.json
+  - key: editorToken
+    value: 'editor-token'
+    enabled: true
+    type: secret
+    description: PoC editor token of config/tokens.json (DP-3, lab only)
+  - key: releaserToken
+    value: 'releaser-token'
+    enabled: true
+    type: secret
+    description: PoC releaser token of config/tokens.json (DP-3, lab only)
+  - key: memberToken
+    value: 'member-token'
+    enabled: true
+    type: secret
+    description: PoC member token of config/tokens.json (DP-3, lab only)

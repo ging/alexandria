@@ -1,0 +1,210 @@
+---
+title: "1. Your First Profile in eunomia.profiles/v1"
+description: Learn how to author an OdrlProfile and SpaceProfile in YAML, validate N1–N5 rules, and generate deterministic artifacts with alexandriac.
+---
+
+import { Steps } from 'fumadocs-ui/components/steps';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
+
+# Tutorial 1: Authoring & Compiling Your First Profile (`alexandriac`)
+
+In a sovereign dataspace, participants never hand-edit SHACL shapes, JSON-LD contexts, JSON Schemas, and Cedar schemas separately—doing so inevitably leads to semantic drift across validation engines. Instead, you author a single source of truth in the **`eunomia.profiles/v1`** YAML language, and the **`alexandriac`** compiler generates every artifact deterministically.
+
+In this first tutorial, you will:
+1. Build the `alexandriac` command-line compiler.
+2. Author an `OdrlProfile` and a `SpaceProfile` in YAML.
+3. Validate the profile across the 5 normative levels (`N1`–`N5`).
+4. Compile and inspect the generated artifacts (`vocab.ttl`, `context.jsonld`, `shapes.ttl`, `schema.json`, `cedar.schema`, `spec.html`, and `space-lock.json`).
+5. Trigger and understand compiler diagnostics when a breaking change violates lifecycle rules (`N4`).
+
+---
+
+<Steps>
+
+### Step 1: Build the `alexandriac` Compiler
+
+From the root of the repository, build `bin/alexandriac`:
+
+```bash
+go build -o bin/alexandriac ./cmd/alexandriac
+```
+
+Verify the CLI usage:
+
+```bash
+./bin/alexandriac
+# usage: alexandriac validate|compile [-o dir] [-vendor dir] [-previous file]... file.yaml...
+```
+
+### Step 2: Inspect an `OdrlProfile` Document
+
+An `OdrlProfile` defines domain-specific policy terms (`action`, `left_operand`, `right_operand`), adopts standard ODRL 2.2 terms, and optionally declares runtime Cedar enforcement bindings.
+
+Let's validate the built-in `colors.profile.yaml` located in `internal/dsl/testdata/colors.profile.yaml`:
+
+```bash
+./bin/alexandriac validate internal/dsl/testdata/colors.profile.yaml
+```
+
+Output:
+```text
+ok: 1 documents valid
+```
+
+Now compile it into `/tmp/colors-build`:
+
+```bash
+./bin/alexandriac compile -o /tmp/colors-build internal/dsl/testdata/colors.profile.yaml
+```
+
+Output:
+```text
+/tmp/colors-build/profiles/odrl/colors/0.1.0/cedar-mapping.json
+/tmp/colors-build/profiles/odrl/colors/0.1.0/cedar.schema
+/tmp/colors-build/profiles/odrl/colors/0.1.0/context.jsonld
+/tmp/colors-build/profiles/odrl/colors/0.1.0/prof.ttl
+/tmp/colors-build/profiles/odrl/colors/0.1.0/schema.json
+/tmp/colors-build/profiles/odrl/colors/0.1.0/shapes.ttl
+/tmp/colors-build/profiles/odrl/colors/0.1.0/spec.html
+/tmp/colors-build/profiles/odrl/colors/0.1.0/vocab.ttl
+```
+
+<Callout type="info">
+Because the `color` left operand in `colors.profile.yaml` declares an `enforcement` block (`cedar_path: context.color`, `pdp_level: PDP-4`), `alexandriac` automatically generates `cedar-mapping.json` and `cedar.schema` alongside the RDF, SHACL, and JSON Schema artifacts!
+</Callout>
+
+### Step 3: Create a Complete Space Bundle (`OdrlProfile` + `SpaceProfile`)
+
+A dataspace combines one or more profiles into a **`SpaceProfile`**, which binds each slot (`odrl`, `dcat`, `dsp`, `dcp`) to a profile version, an obligation (`mandatory` or `recommended`), and the validation gates (`policy_intake`, `dsp_message`, `catalog_entry`, `agreement_admission`) where each artifact role applies.
+
+Create a file `/tmp/my-space-v1.yaml` containing both an `OdrlProfile` and a `SpaceProfile` separated by `---`:
+
+```bash
+cat << 'EOF' > /tmp/my-space-v1.yaml
+dsl: eunomia.profiles/v1
+kind: OdrlProfile
+profile:
+  id: https://example.com/odrl/profile/mobility
+  version: 1.0.0
+  title:
+    en: Mobility Data Usage Profile
+  publisher: GING-DIT, Universidad Politécnica de Madrid
+  license: https://creativecommons.org/licenses/by/4.0/
+  base_url: https://example.com/odrl/profile/mobility
+namespaces:
+  mob: https://example.com/ns/mobility#
+adopted:
+  left_operands:
+    - term: odrl:dateTime
+      signature:
+        datatype: xsd:dateTime
+        operators: [eq, lt, lteq, gt, gteq]
+terms:
+  - id: aggregateTelemetry
+    kind: action
+    included_in: odrl:use
+    label: { en: Aggregate Telemetry }
+    definition: { en: Compute anonymized fleet telemetry aggregates. }
+  - id: minFleetSize
+    kind: left_operand
+    label: { en: Minimum Fleet Size }
+    definition: { en: Minimum number of vehicles required in an aggregation window. }
+    signature:
+      datatype: xsd:integer
+      operators: [gt, gteq]
+---
+dsl: eunomia.profiles/v1
+kind: SpaceProfile
+space:
+  id: https://example.com/spaces/mobility
+  version: 1.0.0
+  title:
+    en: Mobility Sovereign Dataspace
+  operator: https://example.com/party/mobility-authority
+  base_url: https://example.com/spaces/mobility
+lifecycle:
+  grace_window: P30D
+  freshness:
+    ttl: PT24H
+    max_staleness: P7D
+  degraded:
+    policy_intake: continue
+    dsp_message: continue
+bindings:
+  - slot: odrl
+    profile: https://example.com/odrl/profile/mobility
+    source: internal
+    version: "=1.0.0"
+    obligation: mandatory
+    conformance:
+      - { role: json-schema, applies_to: policy_intake }
+      - { role: shacl, applies_to: policy_intake }
+EOF
+```
+
+Validate and compile your space bundle:
+
+```bash
+./bin/alexandriac validate /tmp/my-space-v1.yaml
+./bin/alexandriac compile -o /tmp/mobility-out /tmp/my-space-v1.yaml
+```
+
+Output:
+```text
+ok: 2 documents valid
+/tmp/mobility-out/profiles/odrl/mobility/1.0.0/context.jsonld
+/tmp/mobility-out/profiles/odrl/mobility/1.0.0/prof.ttl
+/tmp/mobility-out/profiles/odrl/mobility/1.0.0/schema.json
+/tmp/mobility-out/profiles/odrl/mobility/1.0.0/shapes.ttl
+/tmp/mobility-out/profiles/odrl/mobility/1.0.0/spec.html
+/tmp/mobility-out/profiles/odrl/mobility/1.0.0/vocab.ttl
+/tmp/mobility-out/space/prof.ttl
+/tmp/mobility-out/space/shacl-union.ttl
+/tmp/mobility-out/space/space-lock.json
+/tmp/mobility-out/space/spec.html
+```
+
+### Step 4: Inspect `space/space-lock.json` and `schema.json`
+
+Inspect the generated `space/space-lock.json`, which records the resolved version, SHA-256 digests of every artifact, gate bindings, and lifecycle configuration:
+
+```bash
+cat /tmp/mobility-out/space/space-lock.json
+```
+
+Notice how `profiles/odrl/mobility/1.0.0/schema.json` is a **self-contained JSON Schema Draft 2020-12** (no external network `$ref`s) that validates compact ODRL offers and enforces:
+- Allowed actions (`odrl:use`, `mob:aggregateTelemetry`).
+- Operator and datatype constraints on `mob:minFleetSize` (`gt`, `gteq` with integer `rightOperand`) and `odrl:dateTime` (`xsd:dateTime`).
+
+### Step 5: Test Cross-Release Evolution Rules (`N4` Validation)
+
+The `eunomia.profiles/v1` specification enforces strict governance over vocabulary evolution (`N4`):
+- You **cannot delete** a term from a profile (`TERM_REMOVED`).
+- You **cannot retire** an active term directly without first deprecating it in an intermediate release (`TERM_RETIRED_WITHOUT_DEPRECATION`).
+
+Let's see `N4` in action! Try creating `/tmp/my-space-bad-v2.yaml` where `aggregateTelemetry` jumps directly from active (in `1.0.0`) to `status: retired` without an intermediate `deprecated` release:
+
+```bash
+ sed 's/version: 1.0.0/version: 2.0.0/g; s/"=1.0.0"/"=2.0.0"/g; s/kind: action/kind: action\n    status: retired/' \
+   /tmp/my-space-v1.yaml > /tmp/my-space-bad-v2.yaml
+
+./bin/alexandriac compile -o /tmp/mobility-v2 -previous /tmp/my-space-v1.yaml /tmp/my-space-bad-v2.yaml
+```
+
+`alexandriac` immediately rejects the invalid transition with a precise `N4` diagnostic and exits with status `1`:
+
+```text
+error TERM_RETIRED_WITHOUT_DEPRECATION my-space-bad-v2.yaml#1:17 /terms/0 term "aggregateTelemetry" was active in 1.0.0 and is retired in 2.0.0 without an intermediate deprecated release
+alexandriac: 1 errors
+```
+
+To retire a term properly (as done in `conformance/f6/drafts/v2.0.0.yaml`), include the intermediate `1.1.0` `OdrlProfile` marking the term `status: deprecated` alongside the `2.0.0` `OdrlProfile` marking it `status: retired`.
+
+</Steps>
+
+---
+
+## Next Tutorial
+
+Now that you know how to author and compile profiles with `alexandriac`, proceed to **[Tutorial 2: Publishing & Governing Vocabularies on `alexandria-server`](./02-hub-governance-lifecycle)** to manage the full draft -> candidate -> release lifecycle over HTTP.

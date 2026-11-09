@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:eunomia:vhub:schema:event-verdict:v1",
+  "title": "Evento vhub.verdict v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "id",
+    "ts",
+    "space",
+    "listener",
+    "route",
+    "message",
+    "gate",
+    "mode",
+    "state",
+    "classification",
+    "action",
+    "evaluated",
+    "matched",
+    "codes",
+    "findings"
+  ],
+  "properties": {
+    "type": {
+      "const": "vhub.verdict"
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "ts": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+    },
+    "space": {
+      "type": "string",
+      "format": "iri"
+    },
+    "listener": {
+      "enum": [
+        "dsp-ingress",
+        "mgmt-ingress",
+        "dsp-egress"
+      ]
+    },
+    "route": {
+      "type": "string",
+      "pattern": "^(GET|POST|PUT|PATCH|DELETE) /"
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1
+    },
+    "gate": {
+      "enum": [
+        "dsp_message",
+        "policy_intake",
+        "catalog_entry",
+        "agreement_admission"
+      ]
+    },
+    "mode": {
+      "enum": [
+        "shadow",
+        "enforce"
+      ]
+    },
+    "state": {
+      "enum": [
+        "Onboarding",
+        "Active",
+        "Transition",
+        "Degraded",
+        "FailClosed"
+      ]
+    },
+    "classification": {
+      "enum": [
+        "ok",
+        "warning",
+        "violation"
+      ]
+    },
+    "action": {
+      "enum": [
+        "forward",
+        "forward-notice",
+        "reject"
+      ]
+    },
+    "evaluated": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "matched": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sunset": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "codes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z][A-Z0-9]*(_[A-Z0-9]+)+$"
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "slot",
+          "source",
+          "severity",
+          "message"
+        ],
+        "properties": {
+          "slot": {
+            "enum": [
+              "odrl",
+              "dcat",
+              "dsp",
+              "dcp"
+            ]
+          },
+          "source": {
+            "enum": [
+              "json-schema",
+              "shacl",
+              "loader"
+            ]
+          },
+          "severity": {
+            "enum": [
+              "Violation",
+              "Warning",
+              "Info"
+            ]
+          },
+          "focus": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

@@ -8,6 +8,8 @@
     "0004-authentication-terminated-at-the-node",
     "0005-tls-terminated-by-a-proxy-in-development-too",
     "0006-one-image-three-deployment-shapes",
-    "0007-unified-wallet-port-and-identityhub-adapter"
+    "0007-unified-wallet-port-and-identityhub-adapter",
+    "0008-enriched-domain-models-mutation-queries-and-structured-errors",
+    "0009-vhub-poc-decisions-and-open-questions"
   ]
 }

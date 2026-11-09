@@ -1,0 +1,17 @@
+$kind: http-request
+method: GET
+url: '{{clientAdmin}}/status'
+order: 3000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      const s = pm.response.json();
+      pm.test('200 with every §4.11 field (REQ-CLI-020)', () => {
+        pm.response.to.have.status(200);
+        ['space', 'state', 'versions', 'last_accepted_listing', 'hub_did', 'clock_skew_estimate_ms', 'gates'].forEach(k => pm.expect(s).to.have.property(k));
+        pm.expect(s.state).to.be.oneOf(['Onboarding', 'Active', 'Transition', 'Degraded', 'FailClosed']);
+        pm.expect(s.hub_did.did).to.eql(pm.environment.get('hubDid'));
+      });
+      pm.test('local roles are head, in_force, scheduled or retained', () => s.versions.forEach(v => pm.expect(v.local_role).to.be.oneOf(['head', 'in_force', 'scheduled', 'retained'])));
+      console.log('client state', s.state, 'listing', s.last_accepted_listing);

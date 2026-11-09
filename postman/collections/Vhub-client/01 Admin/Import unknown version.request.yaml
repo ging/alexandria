@@ -1,0 +1,20 @@
+$kind: http-request
+name: '404 import with an unknown version (REQ-CLI-026)'
+method: POST
+url: '{{clientAdmin}}/agreements:import'
+order: 6000
+headers:
+  - key: 'Content-Type'
+    value: 'application/json'
+body:
+  type: json
+  content: |-
+    [{"agreement_id": "urn:uuid:imported-1", "version": "9.9.9"}]
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('404 API_NOT_FOUND', () => {
+        pm.response.to.have.status(404);
+        pm.expect(pm.response.json().code).to.eql('API_NOT_FOUND');
+      });

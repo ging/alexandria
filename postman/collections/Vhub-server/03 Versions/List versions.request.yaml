@@ -1,0 +1,27 @@
+$kind: http-request
+method: GET
+url: '{{hubUrl}}/v1/versions'
+order: 1000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('200 private, no-cache (REQ-HUB-012)', () => {
+        pm.response.to.have.status(200);
+        pm.expect(pm.response.headers.get('Cache-Control')).to.eql('private, no-cache');
+      });
+      const env = pm.response.json();
+      pm.test('signed listing: expires_at = issued_at + ttl, versions ascending (§3.4)', () => {
+        pm.expect(env.signed.type).to.eql('eunomia.versions/v1');
+        pm.expect(env.signed.sequence).to.be.at.least(1);
+        pm.expect(Date.parse(env.signed.expires_at) - Date.parse(env.signed.issued_at)).to.eql(24 * 3600 * 1000);
+        const vs = env.signed.versions.map(r => r.version);
+        pm.expect(vs).to.eql([...vs].sort());
+        pm.expect(env.signature.alg).to.eql('EdDSA');
+      });
+      const last = env.signed.versions[env.signed.versions.length - 1];
+      pm.collectionVariables.set('version', last.version);
+      pm.collectionVariables.set('profilePath', 'profiles/odrl/f6/' + last.version);
+      pm.collectionVariables.set('manifestSegment', last.manifest.split(';')[1]);
+      pm.collectionVariables.set('listingKid', env.signature.kid);
+      pm.collectionVariables.set('listedRecord', JSON.stringify(last));

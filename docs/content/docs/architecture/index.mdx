@@ -1,62 +1,66 @@
 ---
 title: Architecture Overview
-description: Hexagonal architecture, in-process modular monolith, and core design principles in Alexandria.
+description: Hexagonal architecture, in-process bounded contexts, archtest enforcement, and composition roots in Alexandria.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
 # Architecture Overview
 
-Alexandria is engineered around **Hexagonal Architecture** (Ports and Adapters) structured as an **in-process modular monolith** (as established in [ADR 0001](../adr/0001-bounded-contexts-as-in-process-modules)).
+Alexandria is engineered around **Hexagonal Architecture** (Ports and Adapters) structured as **in-process bounded contexts** (as established in [ADR 0001](../adr/0001-bounded-contexts-as-in-process-modules) and [`DECISIONS.md`](https://github.com/ging/alexandria/blob/feat/vhub-poc/DECISIONS.md)).
 
 ---
 
-## Architectural Principles
+## Core Architectural Principles
 
-1. **In-Process Bounded Contexts:** Rather than prematurely splitting the system into distributed microservices with network latency and distributed failure modes, contexts are implemented as decoupled Go packages under `internal/`.
-2. **Strict Seams & Ports:** Domain logic never directly imports external HTTP clients, database drivers, or wallet-specific SDKs. All external interactions are mediated through driven (outbound) ports.
-3. **Pluggable Adapters:** Third-party integrations (such as wallets and identity providers) are isolated behind adapters. Switching from one provider to another requires changing configuration rather than touching domain logic.
-4. **Resilient Startup & Decoupled Lifecycles:** The node boots cleanly even if external dependencies (wallets, IAM) are temporarily unreachable. Modules report health and readiness independently.
+1. **In-Process Bounded Contexts (`module.go`):** Contexts are implemented as decoupled Go packages under `internal/` (`internal/server`, `internal/client`, `internal/dsl`, `internal/ssi-auth`, `internal/auth-proxy`, `internal/openapi`), each exposing a standard `New(Deps) (*Module, error)`, `Start(ctx)`, `Close()`, `Name()`, and `Describe()` contract.
+2. **Strict Hexagonal Seams & Ports:** Domain packages (`domain/`) and application services (`app/`, `wallet/`) never directly import external HTTP clients, database drivers, or vendor SDKs. All outbound interactions are mediated through driven ports (`ports.go`).
+3. **Automated Architecture Enforcement (`internal/archtest`):** The test suite in `internal/archtest/arch_test.go` parses the Go AST and dependency graph of the codebase on every `make test` run to enforce:
+   - **Hexagonal Layering:** `domain` imports only `internal/core`; `app` imports only `domain` and `internal/core`; `server` and `client` never import each other.
+   - **Dependency Allowlist (`DP-1`):** `vhub` packages only import the Go standard library, `modernc.org/sqlite`, `github.com/santhosh-tekuri/jsonschema/v6`, and `gopkg.in/yaml.v3` (restricted to `internal/dsl`).
+   - **Injectable Clock (`DP-9`):** No production package outside `internal/clock` calls `time.Now()`. All timestamps flow through `timex.Clock`.
+4. **Pluggable Adapters:** Switching between `compiler_dsl` and `compiler_poc`, between static tokens (`auth_static`) and OIDC/SSI auth, or between **Fafnir** and **Eclipse EDC IdentityHub** requires only configuration or `Deps` injection—zero domain changes.
 
 ---
 
-## High-Level Diagram
+## High-Level System Diagram
 
 ```
-       +-------------------------------------------------------+
-       |               Caddy Reverse Proxy (TLS)               |
-       |             Port 8443 (alexandria.nip.io)             |
-       +---------------------------+---------------------------+
-                                   |
-                                   v
-       +-------------------------------------------------------+
-       |                  Alexandria Process                   |
-       |                                                       |
-       |  +---------------------+     +---------------------+  |
-       |  |     auth-proxy      |     |      ssi-auth       |  |
-       |  | (Zitadel OIDC, PKCE |     | (DID Resolution,    |  |
-       |  |  Session Cookies)   |     |  Credential Ops)    |  |
-       |  +----------+----------+     +----------+----------+  |
-       |             |                           |             |
-       |             v                           v             |
-       |  +---------------------+     +---------------------+  |
-       |  | Driver: Gin HTTP    |     | Driven: wallet.Port |  |
-       +--+----------+----------+-----+----------+----------+--+
-                     |                           |
-                     v                           v
-       +----------------------+    +---------------------------+
-       |   Zitadel OIDC IAM   |    |    Pluggable Wallets      |
-       |      Port 1600       |    |  (Fafnir / IdentityHub)   |
-       +----------------------+    +---------------------------+
+  ┌───────────────────────────────────────────────────────────────────────────────┐
+  │                       Composition Roots (cmd/)                                │
+  │                                                                               │
+  │  ┌──────────────────────┐  ┌──────────────────────┐  ┌─────────────────────┐  │
+  │  │    cmd/alexandria    │  │   cmd/alexandria-server    │  │   cmd/alexandria-client   │  │
+  │  │ (Identity & Gateway) │  │   (Vocabulary Hub)   │  │   (Edge Sidecar)    │  │
+  │  └──────────┬───────────┘  └──────────┬───────────┘  └──────────┬──────────┘  │
+  └─────────────┼─────────────────────────┼─────────────────────────┼─────────────┘
+                │                         │                         │
+                ▼                         ▼                         ▼
+  ┌─────────────────────────┐  ┌──────────────────────┐  ┌────────────────────────┐
+  │ internal/auth-proxy     │  │ internal/server      │  │ internal/client        │
+  │ internal/ssi-auth       │  │ internal/dsl         │  │  ├─ app (Sync, Edge)   │
+  │ internal/openapi        │  │  ├─ app (Hub, Pub)   │  │  ├─ domain (Classify)  │
+  │  ├─ wallet.Port         │  │  ├─ domain           │  │  └─ adapters           │
+  │  ├─ Fafnir Adapter      │  │  └─ adapters         │  │     (proxy_dsp,        │
+  │  └─ IdentityHub Adapter │  │     (sqlite, blob_fs,│  │      store_fs,         │
+  │                         │  │      compiler_dsl)   │  │      did_web, admin)   │
+  └─────────────────────────┘  └──────────┬───────────┘  └──────────┬─────────────┘
+                                          │                         │
+                                          ▼                         ▼
+                               ┌─────────────────────────────────────────────┐
+                               │            internal/core & clock            │
+                               │  timex · semver · canon (JCS) · ni · did    │
+                               │  sign (EdDSA) · lifecycle · pkgv · codes    │
+                               └─────────────────────────────────────────────┘
 ```
 
 ---
 
-## The Composition Root (`cmd/alexandria`)
+## Composition Roots (`cmd/`)
 
-The entrypoint in `cmd/alexandria` is the sole location aware of all modules. It:
-- Discovers and parses `config.yaml`.
-- Initializes shared telemetry, database pools, and logging.
-- Instantiates module dependencies (`Deps`).
-- Wires inbound Gin routers and outbound ports.
-- Coordinates graceful termination via Unix signals (`SIGINT`, `SIGTERM`).
+| Binary | Entrypoint | Wired Modules |
+|:---|:---|:---|
+| **`alexandria`** | `cmd/alexandria` | Wires `config.yaml`, PostgreSQL pool, `observability`, `httpapi` (Gin), `auth-proxy` (Zitadel OIDC), `ssi-auth` (Fafnir / IdentityHub wallet), and `openapi` (Swagger UI). |
+| **`alexandria-server`** | `cmd/alexandria-server` | Wires `config/server.json`, `clock` (`System` or `File`), and `internal/server.Module` (`sqlite`, `blob_fs`, `signer_file`, `auth_static`, `compiler_dsl` / `compiler_poc`, `scitt_fake`, `scheduler`). |
+| **`alexandria-client`** | `cmd/alexandria-client` | Validates `CFG-1`..`CFG-5` on `config/config.json`, wires `clock`, and starts `internal/client.Module` (`store_fs`, `did_web`, `http_hub`, `evaluator_poc`, `proxy_dsp`, `status_http`, `sync_timer`). |
+| **`alexandriac`** | `cmd/alexandriac` | Standalone CLI around `internal/dsl.Compile` for validating and compiling `eunomia.profiles/v1` YAML files. |

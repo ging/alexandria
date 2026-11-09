@@ -137,6 +137,10 @@ const (
 	ModuleObservability = "observability"
 	// ModuleOpenAPI is internal/openapi, the API specification and documentation context.
 	ModuleOpenAPI = "openapi"
+	// ModuleVHubServer is internal/server, the vocabulary hub server context.
+	ModuleVHubServer = "alexandria-server"
+	// ModuleVHubClient is internal/client, the vocabulary hub client context.
+	ModuleVHubClient = "alexandria-client"
 	// ModuleMain is the composition root.
 	ModuleMain = "main"
 )

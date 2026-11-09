@@ -84,6 +84,7 @@ func Load(path string) (*Config, error) {
 func Discover(dirs ...string) (*Config, error) {
 	loader := newLoader()
 	loader.SetConfigName("config")
+	loader.SetConfigType("yaml")
 
 	for _, dir := range dirs {
 		loader.AddConfigPath(dir)

@@ -1,90 +1,80 @@
 ---
-title: Remote Conformance Testing
-description: Semantic verification of dataspace payloads, schemas, and connector profiles against published vocabularies.
+title: Conformance & Traceability
+description: Normative requirement conformance suite (61 REQ-*), negative test corpus (64 F5 codes), Scenario F6 E2E verification, and automated traceability.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Steps } from 'fumadocs-ui/components/steps';
 
-# Remote Conformance Testing
+# Conformance & Traceability Suite
 
-In a sovereign dataspace ecosystem, reliable data exchange depends on strict adherence to shared semantic contracts. Alexandria provides **Remote Conformance Testing** as a core service, enabling participants, data providers, and connectors to validate data assets, dataset profiles, and Self-Descriptions against published vocabularies before publishing or transacting.
-
----
-
-## Why Remote Conformance Matters
-
-When heterogeneous participants join a dataspace (e.g., in mobility, manufacturing, or energy domains), agreement on high-level ontology names is insufficient. The actual payload graphs must comply with:
-- Required and forbidden properties.
-- Value range constraints and datatypes.
-- Multiplicity and cardinality rules.
-- Linked Data relations and IRI prefixes.
-
-Alexandria operates as an authoritative validation service where participants can remotely submit semantic artifacts to certify compliance.
+Alexandria enforces conformance at two complementary levels:
+1. **Dataspace Payload Conformance:** Validating Connector DSP messages, ODRL offers/agreements, and DCAT catalog datasets against compiled JSON Schema Draft 2020-12 (`schema.json`) and W3C SHACL (`shapes.ttl`) artifacts.
+2. **System Conformance & Traceability (`conformance/`):** An automated verification suite proving that `alexandria-server`, `alexandria-client`, and `alexandriac` satisfy all **61 normative requirements (`REQ-*`)**, the **64-code closed error catalog (`F5`)**, and the **End-to-End Scenario F6**.
 
 ---
 
-## Validation Engine: SHACL Constraint Shapes
+## 1. Summary of Normative Coverage
 
-Alexandria leverages **SHACL (Shapes Constraint Language)**—the W3C standard for validating RDF graphs—to execute conformance checks:
+Running `make conformance trace` verifies and regenerates [`TRACEABILITY.md`](https://github.com/ging/alexandria/blob/feat/vhub-poc/TRACEABILITY.md):
 
-1. **Shape Association:** Each vocabulary published in Alexandria can register corresponding SHACL shape definitions (e.g. `VehicleProfileShape`, `ContractOfferShape`).
-2. **Graph Validation:** When a payload is submitted for remote testing, Alexandria executes the target SHACL shapes against the payload data graph.
-3. **Conformance Report:** The test returns a standardized SHACL validation report:
-   - `sh:conforms true`: Payload is 100% compliant.
-   - `sh:conforms false`: Detailed violation reports identifying specific focus nodes, failed constraint components, paths, and actionable severity levels (`sh:Violation`, `sh:Warning`, `sh:Info`).
+| Dimension | Coverage | Details |
+|:---|:---:|:---|
+| **Normative Requirements (`F2`, `F3`, `F4`)** | **61 / 61** | `REQ-SYS-001`..`009` (9), `REQ-HUB-001`..`021` (21), `REQ-CLI-001`..`027` (27), `REQ-DOC-001`..`004` (4). Every requirement is mapped to production packages and `TestT_*` tests. |
+| **Production Packages Audited (`§8.8`)** | **44 packages** | Bidirectional traceability (`REQ-* -> Module -> TestT_*` and `Module -> REQ-*`). |
+| **Closed Error Catalog (`F5`)** | **63 / 64** | 63 codes verified with automated negative tests (`TestN_<CODE>` in `conformance/negative_hub_test.go` & `conformance/negative_client_test.go`). Only `VERDICT_SHACL_WARNING` is unreachable in the PoC (`DP-7`). |
+| **End-to-End F6 Scenario (`M8`)** | **19 / 19 rows** | Verified against real compiled `alexandria-server`, `alexandria-client`, and `fake-connector` binaries in `TestE2E_F6` and `make demo`. |
 
 ---
 
-## Remote Conformance Flow
+## 2. Running the Conformance Battery
 
 <Steps>
 
-### 1. Retrieve Target Vocabulary & Shapes
-
-Connectors query Alexandria for the latest published vocabulary version and associated SHACL validation shapes:
+### 1. Run Unit, Contract & Architecture Tests
 
 ```bash
-curl -k https://alexandria.127.0.0.1.nip.io:8443/api/v1/vocabularies/mobility/shapes
+make test
 ```
+Executes all tests under `./internal/...` and `./cmd/...`, including `internal/archtest` (Hexagonal boundaries, `DP-1` dependency allowlist, and `DP-9` no-`time.Now()` AST check) and all `TestT_SYS_*`, `TestT_HUB_*`, and `TestT_CLI_*` tests.
 
-### 2. Execute Remote Conformance Check
-
-Participants submit their payload or dataset profile via REST API to perform remote validation:
+### 2. Run the Full `conformance/` Suite
 
 ```bash
-curl -k -X POST https://alexandria.127.0.0.1.nip.io:8443/api/v1/conformance/validate \
-  -H "Content-Type: application/ld+json" \
-  -H "Cookie: alexandria_session=..." \
-  -d '{
-    "vocabulary_iri": "https://w3id.org/alexandria/mobility#",
-    "payload": {
-      "@context": "https://w3id.org/alexandria/mobility/context.jsonld",
-      "@type": "AssetEntry",
-      "assetId": "urn:uuid:1234",
-      "dataProfile": "https://w3id.org/alexandria/profiles/v1"
-    }
-  }'
+make conformance
 ```
+This runs:
+- **`conformance/documents_test.go` (`T-DOC-001`..`004`, `T-SYS-005`..`006`):** Validates real binary outputs against the normative Appendix A JSON Schemas (`conformance/schemas/*.schema.json`) and verifies byte immutability on `/pub`.
+- **`conformance/determinism_test.go`:** Verifies that two independent `alexandria-client` instances given the same listing and clock produce identical classifications and headers across all inputs (`REQ-SYS-001`).
+- **`conformance/negative_hub_test.go`:** Executes negative `TestN_<CODE>` tests for every `C-HUB` error code (`API_*`, `RELEASE_ABORTED`, `DATES_*`, `LIFECYCLE_*`) using the negative draft corpus in `conformance/corpus/drafts/`.
+- **`conformance/negative_client_test.go`:** Executes negative `TestN_<CODE>` tests for every `C-CLI` error code (`CONFIG_*` in `conformance/corpus/config/`, `SYNC_*`, `DID_*`, `CLIENT_*`, `VERDICT_*`, `AGREEMENT_*`, `AUDIT_*`, `CLOCK_SKEW_EXCEEDED`).
+- **`conformance/e2e_f6_test.go` (`TestE2E_F6`):** Launches the real binaries and verifies all 19 rows of Scenario F6.
 
-### 3. Parse Conformance Verdict
+### 3. Regenerate & Verify `TRACEABILITY.md`
 
-Alexandria responds with the machine-readable validation result:
-
-```json
-{
-  "conforms": true,
-  "vocabulary_version": "v1.4.0",
-  "evaluated_shapes": 12,
-  "timestamp": "2026-09-07T22:30:00Z"
-}
+```bash
+make trace
 ```
+Runs `go run ./conformance/trace`, which parses Go test functions (`TestT_*`, `TestN_*`), package requirement annotations, and `internal/core/codes/catalog.tsv`, failing if any requirement or reachable catalog code lacks test coverage, and writes `TRACEABILITY.md`.
 
 </Steps>
 
 ---
 
-## Automated CI/CD Integration
+## 3. Normative Schemas & Corpus (`conformance/`)
 
-Dataspace engineering teams can incorporate Alexandria's remote conformance endpoint directly into their continuous integration pipelines. Any schema drift or non-compliant ontology modification in a connector immediately breaks the build before deploying to production.
-EOF
+```text
+conformance/
+├── corpus/
+│   ├── config/             # Invalid client configs triggering CONFIG_SCHEMA, CONFIG_ROUTE_OVERLAP, etc.
+│   └── drafts/             # Invalid drafts triggering LIFECYCLE_CLOCK_SKEW, LIFECYCLE_GRACE_ZERO, etc.
+├── demo/                   # CLI runner for make demo (prints F6 verdict table)
+├── examples/               # Normative JSON examples (config.json, version.json, versions.json, verdict-event.json)
+├── f6/                     # Scenario F6 YAML drafts (v1.0.0.yaml, v2.0.0.yaml), process launcher & driver
+├── schemas/                # Appendix A JSON Schemas (Draft 2020-12):
+│   ├── config.schema.json          # Appendix A.3: alexandria-client configuration
+│   ├── verdict-event.schema.json   # Appendix A.4: structured verdict events
+│   ├── version.schema.json         # Appendix A.2: eunomia.version/v1 record
+│   └── versions.schema.json        # Appendix A.1: eunomia.versions/v1 listing
+└── trace/                  # Automated TRACEABILITY.md generator & verifier
+```

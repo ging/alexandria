@@ -1,0 +1,175 @@
+---
+title: "eunomia.profiles/v1 Language & Compiler"
+description: Complete reference for authoring OdrlProfile and SpaceProfile YAML files, N1–N5 validation, and compiling artifacts with alexandriac.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
+
+# Profile Language (`eunomia.profiles/v1`) & `alexandriac` Compiler
+
+A sovereign dataspace is built on a **stack of specifications** (ODRL, DCAT-AP, DSP, DCP). Each base specification leaves extension points (**slots**), and a dataspace authority constrains those slots with **bindings**: which profile governs the slot, at which version, with what obligation (`mandatory` or `recommended`), and at which validation gate (`policy_intake`, `dsp_message`, `catalog_entry`, `agreement_admission`).
+
+In Alexandria, authorities write that stack in YAML (`dsl: eunomia.profiles/v1`), and **`alexandriac`** (or `alexandria-server` with `"compiler": "dsl"`) compiles all validation artifacts deterministically on the fly.
+
+---
+
+## 1. CLI Usage (`cmd/alexandriac`)
+
+```bash
+# Build the CLI compiler
+go build -o bin/alexandriac ./cmd/alexandriac
+
+# Validate one or more YAML documents (prints N1–N5 findings and exits 1 on errors)
+bin/alexandriac validate internal/dsl/testdata/colors.profile.yaml
+
+# Compile artifacts into an output directory (-o)
+bin/alexandriac compile -o out internal/dsl/testdata/colors.profile.yaml
+
+# Compile a full SpaceProfile bundle with vendored profiles and N4 previous-release checks
+bin/alexandriac compile -o out -vendor vendor/ -previous release-1.0.0.yaml release-2.0.0.yaml
+```
+
+### Flags
+- **`validate`:** Runs `N1`–`N5` validation and prints findings in the format `<severity> <CODE> <doc>#<n>:<line> <json-pointer> <message>`. Exits with code `1` if any errors exist.
+- **`compile`:** Runs `validate` and writes all generated profile and space artifacts into `-o <dir>`.
+- **`-previous <file.yaml>` (repeatable):** Supplies the YAML sources of the previous release so `N4` can verify SemVer bump rules and `active -> deprecated -> retired` term transitions.
+- **`-vendor <dir>`:** Directory containing local copies of `vendored` profiles (`<slot>/<version>/vendor.json` plus its referenced artifact files).
+
+---
+
+## 2. Document Kinds
+
+### `kind: OdrlProfile`
+Defines an ODRL policy vocabulary profile, including namespaces, adopted ODRL 2.2 terms, custom terms (`action`, `left_operand`, `right_operand`), operand signatures, and optional Cedar runtime enforcement mappings:
+
+```yaml
+dsl: eunomia.profiles/v1
+kind: OdrlProfile
+
+profile:
+  id: https://example.com/odrl/profile/colors
+  version: 0.1.0
+  title:
+    en: Color Labels ODRL Profile
+    es: Perfil ODRL de etiquetas de color
+  description:
+    en: ODRL profile for applying colour labels to assets.
+  publisher: GING-DIT, Universidad Politécnica de Madrid
+  license: https://creativecommons.org/licenses/by/4.0/
+  base_url: https://example.com/odrl/profile/colors
+
+namespaces:
+  col: https://example.com/ns/colors#
+
+adopted:
+  actions: [odrl:read]
+  left_operands:
+    - term: odrl:dateTime
+      signature:
+        datatype: xsd:dateTime
+        operators: [eq, lt, lteq, gt, gteq]
+
+terms:
+  - id: putColor
+    kind: action
+    included_in: odrl:use
+    label: { en: Put color }
+    definition: { en: To assign a colour label to the Asset. }
+    status: active          # active (default) | deprecated | retired
+    # replaced_by: odrl:read # required when deprecated or retired
+
+  - id: color
+    kind: left_operand
+    label: { en: Color }
+    definition: { en: The colour label assigned by the action. }
+    signature:
+      value_kind: iri
+      values: [col:red, col:green, col:blue, col:yellow]
+      operators: [eq, neq]
+    enforcement:
+      cedar_path: context.color
+      pdp_level: PDP-4
+      eval_timing: once
+
+  - id: red
+    kind: right_operand
+    label: { en: Red }
+    definition: { en: The colour red (#FF0000). }
+
+rules:
+  actions: closed           # closed | open
+```
+
+### `kind: SpaceProfile`
+Binds the dataspace slots (`odrl`, `dcat`, `dsp`, `dcp`) to concrete profiles (`source: internal` or `source: vendored`) and configures the dataspace's lifecycle parameters:
+
+```yaml
+dsl: eunomia.profiles/v1
+kind: SpaceProfile
+
+space:
+  id: https://example.com/spaces/demo
+  version: 1.0.0
+  title: { en: Demo Data Space }
+  operator: https://example.com/party/demo-authority
+  base_url: https://example.com/spaces/demo
+
+lifecycle:
+  grace_window: P30D
+  propagation_window: P2D
+  clock_skew: PT5S
+  lease_margin: PT10S
+  max_concurrent_versions: 2
+  freshness:
+    ttl: PT24H
+    max_staleness: P7D
+  degraded:
+    policy_intake: continue
+    dsp_message: continue
+    catalog_entry: continue
+
+bindings:
+  - slot: odrl
+    profile: https://example.com/odrl/profile/colors
+    source: internal
+    version: "=0.1.0"
+    obligation: mandatory
+    conformance:
+      - { role: json-schema, applies_to: policy_intake }
+      - { role: shacl, applies_to: policy_intake }
+```
+
+---
+
+## 3. Generated Artifacts
+
+Compiling an `OdrlProfile` and `SpaceProfile` produces deterministic, byte-reproducible artifacts:
+
+| Artifact Path | Manifest Role | Description |
+|:---|:---|:---|
+| `profiles/odrl/<token>/<ver>/vocab.ttl` | `vocabulary` | OWL/SKOS ontology, SKOS collections, terms (§8.5), reified constraint signatures (§9.3), and Cedar `eu:` enforcement triples. |
+| `profiles/odrl/<token>/<ver>/context.jsonld` | `mapping` | JSON-LD `@context` mapping every term alias to its full IRI (with mandatory `url` per `D-PVP-1`). |
+| `profiles/odrl/<token>/<ver>/shapes.ttl` | `shacl` | W3C SHACL shapes (§13.3): closed action lists, `sh:Warning` shapes for `deprecated` terms, and one constraint shape per `left_operand` signature. |
+| `profiles/odrl/<token>/<ver>/schema.json` | `json-schema` | Self-contained JSON Schema Draft 2020-12 over compact ODRL `Offer`/`Agreement` payloads (validates declared `profile`, allowed actions, atomic and logical `and`/`or`/`xone` constraints, and per-signature operators/values). |
+| `profiles/odrl/<token>/<ver>/cedar-mapping.json` & `cedar.schema` | `cedar-mapping`, `cedar-schema` | Generated whenever at least one term declares an `enforcement` block (§13.4). |
+| `profiles/odrl/<token>/<ver>/prof.ttl` & `spec.html` | `prof`, `specification` | W3C PROF manifest and human-readable HTML specification. |
+| `space/prof.ttl` & `space/spec.html` | `prof`, `specification` | Space-level W3C PROF manifest and HTML specification. |
+| `space/shacl-union.ttl` | `shacl-union` | Combined SHACL shapes across all `mandatory` bindings per gate. |
+| `space/space-lock.json` | *(package lock)* | Records resolved binding versions, obligations, artifact SHA-256 digests, gates, `lifecycle` parameters, and `profiles` for `alexandria-client`. |
+
+---
+
+## 4. Five-Stage Validation Pipeline (`N1`–`N5`)
+
+| Level | Checks Performed | Example Finding Codes |
+|:---:|:---|:---|
+| **N1** | Strict JSON-subset YAML parsing (rejects anchors, aliases, custom tags, and duplicate keys) + embedded JSON Schema Draft 2020-12 (`internal/dsl/schema.json`) with exact source line numbers. | `YAML`, `SCHEMA` |
+| **N2** | Unique term IDs, collision checks against adopted ODRL terms and JSON-LD aliases, declared prefixes, `profile.id != namespace`, §9.4 operator-to-datatype compatibility matrix, `enforcement => signature`, one binding per slot, `mandatory => conformance gate`, acyclic `via`, and `LIFECYCLE_*` invariants. | `DUPLICATE_ID`, `ALIAS_COLLISION`, `SIG_OPERATOR_TYPE`, `ENFORCEMENT_WITHOUT_SIGNATURE`, `VIA_CYCLE`, `LIFECYCLE_*` |
+| **N3** | Verifies adopted terms against ODRL 2.2 (`internal/dsl/odrlvocab.go`) or profiles in the bundle; resolves SemVer ranges (`=`, `^`, `~`); loads `vendored` profiles from `-vendor`; verifies every declared `conformance` role is produced. | `ADOPTED_UNKNOWN`, `BINDING_UNRESOLVED`, `BINDING_BASE_MISMATCH`, `CONFORMANCE_ROLE_MISSING` |
+| **N4** | Cross-release diff against `-previous` (or the prior Hub release): enforces §14 SemVer bump rules (`MAJOR` vs `MINOR`), forbids deleting terms (`TERM_REMOVED`), requires `active -> deprecated -> retired` across releases, and forbids mutating an already-published version. | `TERM_REMOVED`, `TERM_RETIRED_WITHOUT_DEPRECATION`, `NAMESPACE_CHANGED`, `BUMP_TOO_SMALL`, `PROFILE_VERSION_IMMUTABLE` |
+| **N5** | Verifies all generated outputs: valid JSON, self-compiling JSON Schema Draft 2020-12, and well-formed Turtle structure. | `OUTPUT_INVALID` |
+
+<Callout type="info">
+For the complete engineering review of the `eunomia.profiles/v1` specification (items `R1`–`R15`), see [`PROFILES_DSL.md`](https://github.com/ging/alexandria/blob/feat/vhub-poc/PROFILES_DSL.md) at the repository root.
+</Callout>

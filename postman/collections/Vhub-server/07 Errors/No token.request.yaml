@@ -1,0 +1,15 @@
+$kind: http-request
+name: '401 without token'
+method: GET
+url: '{{hubUrl}}/v1/versions'
+order: 1000
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('401 API_FORBIDDEN_ROLE', () => {
+        pm.response.to.have.status(401);
+        pm.expect(pm.response.json().code).to.eql('API_FORBIDDEN_ROLE');
+      });

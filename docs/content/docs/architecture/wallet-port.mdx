@@ -1,41 +1,53 @@
 ---
 title: Unified Wallet Port
-description: Decoupling domain logic from wallet implementations with the wallet.Wallet interface.
+description: Decoupling domain logic from wallet implementations with the enriched wallet.Wallet interface, mutation-and-query pattern, and structured errors.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
-# Unified Wallet Port
+# Unified Wallet Port (`wallet.Wallet`)
 
-In accordance with [ADR 0003](../adr/0003-key-material-lives-in-an-external-wallet) and [ADR 0007](../adr/0007-unified-wallet-port-and-identityhub-adapter), cryptographic private keys never reside inside the Alexandria process. Instead, key custody and signing are delegated to an external wallet service.
-
-The interface `wallet.Wallet` defined in `internal/ssi-auth/wallet/ports.go` establishes the driven port contract.
+In accordance with [ADR 0003](../adr/0003-key-material-lives-in-an-external-wallet), [ADR 0007](../adr/0007-unified-wallet-port-and-identityhub-adapter), and [ADR 0008](../adr/0008-enriched-domain-models-mutation-queries-and-structured-errors), private keys never reside inside the Alexandria process. Key custody, DID lifecycle, participant contexts, and credential operations are delegated through the `wallet.Wallet` port (`internal/ssi-auth/wallet/ports.go`).
 
 ---
 
-## Core Operations
-
-The `wallet.Wallet` port abstracts three primary capability domains:
+## Capability Domains
 
 ### 1. Identity & DID Lifecycle
-- `Link(ctx) (Did, error)`: Refreshes and verifies identity connection with the wallet.
-- `GetAllDids(ctx)` / `GetDidByID(ctx, id)`: Queries stored DIDs.
-- `RegisterDid(ctx, plan)` / `DeleteDid(ctx, id)`: Provisions or deprovisions DIDs.
-- `PublishDid(ctx, id)` / `UnpublishDid(ctx, id)`: Publishes DID documents to public or dataspace resolvers.
-- `AddServiceEndpoint(ctx, id, endpoint)`: Appends service endpoints (e.g. CredentialService) to published DID Documents.
+- `Link(ctx) (Did, error)` / `IsLinked(ctx) bool`: Refreshes and verifies the active identity connection with the wallet.
+- `GetAllDids(ctx)` / `GetDidByID(ctx, id)`: Queries stored DID records.
+- `RegisterDid(ctx, plan)` / `DeleteDid(ctx, id)`: Provisions or deprovisions `did:jwk` and `did:web` identities.
+- `SetDefaultDid(ctx, id) (Did, error)`: Promotes a DID to be the wallet's default identity.
+- `PublishDid(ctx, id)` / `UnpublishDid(ctx, id)` / `GetDidState(ctx, id)`: Manages publication state (`PUBLISHED`, `UNPUBLISHED`, `CREATED`).
+- `AddServiceEndpoint(ctx, id, plan)` / `RemoveServiceEndpoint(ctx, id, endpointID)`: Attaches or removes service endpoints (such as `CredentialService`) on DID Documents.
 
-### 2. Key Management & Rotation
-- `GetAllKeys(ctx)` / `RegisterKey(ctx, plan)` / `DeleteKey(ctx, id)`: Manages asymmetric cryptographic key pairs.
-- `RotateKey(ctx, id, duration)`: Implements secure key rotation with overlap validity periods.
-- `RevokeKey(ctx, id)`: Instantly revokes compromised keys.
+### 2. Asymmetric Key Management & Rotation
+- `GetAllKeys(ctx)` / `RegisterKey(ctx, plan)` / `DeleteKey(ctx, id)`: Manages cryptographic keypairs (supporting raw PEM, JWK public keys `PublicKeyJwk`, and generator parameters).
+- `AddKeyToDid(ctx, didID, keyID)` / `RemoveKeyFromDid(ctx, didID, keyID)` / `SetDefaultKey(ctx, didID, keyID)`: Binds or unbinds verification methods on a DID.
+- `RotateKey(ctx, id, duration) (Key, error)`: Initiates key rotation with an overlap validity window.
+- `RevokeKey(ctx, id) error`: Immediately revokes a compromised key.
 
-### 3. Verifiable Credentials & Presentations
-- `GetAllCredentials(ctx)` / `DeleteCredential(ctx, id)`: Manages held verifiable credentials.
-- `ProcessOid4vci(ctx, uri)`: Handles inbound OpenID for Verifiable Credential Issuance (OID4VCI) offers.
-- `ProcessOid4vp(ctx, uri)`: Resolves OpenID for Verifiable Presentations (OID4VP) verification requests.
+### 3. Verifiable Credentials, OID4VC & DCP Exchanges
+- `GetAllCredentials(ctx)` / `GetCredentialsByType(ctx, vcType)`: Lists held Verifiable Credentials (optionally filtered by semantic type).
+- `StoreCredential(ctx, plan) (Credential, error)` / `DeleteCredential(ctx, id)`: Imports or purges W3C Verifiable Credentials.
+- `ProcessOid4vci(ctx, uri)` / `ProcessOid4vp(ctx, uri)`: Executes OpenID for Verifiable Credential Issuance and Presentation flows.
+- `RequestDcpCredential(ctx, plan) (string, error)` / `GetDcpRequestStatus(ctx, requestID)`: Requests credentials from a Dataspace Credential Protocol (**DCP**) issuer and tracks issuance status.
+
+### 4. Multi-Participant Context Management
+- `CreateParticipant(ctx, plan) (Participant, error)` / `GetParticipant(ctx, id)`: Provisions and inspects isolated participant contexts in multi-tenant wallets (IdentityHub).
+- `SetParticipantState(ctx, id, active) (Participant, error)`: Activates or deactivates a participant context.
+- `RegenerateParticipantToken(ctx, id)` / `UpdateParticipantToken(ctx, id, token)`: Manages participant API credentials.
 
 ---
 
-## Why Decouple the Wallet?
+## Architectural Patterns (ADR 0008)
 
-Dataspace ecosystems evolve rapidly. Organizations may require enterprise hardware security modules (HSM), sovereign wallets, or Eclipse Dataspace Components (EDC) compliance. Decoupling ensures Alexandria remains agnostic to storage formats, protocols, and vendor lock-in.
+### 1. Enriched Domain Models
+- **`wallet.Key`** preserves both basic key metadata and advanced IdentityHub fields (`SerializedPublicKey`, `KeyContext`, `Usage`, `DefaultPair`, `PrivateKeyAlias`), serialized with `omitempty` so Fafnir responses remain clean.
+- **`wallet.Credential`** normalizes both **VC 1.0 (compact JWT)** and **VC 2.0 (JOSE container)** tokens into unified domain fields (`ID`, `Issuer`, `Subject`, `Types`, `ValidUntil`, `IssuanceDate`, `Format`, `RawVc`, `Credential`, `ParticipantContextID`).
+
+### 2. Mutation-and-Query Pattern
+Every mutating method (`RegisterKey`, `RotateKey`, `RegisterDid`, `AddServiceEndpoint`, `StoreCredential`, `CreateParticipant`, `SetParticipantState`) performs an immediate read-after-write lookup (falling back to plan synthesis when immediate lookup is unsupported) and returns the full updated entity with HTTP `200 OK` or `201 Created`.
+
+### 3. Structured Upstream Errors (`common.UpstreamError`)
+When an upstream wallet returns an HTTP error (e.g., `409 Conflict` or `400 Bad Request`), the adapter wraps the status, endpoint path, provider name, and raw body into `common.UpstreamError`. The REST error translator includes an `originalResponse` object in the JSON error payload for instant debugging.

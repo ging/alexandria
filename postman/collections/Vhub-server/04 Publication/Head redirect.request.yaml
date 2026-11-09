@@ -1,0 +1,21 @@
+$kind: http-request
+name: 'GET /pub/{slug}'
+method: GET
+url: '{{hubUrl}}/pub/{{slug}}'
+order: 1000
+headers:
+  - key: 'Accept'
+    value: 'text/turtle'
+settings:
+  followRedirects: false
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('303 to the manifest of the head in force, or 404 while none is in force (DP-15)', () => {
+        pm.expect(pm.response.code).to.be.oneOf([303, 404]);
+        if (pm.response.code === 303) {
+          pm.expect(pm.response.headers.get('Location')).to.match(new RegExp('^/pub/' + pm.collectionVariables.get('slug') + '/[0-9.]+/manifest.json$'));
+          pm.expect(pm.response.headers.get('Cache-Control')).to.eql('no-cache');
+        }
+      });

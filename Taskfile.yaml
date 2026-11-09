@@ -73,9 +73,35 @@ tasks:
     cmds: ["go tool cover -html=coverage.out"]
 
   build:
-    desc: Build the binary into bin/.
+    desc: Build all project binaries (alexandria, alexandriac, alexandria-server, alexandria-client, fake-connector) into bin/.
     cmds:
+      - mkdir -p bin
       - go build -ldflags="-s -w -X main.version={{.VERSION}}" -o bin/{{.BIN}} {{.MAIN}}
+      - go build -o bin/alexandriac ./cmd/alexandriac
+      - go build -o bin/alexandria-server ./cmd/alexandria-server
+      - go build -o bin/alexandria-client ./cmd/alexandria-client
+      - go build -o bin/fake-connector ./deploy/fake-connector
+
+  conformance:
+    desc: Run the Vocabulary Hub conformance suite (N1-N5, negative cases, and F6).
+    cmds: ["go test ./conformance/..."]
+
+  e2e:
+    desc: Run the end-to-end F6 scenario test.
+    cmds: ["go test -v ./conformance -run '^TestE2E_F6$'"]
+
+  demo:
+    desc: Build binaries and run the interactive F6 demo table.
+    deps: [build]
+    cmds: ["go run ./conformance/demo -bin-dir bin"]
+
+  trace:
+    desc: Verify requirement traceability across TRACEABILITY.md and tests.
+    cmds: ["go run ./conformance/trace"]
+
+  clean:
+    desc: Remove compiled binaries in bin/ and coverage artifacts.
+    cmds: ["rm -rf bin coverage.out"]
 
   run:
     desc: Run the application.
@@ -324,9 +350,29 @@ tasks:
     dir: docs
     cmds: ["pnpm build"]
 
+  tutorial:
+    desc: Bootstrap tutorial/.venv, build Go binaries, and launch JupyterLab in the browser.
+    deps: [build]
+    cmds: ["./tutorial/run"]
+
+  tutorial:exec:
+    desc: Execute and verify all 6 Jupyter notebooks in tutorial/ headlessly against the Go binaries.
+    deps: [build]
+    cmds: ["python3 ./tutorial/run.py exec -v"]
+
+  all:
+    desc: Build all binaries, run unit tests, conformance suite, and traceability check.
+    cmds:
+      - task: build
+      - task: test
+      - task: conformance
+      - task: trace
+
   check:
-    desc: "Full pipeline: format, lint and tests."
+    desc: "Full pipeline: format, lint, unit tests, conformance, and traceability."
     cmds:
       - task: fmt
       - task: lint
       - task: test
+      - task: conformance
+      - task: trace

@@ -1,0 +1,25 @@
+$kind: http-request
+name: 'Catalog request (observe, response audited)'
+method: POST
+url: '{{clientDsp}}/catalog/request'
+order: 5000
+headers:
+  - key: 'Content-Type'
+    value: 'application/json'
+body:
+  type: json
+  content: |-
+    {
+      "@context": ["https://w3id.org/dspace/2025/1/context.jsonld"],
+      "@type": "CatalogRequestMessage",
+      "filter": []
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('observe route: forwarded unchanged', () => {
+        pm.response.to.have.status(200);
+        pm.expect(pm.response.json()['@type']).to.eql('Ack');
+        pm.expect(pm.response.headers.has('VHub-Verdict')).to.be.false;
+      });

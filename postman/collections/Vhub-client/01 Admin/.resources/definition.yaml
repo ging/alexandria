@@ -1,0 +1,5 @@
+$kind: collection
+name: '01 Admin'
+description: |-
+  Served only on the admin listener (REQ-CLI-019).
+order: 1000

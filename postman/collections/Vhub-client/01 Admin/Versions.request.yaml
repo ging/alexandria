@@ -1,0 +1,15 @@
+$kind: http-request
+method: GET
+url: '{{clientAdmin}}/versions'
+order: 4000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('200 known versions with reference state', () => {
+        pm.response.to.have.status(200);
+        pm.response.json().forEach(v => {
+          pm.expect(v.state).to.be.oneOf(['Scheduled', 'Published', 'Deprecated', 'Superseded', 'Retired', 'Revoked']);
+          pm.expect(v.retained).to.be.a('boolean');
+        });
+      });

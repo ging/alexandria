@@ -1,86 +1,107 @@
 ---
-title: Testing & CI/CD
-description: Testing strategies, Taskfile automation, and continuous integration workflows.
+title: Testing, Archtest & CI/CD
+description: Testing strategies, Makefile and Taskfile workflows, AST architectural enforcement, and GitHub Actions pipelines.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
-# Testing & CI/CD
+# Testing, Archtest & CI/CD
 
-Alexandria uses strict quality gates across both unit tests and integration tests.
+Alexandria uses strict, multi-layered quality gates across unit tests, architectural AST tests, normative conformance tests, and live container integration suites.
 
 ---
 
-## Running Tests
+## 1. Vocabulary Hub Test Suite (`Makefile`)
 
-Testing commands are orchestrated via `Taskfile.yaml`:
+All `vhub` (`alexandria-server`, `alexandria-client`, `alexandriac`, `internal/core`, `internal/dsl`) tests run without external containers:
 
-### Unit Tests
-Executes unit tests with race detection and generates a coverage profile (`coverage.out`):
 ```bash
-task test
+# 1. Build alexandria-server, alexandria-client, and fake-connector into ./bin:
+make build
+
+# 2. Run all unit, contract, and hexagonal architecture tests:
+make test
+
+# 3. Run the full conformance suite (T-DOC-*, T-SYS-*, 63 N-<CODE> tests, and TestE2E_F6):
+make conformance
+
+# 4. Run only the real-binary Scenario F6 end-to-end test:
+make e2e
+
+# 5. Run the interactive F6 demo and print the 19-row verdict table:
+make demo
+
+# 6. Verify 100% requirement & catalog coverage and regenerate TRACEABILITY.md:
+make trace
 ```
 
-Inspect coverage interactively in the browser:
+### Architectural Gate (`internal/archtest`)
+Included automatically in `make test` and `task test`, `internal/archtest/arch_test.go` verifies:
+- **Hexagonal Layer Isolation:** `domain` packages never import `app` or `adapters`; `app` packages never import `adapters`; `internal/server` and `internal/client` never import each other; `internal/dsl` never imports `server`, `client`, `clock`, or `testkit`.
+- **Dependency Allowlist (`DP-1`):** Ensures no unauthorized third-party packages enter the `vhub` dependency tree.
+- **Deterministic Clock Enforcement (`DP-9`):** Scans the Go AST of all `vhub` production packages to guarantee `time.Now()` is never called outside `internal/clock`.
+
+---
+
+## 2. Identity & Wallet Test Suite (`Taskfile.yaml`)
+
+### Unit Tests & Coverage
+Executes unit tests across the entire repository with race detection and `-tags=jwx_es256k`, generating `coverage.out`:
+
 ```bash
+task test
 task cover
 ```
 
-### Integration Tests
-Integration tests run against live wallet backends and require the `-tags="integration,jwx_es256k"` build tags:
+### Live Wallet Integration Tests (`//go:build integration`)
+Integration tests verify `internal/ssi-auth/fafnir` and `internal/ssi-auth/identityhub` against live Docker containers (and skip gracefully via `t.Skip` if the target container is unreachable):
 
 ```bash
-# Run all integration tests
+# Run all integration tests:
 task test:integration
 
-# Test Fafnir adapter specifically
+# Test Fafnir wallet adapter specifically:
 task test:integration:fafnir
 
-# Test IdentityHub adapter specifically
+# Test Eclipse EDC IdentityHub adapter specifically:
 task test:integration:identityhub
 
-# Run both unit and integration tests
+# Run both unit and integration suites:
 task test:all
 ```
 
+*(When running `go test` manually for integration suites, always pass `-tags="integration,jwx_es256k"`.)*
+
 ---
 
-## Code Quality & Linters
+## 3. Code Quality & Linters
 
-Before submitting pull requests, run the full validation pipeline:
+Before opening a pull request, run the full verification pipeline:
 
 ```bash
 task check
 ```
 
-This task runs:
-1. `task fmt`: Formats all Go files using `gofumpt`.
-2. `task lint`: Runs static analysis with `golangci-lint`.
-3. `task test`: Runs unit tests with race detection.
+`task check` executes:
+1. **`task fmt`:** Formats all Go files with `gofumpt`.
+2. **`task lint`:** Runs static analysis with `golangci-lint`.
+3. **`task test`:** Runs the unit test suite with the race detector.
 
-Additional checks:
+Additional verification commands:
 ```bash
-# Verify module dependencies are clean
+# Verify go.mod / go.sum are clean:
 task tidy
 
-# Scan codebase for known vulnerabilities
+# Scan dependencies for known CVEs with govulncheck:
 task vuln
 ```
 
 ---
 
-## Continuous Integration (GitHub Actions)
-
-Alexandria runs two primary workflows on GitHub Actions:
+## 4. Continuous Integration (GitHub Actions)
 
 1. **`ci.yaml`:**
-   - Triggers on every push to `main` and all Pull Requests.
-   - Enforces `go mod tidy` synchronization.
-   - Runs `gofumpt` format checks, `go vet`, `golangci-lint`, and race tests.
-   - Scans dependencies with `govulncheck`.
-   - Verifies full binary compilation into `/dev/null`.
-
+   - Runs on every push to `main` and all Pull Requests.
+   - Verifies `go mod tidy` cleanliness, `gofumpt` formatting, `go vet`, `golangci-lint`, race-enabled unit tests, `govulncheck`, and binary compilation.
 2. **`deploy-docs.yaml`:**
-   - Triggers on push to `main` and manual trigger (`workflow_dispatch`).
-   - Compiles static Next.js/Fumadocs documentation.
-   - Deploys static build to GitHub Pages at `https://ging.github.io/alexandria/`.
+   - Builds the static Next.js / Fumadocs portal (`task docs:build`) and deploys it to GitHub Pages at `https://ging.github.io/alexandria/`.

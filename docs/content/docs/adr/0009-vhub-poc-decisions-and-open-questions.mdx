@@ -1,0 +1,57 @@
+---
+title: "0009. Vocabulary Hub v0.2.1 Decisions (DP-1..15) & Open Questions (Q1..17)"
+description: Summary of design decisions (DP-1 to DP-15), integration architecture, and open specification questions (Q1 to Q17) for Vocabulary Hub v0.2.1.
+---
+
+# 0009. Vocabulary Hub v0.2.1 Design Decisions (`DP-1`..`DP-15`) & Open Questions (`Q1`..`Q17`)
+
+- **Status:** Accepted
+- **Date:** 2026-11-09
+
+This record summarizes the 15 architectural decisions (`DP-1` to `DP-15`), workspace integration choices, and specification resolutions (`Q1` to `Q17`) documented in [`DECISIONS.md`](https://github.com/ging/alexandria/blob/feat/vhub-poc/DECISIONS.md) and [`OPEN_QUESTIONS.md`](https://github.com/ging/alexandria/blob/feat/vhub-poc/OPEN_QUESTIONS.md).
+
+---
+
+## 1. Core Design Decisions (`DP-1` to `DP-15`)
+
+| ID | Area | Decision | Implementation Packages |
+|:---|:---|:---|:---|
+| **DP-1** | **Language, Module & Dependencies** | Promoted to the root module (`github.com/ging/alexandria`). `vhub` packages import only the Go standard library, `modernc.org/sqlite` (no `cgo`), `github.com/santhosh-tekuri/jsonschema/v6` (offline Draft 2020-12), and `gopkg.in/yaml.v3` (restricted to `internal/dsl`). Enforced in CI by `internal/archtest`. | `go.mod`, `internal/archtest` |
+| **DP-2** | **Persistence & Immutability** | `alexandria-server` uses embedded SQLite (`modernc.org/sqlite`) with `BEFORE UPDATE` and `BEFORE DELETE` triggers on `releases`, `revocations`, `listings`, and `events` (`REQ-HUB-013`). `BlobStore` is content-addressed on disk (`<dir>/sha256/<hex>`). `alexandria-client` persists continuity, packages, and agreements via atomic `tmp` + `rename` writes. | `internal/server/adapters/sqlite`, `internal/server/adapters/blob_fs`, `internal/client/adapters/store_fs` |
+| **DP-3** | **Authentication on `/v1`** | `auth_static` reads `config/tokens.json` (Bearer token -> `{principal, roles[]}`) and enforces the §3.6 authorization matrix (`REQ-HUB-017`). `internal/server/module.go` also exposes the `http_v1.Authenticator` port for external IAM injection. | `internal/server/adapters/auth_static`, `internal/server/module.go` |
+| **DP-4** | **Hub Key & DID Document (`Q15`)** | `signer_file` manages an Ed25519 PKCS#8 PEM key and supports controlled rotation (`Rotate`), publishing the new key in `PublishedKeys()` before signing (`REQ-HUB-015`). `http_did` serves `GET /.well-known/did.json`. | `internal/server/adapters/signer_file`, `internal/server/adapters/http_did` |
+| **DP-5** | **`did:web` Resolution** | `did_web` resolves `did:web:<host>` over HTTPS (`https://<host>/.well-known/did.json`). Cleartext `http://` is permitted **only** when the host is `127.0.0.1` or `localhost` and `-did.allow_insecure_localhost` is explicitly enabled. | `internal/client/adapters/did_web` |
+| **DP-6 & DSL** | **Profile Compilers (`poc` & `dsl`)** | `compiler_poc` compiles simplified Part 5.1 JSON drafts; `compiler_dsl` (`"compiler": "dsl"`) compiles `eunomia.profiles/v1` YAML bundles (`OdrlProfile` + `SpaceProfile`) with `N1`–`N5` validation and deterministic artifact generation. | `internal/dsl`, `internal/server/adapters/compiler_dsl`, `internal/server/adapters/compiler_poc` |
+| **DP-7** | **Client Evaluator (`evaluator_poc`)** | Executes `json-schema` artifacts offline, verifies that `@context` entries in `shacl` slots belong to the package manifest (`CONTEXT_NOT_IN_PACKAGE`, `REQ-CLI-010`), and skips RDF `shacl` graph execution with informational code `POC_EVAL_UNSUPPORTED_ROLE`. | `internal/client/adapters/evaluator_poc` |
+| **DP-8** | **Simulated Transparency Log (`Q2`, `Q17`)** | `scitt_fake` (server) and `receipt_scitt_fake` (client) issue and verify JCS-signed `{digest, registered_at, log_id, sig}` receipts behind the `TransparencyLog` and `ReceiptVerifier` ports. | `internal/server/adapters/scitt_fake`, `internal/client/adapters/receipt_scitt_fake` |
+| **DP-9** | **Injectable Clock** | No production package outside `internal/clock` calls `time.Now()` (enforced by AST scan in `internal/archtest`). Provides `system_clock` and `file_clock` (`-clock-file` / `VHUB_CLOCK_FILE`) to replay multi-month lifecycles in seconds. | `internal/clock`, `internal/core/timex`, `internal/archtest` |
+| **DP-10** | **Default DSP Route Table (`Q3`)** | When `routes` is empty or omitted in `config.json`, `alexandria-client` loads the 16 normative DSP 2025-1 routes (`config/routes.default.json`) in `observe` mode. | `internal/client/domain/routes.go`, `config/routes.default.json` |
+| **DP-11** | **DSP Error Bodies & `VHub-Verdict` (`Q4`)** | In DSP `400` rejections, missing `providerPid` or `consumerPid` values default to the sentinel `"urn:uuid:00000000-0000-0000-0000-000000000000"`. `VHub-Verdict` is serialized as an RFC 9651 List of Tokens in `route.gates` order. | `internal/client/domain/verdict.go` |
+| **DP-12** | **`alexandria-server` Config Schema (`Q16`)** | `config/server.json` is validated on startup against `config/server.schema.json`. | `internal/server/config`, `config/server.schema.json` |
+| **DP-13** | **Reconciliations `R1`–`R11` & `D-PVP-1` (`Q9`, `Q12`)** | Uses exclusively the F2–F5 nomenclature (`new_content_from`, `enforced_from`, `revoked_from`, state `Revoked`, single DID document key without `roles.json` or `current.json`, and mandatory `url` in `application/ld+json` manifest entries). | `internal/core`, `internal/server`, `internal/client` |
+| **DP-14** | **Deployment Preconditions (`PRE-01`..`05`)** | Assumed by environment in `config/` and `deploy/`; client estimates clock skew via the Hub's HTTP `Date` header and emits `CLOCK_SKEW_EXCEEDED` when `abs(skew) > clock_skew` (`REQ-CLI-025`). | `internal/client/app/status.go`, `internal/server/adapters/httpx` |
+| **DP-15** | **Public `/pub` Caching (`Q13`)** | `/pub` is served without authentication: `Cache-Control: public, max-age=31536000, immutable` + `ETag: "<hex-sha256>"` on versioned/hash-addressed paths, and `303 See Other` with `Cache-Control: no-cache` on `/pub/{slug}` and `/pub/spaces/{slug}`. | `internal/server/adapters/http_pub`, `internal/server/app/publication.go` |
+
+---
+
+## 2. Status of F7 Open Questions (`Q1` to `Q17`)
+
+| ID | Question in F7 | Blocks v1? | Resolution in Alexandria |
+|:---|:---|:---:|:---|
+| **Q1** | Signature envelope `{kid, alg, sig}` over JCS vs JWS (RFC 7515) or VC Data Integrity | No | Implements `{signed, signature: {kid, alg: "EdDSA", sig}}` over `JCS(signed)` in `internal/core/sign`. |
+| **Q2** | Format and verification of SCITT transparency receipts | Yes | **DP-8:** Encapsulated behind `TransparencyLog` and `ReceiptVerifier` ports (`scitt_fake` / `receipt_scitt_fake`). |
+| **Q3** | Default route table alignment with DSP 2025-1 and EDC/FIWARE extensions | Yes | **DP-10:** 16 default DSP routes loaded in `observe` mode when `routes` is empty. |
+| **Q4** | Required PIDs in `ContractNegotiationError` / `TransferError` when absent in request | Yes | **DP-11:** Uses sentinel UUID `"urn:uuid:00000000-0000-0000-0000-000000000000"`. |
+| **Q5** | Active catalog audit identity | No | Implements passive catalog audit (§4.10, `internal/client/app/audit.go`, `REQ-CLI-023`). |
+| **Q6** | Pre-deployment agreements (`import` vs synthetic `pre-hub` version) | No | Implements `POST /agreements:import` requiring the version to exist in known packages (`REQ-CLI-026`). |
+| **Q7** | Hub key compromise and absence of root of trust over `did:web` | No | Verified at reception time (`S2`, `S9`, `V1`–`V4`) and never re-verified retroactively (`REQ-CLI-024`). |
+| **Q8** | Incorporating §2.10 delta parameters, `LIFECYCLE_*`, and `D-PVP-1` into the DSL spec | Yes | Implemented in both `compiler_dsl` and `compiler_poc`. |
+| **Q9** | Aligning F0 with F2–F5 date and state nomenclature | Yes | **DP-13:** Exclusive use of F2–F5 nomenclature across code and schemas. |
+| **Q10** | Per-message latency budget when evaluating multiple versions in `V_t` | No | `Classify` evaluates head first and only evaluates prior versions in `V_t` if head fails; exports `vhub_client_request_duration_seconds`. |
+| **Q11** | Garbage collection of retained packages and agreement expiration | No | `PackageStore.Retain` retains all versions in `versions[]` plus any version referenced by registered agreements (`REQ-CLI-017`). |
+| **Q12** | Aligning Governance rev. 2 §16–§19 with R10 (single DID document key, no `roles.json`) | Yes | **DP-13:** No `roles.json` or `current.json` exists in the codebase. |
+| **Q13** | Public `/pub` vs member-restricted `/pub` | No | **DP-15:** `/pub` is public and immutable (`REQ-HUB-011`). |
+| **Q14** | DID methods beyond `did:web` (`did:key`, `did:ebsi`) | No | Schema A.3 restricts Hub DID to `did:web`, while `app.DIDResolver` port allows injecting additional resolvers from `internal/ssi-auth`. |
+| **Q15** | Who serves the Hub's DID Document (`G1`) | No | **DP-4:** `alexandria-server` serves `GET /.well-known/did.json` from `Signer.PublishedKeys()`. |
+| **Q16** | `alexandria-server` configuration format (`G2`) | No | **DP-12:** `config/server.json` validated against `config/server.schema.json`. |
+| **Q17** | `TransparencyLog` and `ReceiptVerifier` port interfaces (`G5`) | Yes | **DP-8:** Defined in `internal/server/app/ports.go` and `internal/client/app/ports.go`. |

@@ -1,0 +1,58 @@
+$kind: http-request
+name: 'Replace draft (If-Match)'
+method: PUT
+url: '{{hubUrl}}/v1/drafts/{{draftId}}'
+order: 3000
+headers:
+  - key: 'Content-Type'
+    value: 'application/yaml'
+  - key: 'If-Match'
+    value: '{{draftEtag}}'
+body:
+  type: text
+  content: |-
+    # F6 release 1.0.0 of the demo space: the policy slot admits odrl:use and ex:access.
+    dsl: eunomia.profiles/v1
+    kind: OdrlProfile
+    profile:
+      id: https://example.com/odrl/profile/f6
+      version: 1.0.0
+      title: { en: F6 demo policies }
+      publisher: GING-DIT, Universidad Politécnica de Madrid
+      license: https://creativecommons.org/licenses/by/4.0/
+      base_url: https://example.com/odrl/profile/f6
+    namespaces:
+      ex: https://example.com/ns/f6#
+    terms:
+      - id: access
+        kind: action
+        included_in: odrl:use
+        label: { en: Access }
+        definition: { en: To access the asset. }
+    ---
+    dsl: eunomia.profiles/v1
+    kind: SpaceProfile
+    space:
+      id: https://example.com/spaces/demo
+      version: 1.0.0
+      title: { en: Demo data space }
+      operator: https://example.com/party/demo-authority
+      base_url: https://example.com/spaces/demo
+    bindings:
+      - slot: odrl
+        profile: https://example.com/odrl/profile/f6
+        source: internal
+        version: "=1.0.0"
+        obligation: mandatory
+        conformance:
+          - { role: json-schema, applies_to: policy_intake }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('200 with a new ETag (REQ-HUB-018)', () => {
+        pm.response.to.have.status(200);
+        pm.expect(pm.response.headers.get('ETag')).to.not.eql(pm.collectionVariables.get('draftEtag'));
+      });
+      pm.collectionVariables.set('staleEtag', pm.collectionVariables.get('draftEtag'));
+      pm.collectionVariables.set('draftEtag', pm.response.headers.get('ETag'));

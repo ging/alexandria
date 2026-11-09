@@ -1,56 +1,72 @@
 ---
 title: Bounded Contexts
-description: In-process module lifecycle, contracts, and boundary enforcement in Alexandria.
+description: In-process module lifecycle, contracts, and boundary enforcement across Alexandria and Vocabulary Hub.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
 # Bounded Contexts
 
-Alexandria organizes features into distinct bounded contexts located in `internal/`. Each module is self-contained and acts as an independent composition root for its domain.
+Alexandria organizes features into distinct bounded contexts located in `internal/`. Each context is self-contained and exposes a clean composition contract (`module.go`).
 
 ---
 
 ## Module Contract
 
-Every bounded context implements a consistent public lifecycle contract:
+Every bounded context implements a consistent lifecycle interface:
 
 ```go
 type Module interface {
+    Name() string
     Start(ctx context.Context) error
     Close() error
-    Ready() bool
 }
 ```
 
 Each module exposes:
-- **`Deps` struct:** Explicit external requirements (database pool, logger, router group, shared event bus).
-- **`New(deps Deps) (*Module, error)`:** Assembles internal services, repositories, and private adapters.
-- **`Start(ctx context.Context)`:** Spawns background workers, establishes links with external dependencies, and registers routes.
-- **`Close()`:** Gracefully releases resources, flushes buffers, and closes outbound connections.
+- **`Deps` struct:** Explicit external dependencies and optional port overrides (e.g., `Clock`, `Signer`, `Auth`, `DIDResolver`, `Wallet`, `Router`).
+- **`New(deps Deps) (*Module, error)`:** Assembles internal domain services, repositories, and default adapters.
+- **`Start(ctx context.Context)`:** Spawns background workers (e.g., listing re-issuance scheduler in `server`, sync timer in `client`, wallet linking in `ssi-auth`) and registers HTTP routes.
+- **`Close()`:** Gracefully cancels background workers, flushes buffers, and closes database connections.
 
 ---
 
-## Existing Contexts
+## Catalog of Bounded Contexts
 
-### 1. `ssi-auth` (`internal/ssi-auth`)
-Responsible for decentralized identity, verifiable credentials, and cryptographic signing:
-- Exposes `/.well-known/did.json` for DID resolution.
-- Coordinates key management and attestation.
-- Interacts with wallet adapters through the driven `wallet.Wallet` port.
+### 1. `server` (`internal/server`)
+Implements the **Vocabulary Hub Server (`C-HUB`)**:
+- **Application Use Cases (`internal/server/app`):** `Authoring` (drafts & candidate compilation), `Release` (approval & 9-row date calculation), `Revocation`, `Listing` (JCS signing & DID key publication), `Publication` (`/pub` immutable serving & head redirects), and `Query`.
+- **Driven Adapters (`internal/server/adapters`):** `sqlite` (with immutability triggers), `blob_fs` (SHA-256 content-addressed storage), `compiler_dsl` (`eunomia.profiles/v1` YAML compiler), `compiler_poc` (JSON draft compiler), `signer_file` (Ed25519 PKCS#8 PEM with controlled key rotation), `scitt_fake`, `auth_static`, and `scheduler`.
+- **Driving Adapters:** `http_v1` (`/v1/*`), `http_pub` (`/pub/*`), and `http_did` (`/.well-known/did.json`).
 
-### 2. `auth-proxy` (`internal/auth-proxy`)
-Secures the HTTP boundary and manages authentication:
-- Terminates OpenID Connect authorization code flows with PKCE.
-- Issues, verifies, and encrypts `HttpOnly` session cookies.
-- Performs token introspection against Zitadel.
-- Protects downstream `/api/v1` routes.
+### 2. `client` (`internal/client`)
+Implements the **Edge Validation & Sync Sidecar (`C-CLI`)**:
+- **Application Use Cases (`internal/client/app`):** `Sync` (`S1`–`S13` verification pipeline), `HubTrust` (`did:web` resolution & caching), `Edge` (hot-path route matching & gate evaluation), `Agreements` (capture, retention & admission), `Audit` (passive catalog audit), and `Status`.
+- **Domain (`internal/client/domain`):** Pure state machine (`onboarding`, `normal`, `degraded`, `fail_closed`), route table & 16 default DSP routes, `Classify` engine, and RFC 9651 `VHub-Verdict` serializer.
+- **Adapters (`internal/client/adapters`):** `proxy_dsp` (byte-for-byte L7 proxy), `status_http` (isolated admin & Prometheus metrics listener), `store_fs` (atomic `tmp`+`rename` persistence), `evaluator_poc`, `http_hub`, `did_web`, `receipt_scitt_fake`, `events`, and `sync_timer`.
+
+### 3. `dsl` (`internal/dsl`)
+Implements the **`eunomia.profiles/v1` Language Compiler**:
+- Parses and validates `OdrlProfile` and `SpaceProfile` YAML streams across levels `N1`–`N5`.
+- Generates deterministic `vocab.ttl`, `context.jsonld`, `shapes.ttl`, `schema.json`, `cedar-mapping.json`, `cedar.schema`, `prof.ttl`, `spec.html`, `space/shacl-union.ttl`, and `space/space-lock.json`.
+
+### 4. `ssi-auth` (`internal/ssi-auth`)
+Manages decentralized identity, cryptographic keys, verifiable credentials, and participant contexts:
+- Exposes `/.well-known/did.json` and `/api/v1/wallet/*`.
+- Defines the unified `wallet.Wallet` port (`internal/ssi-auth/wallet/ports.go`).
+- Implements driven adapters for **Fafnir** (`internal/ssi-auth/fafnir`) and **Eclipse EDC IdentityHub** (`internal/ssi-auth/identityhub`).
+
+### 5. `auth-proxy` (`internal/auth-proxy`)
+Secures the HTTP boundary of `cmd/alexandria`:
+- Terminates OpenID Connect (OIDC) authorization code flows with PKCE against **Zitadel**.
+- Issues and verifies encrypted `HttpOnly` session cookies (`alexandria_session`).
+- Performs local JWKS verification and fallback OAuth2 token introspection.
+
+### 6. `openapi` (`internal/openapi`)
+Serves embedded OpenAPI 3.0 specifications (`/openapi.json`, `/openapi.yaml`) and the interactive **Swagger UI** (`/docs`, `/api/v1/openapi/docs`).
 
 ---
 
-## Boundary Enforcement
+## Bridging `ssi-auth` & `auth-proxy` into `vhub`
 
-Package boundaries are maintained by convention:
-- Modules do not import each other's internal implementation packages (e.g., `internal/auth-proxy` never imports `internal/ssi-auth/fafnir`).
-- Cross-context communication is mediated through public interfaces or shared events.
-- Because seams are strictly maintained as Go interfaces, migrating any bounded context into a standalone network microservice in the future requires zero internal refactoring.
+Because `internal/server/module.go` and `internal/client/module.go` accept optional port interfaces in `Deps` (`Signer`, `Auth`, `DIDResolver`), you can wire `internal/ssi-auth` and `internal/auth-proxy` directly into `alexandria-server` and `alexandria-client` when moving from a laboratory setup (`DP-3`, `DP-4`, `DP-5`) to a production dataspace deployment.

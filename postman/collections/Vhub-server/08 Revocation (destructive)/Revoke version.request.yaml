@@ -1,0 +1,26 @@
+$kind: http-request
+name: 'Revoke 1.0.0'
+method: POST
+url: '{{hubUrl}}/v1/versions/1.0.0:revoke'
+order: 1000
+headers:
+  - key: 'Content-Type'
+    value: 'application/json'
+body:
+  type: json
+  content: |-
+    {"justification": "Superseded by 2.0.0 (F6)"}
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      if (pm.response.code === 422) {
+        pm.test('re-run: already revoked (REV-1)', () => pm.expect(pm.response.json().code).to.eql('DATES_ALREADY_REVOKED'));
+        return;
+      }
+      pm.test('200 record with revoked_from = R + P2D (§3.3)', () => {
+        pm.response.to.have.status(200);
+        const r = pm.response.json().signed.record;
+        const issued = Date.parse(pm.response.json().signed.issued_at);
+        pm.expect(Date.parse(r.revoked_from) - issued).to.eql(2 * 24 * 3600 * 1000);
+      });

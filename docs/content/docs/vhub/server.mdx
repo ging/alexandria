@@ -1,0 +1,109 @@
+---
+title: "alexandria-server Reference (C-HUB)"
+description: "Deep-dive reference for alexandria-server: governance API, role authorization matrix, 9-row lifecycle date calculation, JCS signing, and /pub distribution."
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# `alexandria-server` Reference (`C-HUB`)
+
+**`alexandria-server`** (`cmd/alexandria-server`, `internal/server`) is the authoritative Vocabulary Hub server (`C-HUB`). It manages the vocabulary governance lifecycle, compiles drafts into Profile Vocabulary Packages (PVP), computes normative transition dates, signs version listings with Ed25519 over JCS, and serves immutable artifacts.
+
+---
+
+## 1. Governance State Machine
+
+```
+  [POST /v1/drafts]
+          │
+          ▼
+     ┌─────────┐   PUT /v1/drafts/{id} (If-Match: ETag)
+     │  Draft  │◄──────────────────────────────────────┐
+     └────┬────┘                                       │
+          │                                            │
+          │ POST /v1/drafts/{id}:propose               │ (Draft remains editable;
+          │ (Runs N1–N5 compiler & writes SHA-256 blobs)│  Candidate is immutable)
+          ▼                                            │
+   ┌─────────────┐                                     │
+   │  Candidate  ├─────────────────────────────────────┘
+   │  (pending)  │
+   └──┬───────┬──┘
+      │       │
+      │       └────► POST /v1/candidates/{id}:reject ──► [Candidate (rejected)]
+      │
+      │ POST /v1/candidates/{id}:approve
+      │ (Checks DATE-1, DATE-2, registers SCITT receipt, signs eunomia.version/v1)
+      ▼
+   ┌─────────────┐
+   │   Release   │────► Published in GET /v1/versions & GET /pub/...
+   └──────┬──────┘
+          │
+          │ POST /v1/versions/{id}:revoke
+          │ (Checks REV-1..REV-4, sets revoked_from, re-issues listing)
+          ▼
+   ┌─────────────┐
+   │   Revoked   │
+   └─────────────┘
+```
+
+---
+
+## 2. Role-Based Authorization Matrix (`REQ-HUB-017`)
+
+Every `/v1/*` endpoint requires a valid Bearer token (`Authorization: Bearer <token>`). In the default configuration (`DP-3`), tokens are mapped to principals and roles in `config/tokens.json` (or injected via the `http_v1.Authenticator` port in `internal/server/module.go`):
+
+| Endpoint | Action | Allowed Roles |
+|:---|:---|:---|
+| `POST /v1/drafts` | Create draft | `editor`, `authority` (`releaser`) |
+| `GET /v1/drafts/{id}` | Read draft | `editor`, `reviewer`, `authority` (`releaser`) |
+| `PUT /v1/drafts/{id}` | Replace draft (`If-Match` required) | `editor`, `authority` (`releaser`) |
+| `POST /v1/drafts/{id}:validate` | Validate draft (N1–N5) | `editor`, `reviewer`, `authority` (`releaser`) |
+| `POST /v1/drafts/{id}:propose` | Compile & freeze Candidate | `editor`, `authority` (`releaser`) |
+| `GET /v1/candidates/{id}` | Inspect Candidate | `editor`, `reviewer`, `authority` (`releaser`) |
+| `POST /v1/candidates/{id}:approve` | Approve & publish Release | **`authority` (`releaser`) only** (`REQ-HUB-003`) |
+| `POST /v1/candidates/{id}:reject` | Reject Candidate | `reviewer`, `authority` (`releaser`) |
+| `GET /v1/versions` | Fetch signed `eunomia.versions/v1` listing | `member`, `editor`, `reviewer`, `authority`, `operator` |
+| `GET /v1/versions/{id}` | Fetch signed `eunomia.version/v1` record | `member`, `editor`, `reviewer`, `authority`, `operator` |
+| `POST /v1/versions/{id}:revoke` | Revoke published version | **`authority` (`releaser`) only** |
+| `GET /v1/events` | Read governance event log | `editor`, `reviewer`, `authority`, `operator` |
+
+*(Unauthenticated requests or callers lacking the required role receive `401 Unauthorized` or `403 Forbidden` with code `API_FORBIDDEN_ROLE`.)*
+
+---
+
+## 3. Lifecycle Dates & 9-Row Approval Matrix (`REQ-HUB-005`)
+
+When a Candidate is approved at instant `P` (`published_at`), `internal/core/lifecycle` computes `new_content_from` and `enforced_from` using the space's `propagation_window` (`pw`, default `P2D`) and `grace_window` (`gw`, default `P30D`):
+
+| Row | Release Class | `emergency` | Explicit `grace_window` | Resulting `new_content_from` | Resulting `enforced_from` |
+|:---:|:---|:---:|:---|:---|:---|
+| **1** | `initial` (first release) | `false` | — | `P + pw` | `P + pw` |
+| **2** | `compatible` (`MINOR` / `PATCH`) | `false` | None | `P + pw` | Inherits open IGW `enforced_from` if prior version is in grace; otherwise `P + pw` |
+| **3** | `compatible` | `false` | Provided | **Rejected:** `DATES_GRACE_ON_COMPATIBLE` | — |
+| **4** | `compatible` | `true` | Any | **Rejected:** `DATES_EMERGENCY_ON_COMPATIBLE` | — |
+| **5** | `breaking` (`MAJOR`) | `false` | None | `P + pw` | `(P + pw) + gw_default` |
+| **6** | `breaking` | `false` | `gw > 0` | `P + pw` | `(P + pw) + gw` |
+| **7** | `breaking` | `false` | `P0D` | **Rejected:** `DATES_ZERO_GRACE_WITHOUT_EMERGENCY` | — |
+| **8** | `breaking` | `true` (requires `justification`) | None / `P0D` | `P + pw` | `P + pw` |
+| **9** | `breaking` | `true` | `gw > 0` | **Rejected:** `DATES_EMERGENCY_WITH_GRACE` | — |
+
+### Approval Date Invariants (`REQ-HUB-006`)
+- **`DATE-1` (`DATES_NON_MONOTONIC`):** The new version's `enforced_from` cannot precede the `enforced_from` of an existing version currently in its grace window.
+- **`DATE-2` (`DATES_TOO_MANY_VERSIONS`):** Approving the release must not cause more than `max_concurrent_versions` (default `2`) to be simultaneously active in the effective set `V_t` at any future instant.
+
+### Revocation Invariants (`REQ-HUB-014`)
+- **`REV-1` (`DATES_ALREADY_REVOKED`):** Cannot revoke an already-revoked version.
+- **`REV-2` (`DATES_JUSTIFICATION_REQUIRED`):** Revocation requires a non-empty `justification`.
+- **`REV-3` (`DATES_REVOCATION_TOO_EARLY`):** Explicit `revoked_from` must be `>= R + pw` (defaults to `R + pw`).
+- **`REV-4` (`DATES_REVOKE_LEAVES_NO_HEAD`):** Cannot revoke the only active head version when no replacement version is effective.
+
+---
+
+## 4. Cryptographic Signing, Scheduler & Storage Immutability
+
+- **JCS + Ed25519 Signing (`REQ-HUB-010`, `REQ-HUB-015`):** All `eunomia.versions/v1`, `eunomia.version/v1`, and `manifest.json` documents are canonicalized with RFC 8785 (JCS) and signed with Ed25519 (`alg: "EdDSA"`). Key rotation (`Signer.Rotate`) publishes the new public key in `/.well-known/did.json` **before** signing any document with it.
+- **Automatic Listing Re-Issuance (`REQ-HUB-008`):** A background scheduler (`internal/server/adapters/scheduler`) re-signs and increments `sequence` on the `eunomia.versions/v1` listing at least every `TTL / 2` so clients never see an expired listing (`SYNC_EXPIRED`).
+- **SQLite Immutability Triggers (`REQ-HUB-013`, `DP-2`):** The `releases`, `revocations`, `listings`, and `events` tables in SQLite are protected by `BEFORE UPDATE` and `BEFORE DELETE` SQL triggers that abort any mutation attempt at the database engine level.
+- **Public `/pub` Caching (`REQ-SYS-005`, `REQ-HUB-011`, `REQ-HUB-016`):**
+  - `GET /pub/{slug}` and `GET /pub/spaces/{slug}` return `303 See Other` with `Cache-Control: no-cache` pointing to the current head's manifest.
+  - Versioned routes (`/pub/{slug}/{version}/...`), package routes (`/pub/packages/{version}/...`), and hash-addressed blobs (`/pub/blobs/sha256/{hex}`) return `Cache-Control: public, max-age=31536000, immutable` and `ETag: "<sha256>"`.

@@ -1,0 +1,160 @@
+---
+title: "5. Sovereign Wallets: Fafnir & IdentityHub"
+description: Hands-on tutorial for managing cryptographic keys, DIDs, service endpoints, participants, and DCP credentials via the Alexandria Wallet API.
+---
+
+import { Steps } from 'fumadocs-ui/components/steps';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
+
+# Tutorial 5: Sovereign Wallets — Fafnir & IdentityHub
+
+In accordance with [ADR 0003](../adr/0003-key-material-lives-in-an-external-wallet), [ADR 0007](../adr/0007-unified-wallet-port-and-identityhub-adapter), and [ADR 0008](../adr/0008-enriched-domain-models-mutation-queries-and-structured-errors), private keys never live inside the Alexandria process. Instead, `cmd/alexandria` exposes a unified REST API (`/api/v1/wallet/*`) that delegates cryptographic custody to either **Fafnir** or **Eclipse EDC IdentityHub**.
+
+In this tutorial, you will:
+1. Explore the interactive **Swagger UI** served directly by the node (`/docs`).
+2. Link and inspect the active wallet (`GET /api/v1/wallet/info`, `POST /api/v1/wallet/link`).
+3. Register asymmetric keys (PEM and JWK), rotate keys, and inspect the enriched `wallet.Key` response.
+4. Create and publish DIDs (`did:jwk` / `did:web`) and attach Service Endpoints.
+5. Manage **Eclipse EDC IdentityHub** Participant Contexts, store W3C Verifiable Credentials (VC 1.0 & 2.0), and initiate a Dataspace Credential Protocol (**DCP**) credential request.
+
+---
+
+<Steps>
+
+### Step 1: Launch the Node & Open Interactive Swagger UI
+
+Start the local stack (or run with authentication disabled for quick `curl` testing):
+
+<Tabs items={['Full Stack (with TLS & Zitadel)', 'Headless Wallet Testing (No Auth)']}>
+
+<Tab value="Full Stack (with TLS & Zitadel)">
+```bash
+task tls:trust
+task dev:auto
+```
+Base URL: `https://alexandria.127.0.0.1.nip.io:8443`
+</Tab>
+
+<Tab value="Headless Wallet Testing (No Auth)">
+```bash
+# Start Fafnir or IdentityHub and run Alexandria without OIDC guard:
+task wallet:bootstrap
+ALEXANDRIA_AUTH_CONFIG_ENABLED=false task dev
+```
+Base URL (direct internal port): `http://127.0.0.1:1234`
+</Tab>
+
+</Tabs>
+
+Open your browser to `/docs` (e.g., `https://alexandria.127.0.0.1.nip.io:8443/docs` or `http://127.0.0.1:1234/docs`) to explore and execute all endpoints interactively via **Swagger UI**!
+
+### Step 2: Check Wallet Link & Metadata
+
+Verify that Alexandria is linked to the configured wallet backend and retrieve its metadata:
+
+```bash
+# Check if wallet is linked (returns 200 OK or 404 Not Found):
+curl -k -i https://alexandria.127.0.0.1.nip.io:8443/api/v1/wallet/is-linked
+
+# Link/refresh the active wallet DID:
+curl -k -s -X POST https://alexandria.127.0.0.1.nip.io:8443/api/v1/wallet/link | jq .
+
+# Get wallet provider info:
+curl -k -s https://alexandria.127.0.0.1.nip.io:8443/api/v1/wallet/info | jq .
+```
+
+### Step 3: Register and Rotate Cryptographic Keys (PEM & JWK)
+
+Thanks to the **Mutation-and-Query Pattern** ([ADR 0008](../adr/0008-enriched-domain-models-mutation-queries-and-structured-errors)), mutating calls like `POST /api/v1/wallet/keys` immediately query and return the enriched key entity (`201 Created`):
+
+```bash
+# 1. Register a new key (supports PEM or JWK publicKeyJwk / keyGeneratorParams):
+curl -k -s -X POST https://alexandria.127.0.0.1.nip.io:8443/api/v1/wallet/keys \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "signing-key-2026",
+    "alias": "primary-ed25519",
+    "keyType": "Ed25519"
+  }' | jq .
+
+# 2. List all registered keys:
+curl -k -s https://alexandria.127.0.0.1.nip.io:8443/api/v1/wallet/keys | jq .
+
+# 3. Rotate a key with a 24h overlap duration:
+curl -k -s -X POST https://alexandria.127.0.0.1.nip.io:8443/api/v1/wallet/keys/signing-key-2026/rotate \
+  -H "Content-Type: application/json" \
+  -d '{"duration": "24h"}' | jq .
+```
+
+### Step 4: Manage DIDs & Service Endpoints
+
+Provision a new DID, add a `CredentialService` endpoint to its DID Document, and publish it:
+
+```bash
+# 1. List all DIDs held by the wallet:
+curl -k -s https://alexandria.127.0.0.1.nip.io:8443/api/v1/wallet/did/all | jq .
+
+# 2. Add a Service Endpoint to a DID Document:
+curl -k -s -X POST https://alexandria.127.0.0.1.nip.io:8443/api/v1/wallet/did/did:web:localhost/endpoints \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "credential-service-1",
+    "type": "CredentialService",
+    "url": "https://alexandria.127.0.0.1.nip.io:8443/api/v1/dsp"
+  }' | jq .
+
+# 3. Publish the DID and inspect its state:
+curl -k -s -X POST https://alexandria.127.0.0.1.nip.io:8443/api/v1/wallet/did/did:web:localhost/publish | jq .
+```
+
+### Step 5: IdentityHub Participants, Verifiable Credentials & DCP Requests
+
+When running with **Eclipse EDC IdentityHub** (`task identityhub:up` and `ALEXANDRIA_WALLET_CONFIG_WALLET=IdentityHub`), Alexandria unlocks full multi-participant and Dataspace Credential Protocol (**DCP**) operations:
+
+```bash
+# 1. Create an IdentityHub Participant Context:
+curl -k -s -X POST https://alexandria.127.0.0.1.nip.io:8443/api/v1/wallet/participants \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "participant-mobility-1",
+    "did": "did:web:mobility.example.com",
+    "active": true,
+    "keyDescriptor": {
+      "keyId": "key-1",
+      "type": "Ed25519",
+      "privateKeyAlias": "participant-mobility-1-alias",
+      "keyGeneratorParams": { "algorithm": "EdDSA", "curve": "Ed25519" }
+    }
+  }' | jq .
+
+# 2. Store a W3C Verifiable Credential (automatically normalized across VC 1.0 JWT and VC 2.0 JOSE):
+curl -k -s -X POST https://alexandria.127.0.0.1.nip.io:8443/api/v1/wallet/credential \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "vc-membership-1",
+    "participantContextId": "participant-mobility-1",
+    "format": "VC1_0_JWT",
+    "rawVc": "eyJhbGciOiJFZERTQSJ9..."
+  }' | jq .
+
+# 3. Query stored Verifiable Credentials (optionally filtered by ?type=DataSpaceParticipant):
+curl -k -s "https://alexandria.127.0.0.1.nip.io:8443/api/v1/wallet/vcs?type=DataSpaceParticipant" | jq .
+
+# 4. Request a credential from an Issuer via DCP:
+curl -k -s -X POST https://alexandria.127.0.0.1.nip.io:8443/api/v1/wallet/dcp/request \
+  -H "Content-Type: application/json" \
+  -d '{
+    "issuerDid": "did:web:issuer.example.com",
+    "holderPid": "req-001",
+    "credentials": [
+      { "id": "cred-1", "format": "VC1_0_JWT", "type": "MembershipCredential" }
+    ]
+  }' | jq .
+```
+
+<Callout type="info">
+**Structured Upstream Troubleshooting (`originalResponse`):** If IdentityHub or Fafnir rejects a request (for example, `409 Conflict` on a duplicate participant or service endpoint), Alexandria returns an enriched error payload containing `"originalResponse": { "provider": "identityhub", "statusCode": 409, "path": "...", "body": {...} }` so you can see the exact upstream cause immediately.
+</Callout>
+
+</Steps>

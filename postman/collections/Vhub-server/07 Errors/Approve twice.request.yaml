@@ -1,0 +1,22 @@
+$kind: http-request
+name: '409 approve an approved candidate'
+method: POST
+url: '{{hubUrl}}/v1/candidates/{{approvedCandidateId}}:approve'
+order: 8000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{releaserToken}}'
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      if (!pm.collectionVariables.get('approvedCandidateId')) pm.execution.skipRequest();
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('409 API_INVALID_STATE', () => {
+        pm.response.to.have.status(409);
+        pm.expect(pm.response.json().code).to.eql('API_INVALID_STATE');
+      });

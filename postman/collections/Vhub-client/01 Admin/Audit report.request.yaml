@@ -1,0 +1,9 @@
+$kind: http-request
+method: GET
+url: '{{clientAdmin}}/audit/reports/latest'
+order: 9000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('200 report or 404 before any catalog response was audited', () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));

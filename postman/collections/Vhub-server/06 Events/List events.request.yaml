@@ -1,0 +1,20 @@
+$kind: http-request
+method: GET
+url: '{{hubUrl}}/v1/events?after=0'
+order: 1000
+queryParams:
+  - key: 'after'
+    value: '0'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('200 with strictly increasing ids', () => {
+        pm.response.to.have.status(200);
+        const ids = pm.response.json().events.map(e => e.id);
+        ids.forEach((id, i) => { if (i) pm.expect(id).to.be.above(ids[i - 1]); });
+      });
+      pm.test('the releases left their events', () => {
+        const types = pm.response.json().events.map(e => e.type);
+        ['draft.created', 'candidate.proposed', 'candidate.approved', 'release.published', 'listing.issued'].forEach(t => pm.expect(types).to.include(t));
+      });

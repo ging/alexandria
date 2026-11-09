@@ -1,0 +1,65 @@
+dsl: eunomia.profiles/v1
+kind: SpaceProfile
+
+space:
+  id: https://example.com/spaces/demo/profile
+  version: 1.0.0
+  title:
+    en: Demo Data Space Vocabulary Profile
+    es: Perfil de vocabulario del espacio de datos de demostración
+  operator: https://example.com/party/demo-authority
+  base_url: https://example.com/spaces/demo
+
+lifecycle:
+  grace_window: P30D            # ventana por defecto para cambios que rompen
+  freshness:
+    ttl: PT24H                  # validez de current.json
+    max_staleness: P7D          # sin renovar durante más de esto: FailClosed
+  degraded:                     # qué hace cada gate en estado Degraded
+    catalog_entry: continue
+    policy_intake: continue
+    pdp_load: continue
+    dsp_message: continue
+    credential_presentation: reject
+  conformance_required: behavioral
+
+bindings:
+  - slot: odrl
+    profile: https://example.com/odrl/profile/colors
+    source: internal
+    version: "^0.1"
+    obligation: mandatory
+    conformance:
+      - role: shacl
+        applies_to: policy_intake
+      - role: json-schema
+        applies_to: dsp_message
+      - role: cedar-mapping
+        applies_to: pdp_load
+
+  - slot: dcat
+    profile: https://semiceu.github.io/DCAT-AP/releases/3.0.0/
+    source: vendored
+    version: "=3.0.0"
+    obligation: mandatory
+    conformance:
+      - role: shacl
+        applies_to: catalog_entry
+
+  - slot: dsp
+    profile: https://w3id.org/dspace/2025/1
+    source: vendored
+    version: "=2025-1"
+    obligation: mandatory
+    conformance:
+      - role: json-schema
+        applies_to: dsp_message
+
+  - slot: dcp
+    profile: https://example.com/dcp/credentials
+    source: internal
+    version: "^0.3"
+    obligation: recommended
+    conformance:
+      - role: shacl
+        applies_to: credential_presentation

@@ -1,0 +1,10 @@
+{
+  "title": "Vocabulary Hub & DSL (vhub)",
+  "pages": [
+    "index",
+    "profiles-dsl",
+    "server",
+    "client",
+    "error-catalog"
+  ]
+}

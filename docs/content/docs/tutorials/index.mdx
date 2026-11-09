@@ -1,0 +1,62 @@
+---
+title: Incremental Tutorials
+description: Step-by-step hands-on learning path for Alexandria, the eunomia.profiles/v1 DSL, Vocabulary Hub (alexandria-server & alexandria-client), and Sovereign Wallets.
+---
+
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Incremental Tutorials
+
+This tutorial track takes you step by step from writing your first vocabulary profile in YAML to governing multi-version lifecycles on `alexandria-server`, enforcing Dataspace Protocol (DSP) policies at the edge with `alexandria-client`, and managing cryptographic identities with Fafnir and Eclipse EDC IdentityHub.
+
+<Callout type="info">
+**Designed for Hands-On Learning:** Every tutorial builds on the concepts of the previous one and uses real commands you can copy and paste directly in your terminal. Tutorials 1 through 4 require only Go (`make build`)—no Docker containers needed!
+</Callout>
+
+---
+
+## Learning Path Progression
+
+```
+  [Tutorial 1]                  [Tutorial 2]                  [Tutorial 3]
+  eunomia.profiles/v1 YAML  ──► alexandria-server Governance    ──► alexandria-client Sidecar Proxy
+  (alexandriac validate/compile)      (/v1/drafts -> /pub/)         (S1-S13 sync, DSP gates)
+                                                                       │
+                                                                       ▼
+                                [Tutorial 5]                  [Tutorial 4]
+                                Wallets & IdentityHub     ◄── Breaking Changes & F6
+                                (DIDs, Keys, VCs, DCP)        (Grace windows, Revocation)
+```
+
+---
+
+## Tutorial Catalog
+
+<Cards>
+  <Card
+    title="1. Your First Profile in eunomia.profiles/v1"
+    href="./tutorials/01-first-profile-dsl"
+    description="Write an OdrlProfile and SpaceProfile in YAML, validate N1–N5 rules, and compile RDF, JSON-LD, SHACL, JSON Schema, and Cedar artifacts with alexandriac."
+  />
+  <Card
+    title="2. Publishing & Governance on alexandria-server"
+    href="./tutorials/02-hub-governance-lifecycle"
+    description="Launch alexandria-server, create drafts, propose candidates, approve releases with role separation, verify JCS signatures, and fetch immutable /pub artifacts."
+  />
+  <Card
+    title="3. Edge DSP Validation with alexandria-client"
+    href="./tutorials/03-edge-validation-sidecar"
+    description="Place alexandria-client in front of a connector, inspect background sync (S1–S13), validate ContractRequestMessage payloads, and read VHub-Verdict headers."
+  />
+  <Card
+    title="4. Breaking Changes, Grace Windows & F6"
+    href="./tutorials/04-breaking-changes-and-f6"
+    description="Evolve a profile from 1.0.0 to 2.0.0 (deprecated -> retired), travel through time with the injectable clock, track agreements, and handle revocations."
+  />
+  <Card
+    title="5. Sovereign Wallets: Fafnir & IdentityHub"
+    href="./tutorials/05-wallets-and-identityhub"
+    description="Use the Alexandria Wallet REST API and Swagger UI to manage PEM/JWK keys, DID documents, service endpoints, participants, and DCP credentials."
+  />
+</Cards>
