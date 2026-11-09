@@ -1,4 +1,4 @@
-// Emitter of vocab.ttl: ontology, SKOS collections, created terms in their §8.5 RDF form and reified signatures (§9.3).
+// Package dsl provides the emitter of vocab.ttl: ontology, SKOS collections, created terms in their §8.5 RDF form and reified signatures (§9.3).
 // Adopted terms are only listed as members; nothing is asserted about IRIs the profile does not own (§8.4).
 package dsl
 

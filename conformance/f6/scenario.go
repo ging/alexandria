@@ -1,10 +1,11 @@
-// F6 scenario driver over HTTP: publishes 1.0.0 and 2.0.0, moves the file clock and sends m1–m3, A1 and its transfers.
+// Package f6 is the F6 scenario driver over HTTP: publishes 1.0.0 and 2.0.0, moves the file clock and sends m1–m3, A1 and its transfers.
 // Shared by the e2e test (conformance/e2e_f6_test.go) and make demo, so both observe the same rows (Part 4 M8, M9).
 package f6
 
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -60,8 +61,10 @@ func Expected() []Row {
 		return Row{At: at, Message: m, Classification: "warning", Action: "forward-notice", Status: 200, Verdict: m2Warning}
 	}
 	viol := func(at, m, code string) Row {
-		return Row{At: at, Message: m, Classification: "violation", Action: "reject", Status: 400,
-			Verdict: `violation;gate=policy_intake;code="` + code + `"`, Code: code}
+		return Row{
+			At: at, Message: m, Classification: "violation", Action: "reject", Status: 400,
+			Verdict: `violation;gate=policy_intake;code="` + code + `"`, Code: code,
+		}
 	}
 	return []Row{
 		ok("2026-10-02T12:00:00Z", "m1 odrl:use"), ok("2026-10-02T12:00:00Z", "m2 ex:access"), viol("2026-10-02T12:00:00Z", "m3 odrl:read", "VERDICT_VIOLATION"),
@@ -73,8 +76,10 @@ func Expected() []Row {
 		ok("2026-11-05T12:00:00Z", "A1 transfer"),
 		{At: "2026-11-10T00:00:00Z", Message: "revoke 1.0.0", Classification: "event", Action: "AGREEMENT_REVOCATION_SCHEDULED", Status: 200},
 		ok("2026-11-12T00:00:05Z", "A1 transfer"),
-		{At: "2026-11-12T00:00:10Z", Message: "A1 transfer", Classification: "violation", Action: "reject", Status: 400,
-			Verdict: `violation;gate=agreement_admission;code="AGREEMENT_VERSION_REVOKED"`, Code: "AGREEMENT_VERSION_REVOKED"},
+		{
+			At: "2026-11-12T00:00:10Z", Message: "A1 transfer", Classification: "violation", Action: "reject", Status: 400,
+			Verdict: `violation;gate=agreement_admission;code="AGREEMENT_VERSION_REVOKED"`, Code: "AGREEMENT_VERSION_REVOKED",
+		},
 	}
 }
 
@@ -121,14 +126,14 @@ func Draft(v string) []byte {
 // logf writes progress when a log is set.
 func (e Env) logf(format string, a ...any) {
 	if e.Log != nil {
-		fmt.Fprintf(e.Log, format+"\n", a...)
+		_, _ = fmt.Fprintf(e.Log, format+"\n", a...)
 	}
 }
 
 // setClock writes the file clock read by both binaries.
 func (e Env) setClock(t string) error {
 	tmp := e.ClockFile + ".tmp"
-	if err := os.WriteFile(tmp, []byte(t+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(tmp, []byte(t+"\n"), 0o600); err != nil {
 		return err
 	}
 	e.logf("· clock → %s", t)
@@ -137,7 +142,7 @@ func (e Env) setClock(t string) error {
 
 // call performs an HTTP request and returns status, headers and body.
 func call(c *http.Client, method, u, token string, body []byte) (int, http.Header, []byte, error) {
-	req, _ := http.NewRequest(method, u, bytes.NewReader(body))
+	req, _ := http.NewRequestWithContext(context.Background(), method, u, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -146,7 +151,7 @@ func call(c *http.Client, method, u, token string, body []byte) (int, http.Heade
 	if err != nil {
 		return 0, nil, nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(resp.Body)
 	return resp.StatusCode, resp.Header, b, nil
 }
@@ -156,19 +161,19 @@ func (e Env) publish(doc []byte) error {
 	c := http.DefaultClient
 	st, _, b, err := call(c, "POST", e.HubURL+"/v1/drafts", "editor-token", doc)
 	if err != nil || st != 201 {
-		return fmt.Errorf("create draft: %d %s %v", st, b, err)
+		return fmt.Errorf("create draft: %d %s %w", st, b, err)
 	}
 	var d struct{ ID string }
 	_ = json.Unmarshal(b, &d)
 	st, _, b, err = call(c, "POST", e.HubURL+"/v1/drafts/"+d.ID+":propose", "editor-token", nil)
 	if err != nil || st != 201 {
-		return fmt.Errorf("propose: %d %s %v", st, b, err)
+		return fmt.Errorf("propose: %d %s %w", st, b, err)
 	}
 	var cand struct{ ID string }
 	_ = json.Unmarshal(b, &cand)
 	st, _, b, err = call(c, "POST", e.HubURL+"/v1/candidates/"+cand.ID+":approve", "releaser-token", []byte(`{}`))
 	if err != nil || st != 201 {
-		return fmt.Errorf("approve: %d %s %v", st, b, err)
+		return fmt.Errorf("approve: %d %s %w", st, b, err)
 	}
 	e.logf("· released %s", b)
 	return nil
@@ -265,7 +270,7 @@ func (e Env) revoke(at string) func() ([]Row, error) {
 	return func() ([]Row, error) {
 		st, _, b, err := call(http.DefaultClient, "POST", e.HubURL+"/v1/versions/1.0.0:revoke", "releaser-token", []byte(`{"justification":"superseded by 2.0.0"}`))
 		if err != nil || st != 200 {
-			return nil, fmt.Errorf("revoke: %d %s %v", st, b, err)
+			return nil, fmt.Errorf("revoke: %d %s %w", st, b, err)
 		}
 		if err := e.waitSynced(at); err != nil {
 			return nil, err
@@ -286,11 +291,11 @@ func (e Env) eventSeen(code, agreement string) bool {
 			sc := bufio.NewScanner(f)
 			for sc.Scan() {
 				if strings.Contains(sc.Text(), `"code":"`+code+`"`) && strings.Contains(sc.Text(), agreement) {
-					f.Close()
+					_ = f.Close()
 					return true
 				}
 			}
-			f.Close()
+			_ = f.Close()
 		}
 		time.Sleep(100 * time.Millisecond)
 	}

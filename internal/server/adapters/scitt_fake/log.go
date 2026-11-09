@@ -1,4 +1,4 @@
-// Fake transparency log: Register returns a receipt {digest, registered_at, log_id, sig} signed with the hub key.
+// Package scitt_fake implements a fake transparency log: Register returns a receipt {digest, registered_at, log_id, sig} signed with the hub key.
 // NOT conformant with SCITT; it stands behind the TransparencyLog port until Q2/Q17 are decided (DP-8, REQ-HUB-004).
 package scitt_fake
 

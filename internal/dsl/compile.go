@@ -1,4 +1,4 @@
-// Compilation pipeline: load (N1), index and validate (N2, N3), diff against the previous release (N4), emit, check outputs (N5).
+// Package dsl implements the compilation pipeline: load (N1), index and validate (N2, N3), diff against the previous release (N4), emit, check outputs (N5).
 // A bundle is one SpaceProfile plus the OdrlProfiles it binds; each slot's artefacts carry the gates of its binding (§5, §13).
 package dsl
 
@@ -256,8 +256,10 @@ func (r *Result) emit() {
 	for _, b := range r.Bindings {
 		if v := b.Vendored; v != nil {
 			for _, va := range v.Artifacts {
-				r.Artifacts = append(r.Artifacts, Artifact{Path: path.Join("profiles", b.Binding.Slot, "vendored", b.Version, va.Path), MediaType: va.MediaType,
-					Role: va.Role, Slot: b.Binding.Slot, AppliesTo: gatesFor(b, va.Role), URL: va.URL, Bytes: va.Bytes})
+				r.Artifacts = append(r.Artifacts, Artifact{
+					Path: path.Join("profiles", b.Binding.Slot, "vendored", b.Version, va.Path), MediaType: va.MediaType,
+					Role: va.Role, Slot: b.Binding.Slot, AppliesTo: gatesFor(b, va.Role), URL: va.URL, Bytes: va.Bytes,
+				})
 			}
 		}
 	}

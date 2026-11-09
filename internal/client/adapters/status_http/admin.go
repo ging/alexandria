@@ -1,4 +1,4 @@
-// Admin API served only on the admin listener: /status, /versions, /agreements, /audit, /healthz, /readyz and /metrics.
+// Package status_http serves the admin API only on the admin listener: /status, /versions, /agreements, /audit, /healthz, /readyz and /metrics.
 // Never mounted on DSP or management listeners; errors are problem+json (§4.11, REQ-CLI-019, REQ-CLI-020, REQ-CLI-026).
 package status_http
 
@@ -25,8 +25,8 @@ type Admin struct {
 // Handler returns the admin mux.
 func (a Admin) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /status", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, a.Status.Report()) })
-	mux.HandleFunc("GET /versions", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, a.Status.Versions()) })
+	mux.HandleFunc("GET /status", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, a.Status.Report()) })
+	mux.HandleFunc("GET /versions", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, a.Status.Versions()) })
 	mux.HandleFunc("GET /agreements/{id...}", func(w http.ResponseWriter, r *http.Request) {
 		v, err := a.Agreements.Get(r.PathValue("id"), a.Cell.Load(), a.Status.Clock.Now())
 		if err != nil {
@@ -49,23 +49,23 @@ func (a Admin) Handler() http.Handler {
 		}
 		writeJSON(w, map[string]int{"imported": len(pairs)})
 	})
-	mux.HandleFunc("GET /audit/reports/latest", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /audit/reports/latest", func(w http.ResponseWriter, _ *http.Request) {
 		rep := a.Audit.Latest()
 		if rep == nil {
-			writeError(w, codes.New(codes.ApiNotFound, "no audit report yet"))
+			writeError(w, codes.New(codes.APINotFound, "no audit report yet"))
 			return
 		}
 		writeJSON(w, rep)
 	})
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
-	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) {
 		if a.Status.Ready() {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 		w.WriteHeader(http.StatusServiceUnavailable)
 	})
-	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", metrics.ContentType)
 		a.Metrics.Write(w, a.Status.ListingAge())
 	})
@@ -83,14 +83,14 @@ func writeJSON(w http.ResponseWriter, v any) {
 func writeProblem(w http.ResponseWriter, p problem.Problem) {
 	w.Header().Set("Content-Type", problem.ContentType)
 	w.WriteHeader(p.Status)
-	_, _ = w.Write(p.JSON())
+	_, _ = w.Write(p.JSON()) // #nosec G705 -- problem+json body, never rendered as HTML.
 }
 
 // writeError maps coded errors to problem+json (API_NOT_FOUND is 404).
 func writeError(w http.ResponseWriter, err error) {
 	if ce, ok := codes.As(err); ok {
 		st := http.StatusInternalServerError
-		if ce.Code == codes.ApiNotFound {
+		if ce.Code == codes.APINotFound {
 			st = http.StatusNotFound
 		}
 		writeProblem(w, problem.From(ce, st))

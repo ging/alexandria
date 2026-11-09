@@ -1,4 +1,4 @@
-// Random identifiers for drafts stored in SQLite.
+// Package sqlite generates random identifiers for drafts stored in SQLite.
 // Kept apart so the repository code stays focused on SQL (DP-2).
 package sqlite
 

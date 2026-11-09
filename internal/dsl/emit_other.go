@@ -1,4 +1,4 @@
-// Emitters of prof.ttl, spec.html, cedar-mapping.json and cedar.schema for a profile (§13.1, §13.4).
+// Package dsl provides the emitters of prof.ttl, spec.html, cedar-mapping.json and cedar.schema for a profile (§13.1, §13.4).
 // The PROF manifest lists every generated artefact with its role and media type.
 package dsl
 
@@ -52,8 +52,10 @@ func hasEnforcement(ix *Index) bool {
 func emitProf(ix *Index) []byte {
 	m := ix.P.Profile
 	base := strings.TrimRight(m.BaseURL, "/") + "/"
-	t := newTurtle(map[string]string{"prof": "http://www.w3.org/ns/dx/prof/", "role": profRole, "eurole": euRole,
-		"dct": Reserved["dct"], "owl": Reserved["owl"], "xsd": Reserved["xsd"], "r": base})
+	t := newTurtle(map[string]string{
+		"prof": "http://www.w3.org/ns/dx/prof/", "role": profRole, "eurole": euRole,
+		"dct": Reserved["dct"], "owl": Reserved["owl"], "xsd": Reserved["xsd"], "r": base,
+	})
 	core := "http://www.w3.org/ns/odrl/2/core"
 	t.subject("<"+core+">", p("a", "dct:Standard"), p("dct:title", lit("ODRL Core Profile 2.2")))
 	var res []string
@@ -71,9 +73,11 @@ func emitProf(ix *Index) []byte {
 		p("dct:license", "<"+m.License+">"),
 		p("prof:hasResource", res...))
 	for _, a := range profileArtefacts(ix) {
-		pairs := [][2]any{p("a", "prof:ResourceDescriptor"), p("prof:hasRole", t.ref(a.role)),
+		pairs := [][2]any{
+			p("a", "prof:ResourceDescriptor"), p("prof:hasRole", t.ref(a.role)),
 			p("prof:hasArtifact", "<"+base+a.file+">"),
-			p("dct:format", "<https://www.iana.org/assignments/media-types/"+a.mediaType+">")}
+			p("dct:format", "<https://www.iana.org/assignments/media-types/"+a.mediaType+">"),
+		}
 		if a.conformsTo != "" {
 			pairs = append(pairs, p("dct:conformsTo", "<"+a.conformsTo+">"))
 		}
@@ -164,8 +168,10 @@ func emitCedarMapping(ix *Index) []byte {
 		if e.Enforcement == nil {
 			continue
 		}
-		m := mapping{LeftOperand: e.IRI, CedarPath: e.Enforcement.CedarPath, Type: cedarType(e.Signature), Operators: map[string]string{},
-			PDPLevel: e.Enforcement.PDPLevel, EvalTiming: e.Enforcement.EvalTiming}
+		m := mapping{
+			LeftOperand: e.IRI, CedarPath: e.Enforcement.CedarPath, Type: cedarType(e.Signature), Operators: map[string]string{},
+			PDPLevel: e.Enforcement.PDPLevel, EvalTiming: e.Enforcement.EvalTiming,
+		}
 		for _, o := range e.Signature.Operators {
 			if c, ok := cedarOps[o]; ok {
 				m.Operators[operatorIRI(ix, o)] = c

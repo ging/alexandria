@@ -1,4 +1,4 @@
-// Minimal deterministic Turtle writer: prefixed names when the local part is safe, IRIs otherwise, escaped literals.
+// Package dsl provides a minimal deterministic Turtle writer: prefixed names when the local part is safe, IRIs otherwise, escaped literals.
 // All Turtle artefacts go through it so output is byte-stable for the same input (§13, determinism).
 package dsl
 
@@ -103,15 +103,6 @@ func p(pred string, objs ...string) [2]any {
 
 // list renders an RDF collection.
 func list(items []string) string { return "( " + strings.Join(items, " ") + " )" }
-
-// refs renders several IRIs.
-func (t *turtle) refs(iris []string) []string {
-	out := make([]string, 0, len(iris))
-	for _, i := range iris {
-		out = append(out, t.ref(i))
-	}
-	return out
-}
 
 // sortedStrings returns a sorted copy.
 func sortedStrings(xs []string) []string {

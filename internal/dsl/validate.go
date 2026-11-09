@@ -1,4 +1,4 @@
-// Levels N2 (invariants) and N3 (references) for OdrlProfile documents, including the §9.4 operator–type table.
+// Package dsl implements levels N2 (invariants) and N3 (references) for OdrlProfile documents, including the §9.4 operator–type table.
 // Adopted ODRL terms are checked against the local vocabulary copy; other adoptions against profiles in the bundle (§12).
 package dsl
 
@@ -7,8 +7,10 @@ import (
 )
 
 // orderedTypes are the datatypes that admit lt, lteq, gt and gteq (§9.4).
-var orderedTypes = map[string]bool{"xsd:integer": true, "xsd:decimal": true, "xsd:double": true, "xsd:float": true,
-	"xsd:date": true, "xsd:dateTime": true, "xsd:time": true}
+var orderedTypes = map[string]bool{
+	"xsd:integer": true, "xsd:decimal": true, "xsd:double": true, "xsd:float": true,
+	"xsd:date": true, "xsd:dateTime": true, "xsd:time": true,
+}
 
 // Operator families of §9.4.
 var (

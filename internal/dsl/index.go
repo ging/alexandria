@@ -1,4 +1,4 @@
-// Term index of an OdrlProfile: expands CURIEs, assigns compact aliases and gathers created and adopted terms.
+// Package dsl builds the term index of an OdrlProfile: expands CURIEs, assigns compact aliases and gathers created and adopted terms.
 // Every emitter reads this single index, so the artefacts cannot disagree about what a term is (§5, §13.1).
 package dsl
 
@@ -50,8 +50,10 @@ func NewIndex(d *Document, fs *Findings) *Index {
 	for i := range p.Terms {
 		t := &p.Terms[i]
 		ptr := "/terms/" + itoa(i)
-		e := &Entry{IRI: ix.TermNS + t.ID, CURIE: ix.Prefix + ":" + t.ID, Alias: t.ID, Kind: t.Kind, Status: t.State(),
-			Created: t, Signature: t.Signature, Enforcement: t.Enforcement, Ptr: ptr}
+		e := &Entry{
+			IRI: ix.TermNS + t.ID, CURIE: ix.Prefix + ":" + t.ID, Alias: t.ID, Kind: t.Kind, Status: t.State(),
+			Created: t, Signature: t.Signature, Enforcement: t.Enforcement, Ptr: ptr,
+		}
 		if _, dup := ix.byIRI[e.IRI]; dup {
 			fs.add(d, "N2", Error, CodeTermDupID, ptr+"/id", "term id %s is repeated", t.ID)
 			continue
@@ -73,8 +75,10 @@ func NewIndex(d *Document, fs *Findings) *Index {
 			if (a.Signature != nil || a.Enforcement != nil) && cat != "left_operands" {
 				fs.add(d, "N2", Error, CodeSchema, ptr, "signature and enforcement are only allowed on adopted left_operands")
 			}
-			ix.add(&Entry{IRI: iri, CURIE: a.Term, Alias: localName(a.Term), Kind: categoryKind[cat], Status: "active",
-				Signature: a.Signature, Enforcement: a.Enforcement, Ptr: ptr})
+			ix.add(&Entry{
+				IRI: iri, CURIE: a.Term, Alias: localName(a.Term), Kind: categoryKind[cat], Status: "active",
+				Signature: a.Signature, Enforcement: a.Enforcement, Ptr: ptr,
+			})
 		}
 	}
 	ix.checkAliases(fs)
@@ -123,7 +127,7 @@ func (ix *Index) Lookup(curie string) (*Entry, bool) {
 func (ix *Index) OfKind(kind string, skipRetired bool) []*Entry {
 	var out []*Entry
 	for _, e := range ix.Entries {
-		if e.Kind == kind && !(skipRetired && e.Status == "retired") {
+		if e.Kind == kind && (!skipRetired || e.Status != "retired") {
 			out = append(out, e)
 		}
 	}

@@ -1,4 +1,4 @@
-// Agreement registry entry and the exhaustive admission table of the agreement_admission gate.
+// Package domain defines the agreement registry entry and the exhaustive admission table of the agreement_admission gate.
 // Registered agreements stay usable until revoked_from + L of their version (§4.9, REQ-CLI-016).
 package domain
 

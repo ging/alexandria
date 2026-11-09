@@ -1,8 +1,9 @@
-// HTTP client of the hub: GET /v1/versions with the member bearer token, and package files and blobs from /pub.
+// Package http_hub implements the HTTP client of the hub: GET /v1/versions with the member bearer token, and package files and blobs from /pub.
 // The only adapter that talks to the hub; it is wired into Sync, never into Edge (REQ-SYS-002, REQ-CLI-003, REQ-CLI-027, DP-3).
 package http_hub
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -32,7 +33,7 @@ func New(base, token string) *Client {
 
 // get performs a GET and returns status, headers and body.
 func (c *Client) get(path string, auth bool) (int, http.Header, []byte, error) {
-	req, err := http.NewRequest(http.MethodGet, c.Base+path, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, c.Base+path, nil)
 	if err != nil {
 		return 0, nil, nil, err
 	}
@@ -41,9 +42,9 @@ func (c *Client) get(path string, auth bool) (int, http.Header, []byte, error) {
 	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return 0, nil, nil, fmt.Errorf("%w: %v", app.ErrUnreachable, err)
+		return 0, nil, nil, fmt.Errorf("%w: %w", app.ErrUnreachable, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, err := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
 	return resp.StatusCode, resp.Header, b, err
 }

@@ -1,4 +1,4 @@
-// Shared HTTP helpers of the server driving adapters: problem+json responses, status mapping and the Date header.
+// Package httpx provides the shared HTTP helpers of the server driving adapters: problem+json responses, status mapping and the Date header.
 // The Date header comes from the hub Clock so clients can estimate skew even under file_clock (REQ-HUB-017, REQ-HUB-019, REQ-CLI-025).
 package httpx
 
@@ -16,15 +16,15 @@ import (
 // Status maps a code to its HTTP status.
 func Status(c codes.Code) int {
 	switch {
-	case c == codes.ApiForbiddenRole:
+	case c == codes.APIForbiddenRole:
 		return http.StatusForbidden
-	case c == codes.ApiPreconditionRequired:
+	case c == codes.APIPreconditionRequired:
 		return http.StatusPreconditionRequired
-	case c == codes.ApiPreconditionFailed:
+	case c == codes.APIPreconditionFailed:
 		return http.StatusPreconditionFailed
-	case c == codes.ApiNotFound:
+	case c == codes.APINotFound:
 		return http.StatusNotFound
-	case c == codes.ApiInvalidState:
+	case c == codes.APIInvalidState:
 		return http.StatusConflict
 	case c == codes.ReleaseAborted:
 		return http.StatusServiceUnavailable

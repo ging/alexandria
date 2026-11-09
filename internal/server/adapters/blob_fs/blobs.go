@@ -1,4 +1,4 @@
-// Content-addressed blob store on the local filesystem: <dir>/sha256/<hex>, written once and read-only.
+// Package blob_fs provides a content-addressed blob store on the local filesystem: <dir>/sha256/<hex>, written once and read-only.
 // Implements the BlobStore port; bytes for a hash never change (DP-2, REQ-SYS-005, REQ-HUB-011).
 package blob_fs
 
@@ -22,7 +22,7 @@ var _ app.BlobStore = Store{}
 
 // New creates the blob directory if needed.
 func New(dir string) (Store, error) {
-	if err := os.MkdirAll(filepath.Join(dir, "sha256"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "sha256"), 0o750); err != nil {
 		return Store{}, err
 	}
 	return Store{dir: dir}, nil
@@ -44,13 +44,13 @@ func (s Store) Put(hex string, b []byte) error {
 		return err
 	}
 	if _, err := tmp.Write(b); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return err
 	}
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	if err := os.Chmod(tmp.Name(), 0o444); err != nil {
+	if err := os.Chmod(tmp.Name(), 0o400); err != nil {
 		return err
 	}
 	return os.Rename(tmp.Name(), s.path(hex))

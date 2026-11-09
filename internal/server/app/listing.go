@@ -1,4 +1,4 @@
-// Listing use case: issues signed listings on date changes and at most every ttl/2, signs version records, serves the DID document.
+// Package app implements the listing use case: issues signed listings on date changes and at most every ttl/2, signs version records, serves the DID document.
 // Records and listings come from the same projection, so a record never diverges from its listing entry (REQ-HUB-008..010, REQ-HUB-015, REQ-HUB-021).
 package app
 
@@ -90,7 +90,7 @@ func (l *Listing) Latest(p domain.Principal) ([]byte, error) {
 		return nil, err
 	}
 	if !ok {
-		return nil, codes.New(codes.ApiNotFound, "no version has been published yet")
+		return nil, codes.New(codes.APINotFound, "no version has been published yet")
 	}
 	return last.Raw, nil
 }
@@ -102,7 +102,7 @@ func (l *Listing) Record(p domain.Principal, version string) ([]byte, error) {
 	}
 	v, err := semver.Parse(version)
 	if err != nil {
-		return nil, codes.New(codes.ApiNotFound, "version %s not found", version)
+		return nil, codes.New(codes.APINotFound, "version %s not found", version)
 	}
 	return l.signRecord(v)
 }
@@ -115,7 +115,7 @@ func (l *Listing) signRecord(v semver.Version) ([]byte, error) {
 	}
 	rec, ok := lifecycle.Find(recs, v)
 	if !ok {
-		return nil, codes.New(codes.ApiNotFound, "version %s not found", v)
+		return nil, codes.New(codes.APINotFound, "version %s not found", v)
 	}
 	return l.signDoc(rec, l.d.Clock.Now())
 }

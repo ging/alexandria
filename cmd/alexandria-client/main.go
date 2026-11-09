@@ -65,7 +65,7 @@ func run(cfg *config.Config, stateDir, clockFile string, insecure bool) error {
 	errs := make(chan error, len(cfg.Listeners))
 	var servers []*http.Server
 	for name, l := range cfg.Listeners {
-		ln, err := net.Listen("tcp", l.Bind)
+		ln, err := new(net.ListenConfig).Listen(ctx, "tcp", l.Bind)
 		if err != nil {
 			return fmt.Errorf("%s: %w", name, err)
 		}

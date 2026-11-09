@@ -1,8 +1,9 @@
-// Launcher of the F6 environment: writes server and client configurations on free ports and starts the three real binaries.
+// Package f6 is the launcher of the F6 environment: writes server and client configurations on free ports and starts the three real binaries.
 // Both processes read the same file clock, so the scenario replays two months in seconds (DP-9, DP-5, Part 4 M8).
 package f6
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,29 +18,35 @@ import (
 
 // freePort returns a TCP port that is free right now.
 func freePort() (int, error) {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
+	l, err := new(net.ListenConfig).Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		return 0, err
 	}
-	defer l.Close()
+	defer func() { _ = l.Close() }()
 	return l.Addr().(*net.TCPAddr).Port, nil
 }
 
 // writeJSON writes v as indented JSON.
 func writeJSON(path string, v any) error {
 	b, _ := json.MarshalIndent(v, "", "  ")
-	return os.WriteFile(path, b, 0o644)
+	return os.WriteFile(path, b, 0o600)
 }
 
 // Routes are the client routes of F6: contract requests and agreements in enforce, transfers with admission.
 func Routes() []map[string]any {
 	return []map[string]any{
-		{"listener": "dsp-ingress", "match": map[string]string{"method": "POST", "path": "/negotiations/request"}, "message": "ContractRequestMessage",
-			"gates": []string{"dsp_message", "policy_intake"}, "mode": "enforce", "body": map[string]string{"select": "$.offer"}},
-		{"listener": "dsp-egress", "match": map[string]string{"method": "POST", "path": "/negotiations/:consumerPid/agreement"}, "message": "ContractAgreementMessage",
-			"gates": []string{"dsp_message", "policy_intake"}, "mode": "enforce", "body": map[string]string{"select": "$.agreement"}},
-		{"listener": "dsp-ingress", "match": map[string]string{"method": "POST", "path": "/transfers/request"}, "message": "TransferRequestMessage",
-			"gates": []string{"dsp_message", "agreement_admission"}, "mode": "enforce"},
+		{
+			"listener": "dsp-ingress", "match": map[string]string{"method": "POST", "path": "/negotiations/request"}, "message": "ContractRequestMessage",
+			"gates": []string{"dsp_message", "policy_intake"}, "mode": "enforce", "body": map[string]string{"select": "$.offer"},
+		},
+		{
+			"listener": "dsp-egress", "match": map[string]string{"method": "POST", "path": "/negotiations/:consumerPid/agreement"}, "message": "ContractAgreementMessage",
+			"gates": []string{"dsp_message", "policy_intake"}, "mode": "enforce", "body": map[string]string{"select": "$.agreement"},
+		},
+		{
+			"listener": "dsp-ingress", "match": map[string]string{"method": "POST", "path": "/transfers/request"}, "message": "TransferRequestMessage",
+			"gates": []string{"dsp_message", "agreement_admission"}, "mode": "enforce",
+		},
 	}
 }
 
@@ -60,7 +67,7 @@ func Launch(binDir, work string, log io.Writer) (Env, func(), error) {
 		ClientAdmin: fmt.Sprintf("http://127.0.0.1:%d", admin), ClockFile: filepath.Join(work, "clock"),
 		EventsFile: filepath.Join(work, "client", "events.jsonl"), Log: log,
 	}
-	_ = os.MkdirAll(filepath.Join(work, "client"), 0o755)
+	_ = os.MkdirAll(filepath.Join(work, "client"), 0o750)
 	if err := e.setClock("2026-09-01T10:00:00Z"); err != nil {
 		return Env{}, nil, err
 	}
@@ -80,8 +87,10 @@ func Launch(binDir, work string, log io.Writer) (Env, func(), error) {
 		"space":     "https://example.com/spaces/demo",
 		"trust":     map[string]string{"hub_did": did, "hub": fmt.Sprintf("https://127.0.0.1:%d", hub), "credentials": "file://" + filepath.Join(work, "credentials.json")},
 		"upstreams": map[string]string{"dsp": e.Connector},
-		"listeners": map[string]any{"dsp-ingress": map[string]string{"bind": fmt.Sprintf("127.0.0.1:%d", ingress)},
-			"dsp-egress": map[string]string{"bind": fmt.Sprintf("127.0.0.1:%d", egress)}, "admin": map[string]string{"bind": fmt.Sprintf("127.0.0.1:%d", admin)}},
+		"listeners": map[string]any{
+			"dsp-ingress": map[string]string{"bind": fmt.Sprintf("127.0.0.1:%d", ingress)},
+			"dsp-egress":  map[string]string{"bind": fmt.Sprintf("127.0.0.1:%d", egress)}, "admin": map[string]string{"bind": fmt.Sprintf("127.0.0.1:%d", admin)},
+		},
 		"routes": Routes(), "events": map[string]string{"sink": "file://" + e.EventsFile},
 	})
 	var procs []*exec.Cmd
@@ -92,9 +101,9 @@ func Launch(binDir, work string, log io.Writer) (Env, func(), error) {
 		}
 	}
 	start := func(name string, args ...string) error {
-		cmd := exec.Command(filepath.Join(binDir, name), args...)
+		cmd := exec.CommandContext(context.Background(), filepath.Join(binDir, name), args...) // #nosec G204 -- fixed binaries of this repository.
 		cmd.Dir = work
-		out, _ := os.Create(filepath.Join(work, name+".log"))
+		out, _ := os.Create(filepath.Join(work, name+".log")) // #nosec G304 -- path under the launcher work dir.
 		cmd.Stdout, cmd.Stderr = out, out
 		if err := cmd.Start(); err != nil {
 			return err
@@ -118,8 +127,8 @@ func Launch(binDir, work string, log io.Writer) (Env, func(), error) {
 		}
 		if err := waitUp(s.ping); err != nil {
 			stop()
-			b, _ := os.ReadFile(filepath.Join(work, s.name+".log"))
-			return Env{}, nil, fmt.Errorf("%s: %v\n%s", s.name, err, strings.TrimSpace(string(b)))
+			b, _ := os.ReadFile(filepath.Join(work, s.name+".log")) // #nosec G304 -- path under the launcher work dir.
+			return Env{}, nil, fmt.Errorf("%s: %w\n%s", s.name, err, strings.TrimSpace(string(b)))
 		}
 	}
 	return e, stop, nil
@@ -128,8 +137,9 @@ func Launch(binDir, work string, log io.Writer) (Env, func(), error) {
 // waitUp polls a URL until it answers.
 func waitUp(u string) error {
 	for i := 0; i < 100; i++ {
-		if resp, err := http.Get(u); err == nil {
-			resp.Body.Close()
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, u, nil)
+		if resp, err := http.DefaultClient.Do(req); err == nil {
+			_ = resp.Body.Close()
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)

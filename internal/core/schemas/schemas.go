@@ -1,10 +1,11 @@
-// Embedded Appendix A schemas (listing, version record, client config, verdict event) and a no-network validator.
+// Package schemas embeds the Appendix A schemas (listing, version record, client config, verdict event) and a no-network validator.
 // Used to check every document the binaries emit or read (REQ-DOC-001, REQ-DOC-002, REQ-DOC-003, REQ-DOC-004).
 package schemas
 
 import (
 	"bytes"
 	"embed"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -144,8 +145,8 @@ func (s *Schema) Errors(doc []byte) []Leaf {
 	if err == nil {
 		return nil
 	}
-	ve, ok := err.(*jsonschema.ValidationError)
-	if !ok {
+	var ve *jsonschema.ValidationError
+	if !errors.As(err, &ve) {
 		return []Leaf{{Message: err.Error()}}
 	}
 	var out []Leaf

@@ -1,4 +1,4 @@
-// In-process alexandria-server over the real adapters (SQLite, blob_fs, signer_file, auth_static) behind httptest.
+// Package testkit provides an in-process alexandria-server over the real adapters (SQLite, blob_fs, signer_file, auth_static) behind httptest.
 // Used by HTTP contract tests and by client tests that need a real hub over HTTP (F8 §8.7).
 package testkit
 
@@ -63,7 +63,7 @@ func NewHTTPServer(t *testing.T, t0 string) *HTTPServer {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { store.Close() })
+	t.Cleanup(func() { _ = store.Close() })
 	blobs, _ := blob_fs.New(filepath.Join(dir, "blobs"))
 	signer, err := signer_file.Load(filepath.Join(dir, "hub.key"), h.DID)
 	if err != nil {
@@ -76,8 +76,10 @@ func NewHTTPServer(t *testing.T, t0 string) *HTTPServer {
 		Compiler: compiler_poc.Compiler{Defaults: lifecycle.Defaults()}, Events: store.Events(), Clock: clk, DID: h.DID,
 		Defaults: lifecycle.Defaults(),
 	})
-	tokens := auth_static.Tokens{EditorToken: Editor, ReleaserToken: Releaser, MemberToken: Member,
-		"all-token": {Name: "admin", Roles: []domain.Role{domain.Editor, domain.Releaser, domain.Member}}}
+	tokens := auth_static.Tokens{
+		EditorToken: Editor, ReleaserToken: Releaser, MemberToken: Member,
+		"all-token": {Name: "admin", Roles: []domain.Role{domain.Editor, domain.Releaser, domain.Member}},
+	}
 	http_v1.Handler{Hub: h.Hub, Auth: tokens}.Register(mux)
 	http_pub.Handler{Pub: h.Hub.Publication}.Register(mux)
 	http_did.Handler{Listing: h.Hub.Listing}.Register(mux)
@@ -99,7 +101,7 @@ func (h *HTTPServer) Do(t *testing.T, method, path, token string, body []byte, h
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(resp.Body)
 	return resp.StatusCode, resp.Header, b
 }

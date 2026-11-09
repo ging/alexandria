@@ -1,4 +1,4 @@
-// Query use case: event log pagination and candidate lookup for releasers.
+// Package app implements the query use case: event log pagination and candidate lookup for releasers.
 // Event ids are strictly increasing and pagination uses the after cursor (REQ-HUB-019, REQ-HUB-020).
 package app
 

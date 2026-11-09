@@ -1,4 +1,4 @@
-// Status: /status and /versions views, readiness, the vhub.state watcher and the clock-skew estimate.
+// Package app implements Status: /status and /versions views, readiness, the vhub.state watcher and the clock-skew estimate.
 // CLOCK_SKEW_EXCEEDED is informative and never changes a decision (§4.11, REQ-CLI-020, REQ-CLI-025).
 package app
 

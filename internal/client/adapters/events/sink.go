@@ -1,9 +1,10 @@
-// Event sinks selected by events.sink: append-only JSON Lines file (file:) or one HTTP POST per event (http:, https:).
+// Package events provides the event sinks selected by events.sink: append-only JSON Lines file (file:) or one HTTP POST per event (http:, https:).
 // Implements the EventSink port for every event type of §4.11 (REQ-CLI-021).
 package events
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -51,10 +52,10 @@ func Open(uri string) (app.EventSink, error) {
 		if p == "" {
 			p = u.Opaque
 		}
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
 			return nil, err
 		}
-		f, err := os.OpenFile(p, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		f, err := os.OpenFile(p, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600) // #nosec G304 -- sink path comes from the operator configuration.
 		if err != nil {
 			return nil, err
 		}
@@ -82,7 +83,13 @@ func (s HTTPSink) Emit(e any) {
 	if err != nil {
 		return
 	}
-	resp, err := s.HTTP.Post(s.URL, "application/json", bytes.NewReader(b))
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, s.URL, bytes.NewReader(b))
+	if err != nil {
+		log.Printf("events: %v", err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := s.HTTP.Do(req)
 	if err != nil {
 		log.Printf("events: %v", err)
 		return

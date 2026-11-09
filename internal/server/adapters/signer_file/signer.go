@@ -1,4 +1,4 @@
-// File signer: one Ed25519 hub key read from a PKCS#8 PEM file, generated on first start (PoC only).
+// Package signer_file implements the file signer: one Ed25519 hub key read from a PKCS#8 PEM file, generated on first start (PoC only).
 // Implements the Signer port; it only signs with the key it publishes in the DID document (DP-4, REQ-HUB-010, REQ-HUB-015).
 package signer_file
 
@@ -25,7 +25,7 @@ var _ app.Signer = (*Signer)(nil)
 
 // Load reads the key at path, generating and saving a new one if the file does not exist.
 func Load(path string, d did.DID) (*Signer, error) {
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(path) // #nosec G304 -- path chosen by the operator in server.json.
 	if errors.Is(err, os.ErrNotExist) {
 		return generate(path, d)
 	}

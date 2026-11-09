@@ -1,8 +1,9 @@
-// did:web resolver over HTTPS; plain HTTP is allowed only for localhost with did.allow_insecure_localhost (PoC).
+// Package did_web provides a did:web resolver over HTTPS; plain HTTP is allowed only for localhost with did.allow_insecure_localhost (PoC).
 // Implements the DIDResolver port used by HubTrust (§4.4.1, DP-5, REQ-CLI-027, PRE-05).
 package did_web
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -32,11 +33,15 @@ func (r Resolver) Resolve(d did.DID) (did.Document, error) {
 	if err != nil {
 		return did.Document{}, err
 	}
-	resp, err := r.HTTP.Get(u)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, u, nil)
 	if err != nil {
 		return did.Document{}, err
 	}
-	defer resp.Body.Close()
+	resp, err := r.HTTP.Do(req)
+	if err != nil {
+		return did.Document{}, err
+	}
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return did.Document{}, fmt.Errorf("did_web: %s answered %d", u, resp.StatusCode)
 	}

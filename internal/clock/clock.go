@@ -1,4 +1,4 @@
-// System and file clock adapters of the timex.Clock port; the only place allowed to call time.Now (DP-9).
+// Package clock provides the system and file clock adapters of the timex.Clock port; the only place allowed to call time.Now (DP-9).
 // file_clock reads an RFC 3339 instant from a file so tests and the demo can replay F6 without waiting (REQ-SYS-001).
 package clock
 
@@ -57,7 +57,7 @@ func (f *File) Now() timex.Instant {
 // Set writes an instant to a clock file (used by tests and the demo driver).
 func Set(path string, t timex.Instant) error {
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(t.String()+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(tmp, []byte(t.String()+"\n"), 0o600); err != nil {
 		return err
 	}
 	return os.Rename(tmp, path)

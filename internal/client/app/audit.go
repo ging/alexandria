@@ -1,4 +1,4 @@
-// Passive audit: keeps the last audit.window catalog responses and re-classifies them when a new version is verified.
+// Package app implements passive audit: keeps the last audit.window catalog responses and re-classifies them when a new version is verified.
 // Classifies at new_content_from(X) and enforced_from(X) with margin 0 and makes no active request (§4.10, Q5, REQ-CLI-023).
 package app
 
@@ -61,7 +61,7 @@ func (a *Audit) OnNewVersion(x lifecycle.Record, snap *domain.Snapshot) {
 			c := domain.Classify(domain.ClassifyInput{Snap: &ref, State: domain.Active, TL: at, Unparseable: !ok}, func(v lifecycle.Record) domain.EvalResult {
 				return a.Evaluator.Evaluate(domain.Message{Root: body, Selected: sel}, domain.GateCatalog, ref.Package(v))
 			})
-			code := codes.Code("")
+			var code codes.Code
 			switch c.Result {
 			case domain.Warning:
 				code = codes.AuditWillWarn

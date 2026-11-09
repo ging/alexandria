@@ -1,4 +1,4 @@
-// Driving adapter that ticks on wall time, runs Sync when due by the client Clock and watches state changes.
+// Package sync_timer is a driving adapter that ticks on wall time, runs Sync when due by the client Clock and watches state changes.
 // Syncs at start and then within sync_interval of the head package (REQ-CLI-003, REQ-CLI-027).
 package sync_timer
 

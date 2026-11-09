@@ -41,12 +41,16 @@ func catalogDraft(v string, obligation string, licenses ...string) []byte {
 }
 
 // catalogRoute is a shadow catalog route with passive response validation.
-var catalogRoute = domain.Route{Listener: domain.DSPIngress, Match: domain.Match{Method: "POST", Path: "/catalog/request"}, Message: "CatalogRequestMessage",
-	Gates: []domain.Gate{domain.GateCatalog}, Mode: domain.Enforce, ValidateResponse: &domain.ValidateResponse{Gate: domain.GateCatalog, Mode: domain.Shadow}}
+var catalogRoute = domain.Route{
+	Listener: domain.DSPIngress, Match: domain.Match{Method: "POST", Path: "/catalog/request"}, Message: "CatalogRequestMessage",
+	Gates: []domain.Gate{domain.GateCatalog}, Mode: domain.Enforce, ValidateResponse: &domain.ValidateResponse{Gate: domain.GateCatalog, Mode: domain.Shadow},
+}
 
 // mgmtRoute is a management route validating the policy at $.policy.
-var mgmtRoute = domain.Route{Listener: domain.MgmtIngress, Match: domain.Match{Method: "POST", Path: "/v3/policydefinitions"}, Message: "management",
-	Gates: []domain.Gate{domain.GatePolicy}, Mode: domain.Enforce, Body: &domain.Body{Select: "$.policy"}}
+var mgmtRoute = domain.Route{
+	Listener: domain.MgmtIngress, Match: domain.Match{Method: "POST", Path: "/v3/policydefinitions"}, Message: "management",
+	Gates: []domain.Gate{domain.GatePolicy}, Mode: domain.Enforce, Body: &domain.Body{Select: "$.policy"},
+}
 
 func TestT_CLI_002_OnboardingRejectsInEnforce(t *testing.T) {
 	_, c := f6Client(t)
@@ -397,19 +401,24 @@ func TestT_CLI_023_PassiveAudit(t *testing.T) {
 func TestT_CLI_026_ImportAndGetNotFound(t *testing.T) {
 	_, c := synced(t, "2026-10-10T12:00:00Z")
 	err := c.Agreements.Import([]clientapp.ImportPair{{AgreementID: "urn:x", Version: "7.0.0"}}, c.Cell.Load())
-	if ce, ok := codes.As(err); !ok || ce.Code != codes.ApiNotFound {
+	if ce, ok := codes.As(err); !ok || ce.Code != codes.APINotFound {
 		t.Fatalf("import: %v", err)
 	}
 	_, err = c.Agreements.Get("urn:none", c.Cell.Load(), c.Clock.Now())
-	if ce, ok := codes.As(err); !ok || ce.Code != codes.ApiNotFound {
+	if ce, ok := codes.As(err); !ok || ce.Code != codes.APINotFound {
 		t.Fatalf("get: %v", err)
 	}
 }
 
 // corpus is a fixed list of (instant, action) pairs covering every F6 frontier.
 var corpus = []struct{ at, action string }{
-	{"2026-10-02T12:00:00Z", "odrl:read"}, {"2026-10-03T09:59:49Z", "ex:access"}, {"2026-10-03T09:59:50Z", "ex:access"},
-	{"2026-10-10T12:00:00Z", "ex:access"}, {"2026-11-02T10:00:09Z", "ex:access"}, {"2026-11-02T10:00:10Z", "ex:access"}, {"2026-11-02T10:00:10Z", "odrl:read"},
+	{"2026-10-02T12:00:00Z", "odrl:read"},
+	{"2026-10-03T09:59:49Z", "ex:access"},
+	{"2026-10-03T09:59:50Z", "ex:access"},
+	{"2026-10-10T12:00:00Z", "ex:access"},
+	{"2026-11-02T10:00:09Z", "ex:access"},
+	{"2026-11-02T10:00:10Z", "ex:access"},
+	{"2026-11-02T10:00:10Z", "odrl:read"},
 }
 
 // replay runs the corpus on a client and returns comparable outcomes.
@@ -420,7 +429,7 @@ func replay(t *testing.T) []string {
 	var out []string
 	for _, p := range corpus {
 		s.Clock.Set(p.at)
-		if !(s.Clock.Now() < c.Cell.Load().ExpiresAt) || p.at == "2026-11-02T10:00:09Z" {
+		if s.Clock.Now() >= c.Cell.Load().ExpiresAt || p.at == "2026-11-02T10:00:09Z" {
 			at(t, s, c, "2026-11-02T06:00:00Z")
 			s.Clock.Set(p.at)
 		}

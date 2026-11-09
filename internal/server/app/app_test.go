@@ -54,7 +54,7 @@ func latest(t *testing.T, s *testkit.Server) lifecycle.Listing {
 // nothingVisible asserts that version v is neither in the listing nor in /pub.
 func nothingVisible(t *testing.T, s *testkit.Server, v string) {
 	t.Helper()
-	if _, _, err := s.Hub.Publication.VersionedFile("demo", v, "manifest.json"); codeOf(err) != codes.ApiNotFound {
+	if _, _, err := s.Hub.Publication.VersionedFile("demo", v, "manifest.json"); codeOf(err) != codes.APINotFound {
 		t.Errorf("/pub serves %s: %v", v, err)
 	}
 	for _, l := range (testkit.MemListings{MemDB: s.DB}).All() {
@@ -74,7 +74,7 @@ func TestT_HUB_001_NegativeDraftCorpus(t *testing.T) {
 		codes.LifecycleLease:          testkit.DraftWith(testkit.DraftV1, `{"clock_skew":"PT10S","lease_margin":"PT5S"}`),
 		codes.LifecyclePropagation:    testkit.DraftWith(testkit.DraftV1, `{"freshness":{"ttl":"PT24H"},"propagation_window":"PT24H"}`),
 		codes.LifecycleMaxVersions:    testkit.DraftWith(testkit.DraftV1, `{"max_concurrent_versions":1}`),
-		codes.LifecycleStalenessLtTtl: testkit.DraftWith(testkit.DraftV1, `{"freshness":{"ttl":"PT24H","max_staleness":"PT12H"},"sync_interval":"PT6H"}`),
+		codes.LifecycleStalenessLtTTL: testkit.DraftWith(testkit.DraftV1, `{"freshness":{"ttl":"PT24H","max_staleness":"PT12H"},"sync_interval":"PT6H"}`),
 		compiler_poc.PocN1:            []byte(`{`),
 		compiler_poc.PocN2:            []byte(`{"space":"x","version":"1.0","slots":[{"slot":"odrl","obligation":"optional"}],"files":[]}`),
 		compiler_poc.PocN3:            bytes.Replace(testkit.DraftV1, []byte(`"type":"object"`), []byte(`"type":"objekt"`), 1),
@@ -127,10 +127,10 @@ func TestT_HUB_002_ApproveTwiceInvalidState(t *testing.T) {
 	if _, err := s.Hub.Release.Approve(testkit.Releaser, id, app.ApproveOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Hub.Release.Approve(testkit.Releaser, id, app.ApproveOptions{}); codeOf(err) != codes.ApiInvalidState {
+	if _, err := s.Hub.Release.Approve(testkit.Releaser, id, app.ApproveOptions{}); codeOf(err) != codes.APIInvalidState {
 		t.Fatalf("got %v", err)
 	}
-	if _, err := s.Hub.Release.Reject(testkit.Releaser, id, "late"); codeOf(err) != codes.ApiInvalidState {
+	if _, err := s.Hub.Release.Reject(testkit.Releaser, id, "late"); codeOf(err) != codes.APIInvalidState {
 		t.Fatalf("reject approved: got %v", err)
 	}
 }
@@ -138,7 +138,7 @@ func TestT_HUB_002_ApproveTwiceInvalidState(t *testing.T) {
 func TestT_HUB_003_EditorCannotApprove(t *testing.T) {
 	s := testkit.NewServer("2026-09-01T10:00:00Z")
 	id := s.Propose(t, testkit.DraftV1)
-	if _, err := s.Hub.Release.Approve(testkit.Editor, id, app.ApproveOptions{}); codeOf(err) != codes.ApiForbiddenRole {
+	if _, err := s.Hub.Release.Approve(testkit.Editor, id, app.ApproveOptions{}); codeOf(err) != codes.APIForbiddenRole {
 		t.Fatalf("got %v", err)
 	}
 	if recs, _ := (testkit.MemReleases{MemDB: s.DB}).Records(); len(recs) != 0 {
@@ -332,8 +332,10 @@ func TestT_HUB_020_EventsForEveryEffect(t *testing.T) {
 	c, _ = s.Hub.Authoring.Propose(testkit.Editor, d.ID)
 	_, _ = s.Hub.Release.Approve(testkit.Releaser, c.ID, app.ApproveOptions{})
 	ev, _ := s.Hub.Query.Events(testkit.Editor, 0, 100)
-	want := []string{domain.EvDraftCreated, domain.EvDraftUpdated, domain.EvCandidateProposed, domain.EvCandidateRejected,
-		domain.EvCandidateProposed, domain.EvCandidateApproved, domain.EvReleasePublished, domain.EvListingIssued}
+	want := []string{
+		domain.EvDraftCreated, domain.EvDraftUpdated, domain.EvCandidateProposed, domain.EvCandidateRejected,
+		domain.EvCandidateProposed, domain.EvCandidateApproved, domain.EvReleasePublished, domain.EvListingIssued,
+	}
 	if len(ev) != len(want) {
 		t.Fatalf("got %d events: %+v", len(ev), ev)
 	}

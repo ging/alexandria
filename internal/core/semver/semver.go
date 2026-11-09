@@ -1,4 +1,4 @@
-// SemVer 2.0.0 parsing and precedence ordering for versions of a SpaceProfile.
+// Package semver implements SemVer 2.0.0 parsing and precedence ordering for versions of a SpaceProfile.
 // Both binaries order versions with this single implementation (§2.5, REQ-SYS-001).
 package semver
 

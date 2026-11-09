@@ -1,4 +1,4 @@
-// Named-information identifiers (RFC 6920) with SHA-256, used to address packages and files.
+// Package ni implements named-information identifiers (RFC 6920) with SHA-256, used to address packages and files.
 // The URL form of a digest is its unpadded base64url value (§2.5, REQ-CLI-006, REQ-CLI-007).
 package ni
 

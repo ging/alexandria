@@ -1,4 +1,4 @@
-// Normative classification pseudocode of §4.7 as a pure function; evaluation of one version is injected.
+// Package domain implements the normative classification pseudocode of §4.7 as a pure function; evaluation of one version is injected.
 // Evaluates the head first and older versions only if needed, so it is deterministic and cheap (REQ-SYS-001, REQ-SYS-007, REQ-CLI-011).
 package domain
 

@@ -1,4 +1,4 @@
-// Composition of the server use cases around shared ports, and helpers that map failures to coded errors.
+// Package app provides the composition of the server use cases around shared ports, and helpers that map failures to coded errors.
 // Each use case authorizes with the §3.6 matrix and records events for every effect (REQ-HUB-017, REQ-HUB-020).
 package app
 
@@ -58,13 +58,13 @@ func authorize(p domain.Principal, a domain.Action) *codes.Error {
 	if domain.Allowed(p, a) {
 		return nil
 	}
-	return codes.New(codes.ApiForbiddenRole, "%s requires one of %v", a, domain.Matrix[a])
+	return codes.New(codes.APIForbiddenRole, "%s requires one of %v", a, domain.Matrix[a])
 }
 
 // notFound maps a repository miss to API_NOT_FOUND and passes other errors through.
 func notFound(err error, what string) error {
 	if errors.Is(err, ErrNotFound) {
-		return codes.New(codes.ApiNotFound, "%s not found", what)
+		return codes.New(codes.APINotFound, "%s not found", what)
 	}
 	return err
 }

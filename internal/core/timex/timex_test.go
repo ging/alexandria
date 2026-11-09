@@ -55,7 +55,7 @@ func TestDurationString(t *testing.T) {
 }
 
 func TestAddSaturatesAtNever(t *testing.T) {
-	if Never.Add(Day) != Never || Instant(Never-1).Add(Day) != Never {
+	if Never.Add(Day) != Never || (Never-1).Add(Day) != Never {
 		t.Fatal("no saturation")
 	}
 }

@@ -69,7 +69,7 @@ func main() {
 func read(paths []string) ([]dsl.Source, error) {
 	var out []dsl.Source
 	for _, p := range paths {
-		b, err := os.ReadFile(p)
+		b, err := os.ReadFile(p) // #nosec G304 G703 -- input files named on the command line.
 		if err != nil {
 			return nil, err
 		}
@@ -89,10 +89,10 @@ func write(dir string, r *dsl.Result) error {
 	}
 	for p, b := range files {
 		full := filepath.Join(dir, filepath.FromSlash(p))
-		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil { // #nosec G301 G703 -- build output meant to be published.
 			return err
 		}
-		if err := os.WriteFile(full, b, 0o644); err != nil {
+		if err := os.WriteFile(full, b, 0o644); err != nil { // #nosec G306 G703 -- build output meant to be published.
 			return err
 		}
 		fmt.Println(full)

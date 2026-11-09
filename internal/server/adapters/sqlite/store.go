@@ -1,8 +1,9 @@
-// SQLite adapter (modernc.org/sqlite, no cgo) for drafts, candidates, releases, revocations, listings and events.
+// Package sqlite is the SQLite adapter (modernc.org/sqlite, no cgo) for drafts, candidates, releases, revocations, listings and events.
 // Immutable tables only accept INSERT and SELECT: triggers abort any UPDATE or DELETE on them (DP-2, REQ-HUB-013, REQ-SYS-005, REQ-SYS-006, REQ-HUB-020).
 package sqlite
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -17,8 +18,12 @@ import (
 	"github.com/ging/alexandria/internal/server/app"
 	"github.com/ging/alexandria/internal/server/domain"
 
+	// Registers the pure-Go "sqlite" driver used by Open.
 	_ "modernc.org/sqlite"
 )
+
+// bg is the context of every query: the repository ports are synchronous and carry no context.
+var bg = context.Background()
 
 // ImmutableTables are append-only (REQ-HUB-013).
 var ImmutableTables = []string{"candidates", "candidate_decisions", "releases", "release_files", "revocations", "listings", "events"}
@@ -44,14 +49,15 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(schema); err != nil {
+	if _, err := db.ExecContext(bg, schema); err != nil {
 		return nil, err
 	}
 	for _, t := range ImmutableTables {
 		for _, op := range []string{"UPDATE", "DELETE"} {
+			// #nosec G201 -- identifiers come from the constant ImmutableTables list, never from input.
 			q := fmt.Sprintf(`CREATE TRIGGER IF NOT EXISTS %s_no_%s BEFORE %s ON %s BEGIN SELECT RAISE(ABORT, '%s is append-only'); END;`,
 				t, strings.ToLower(op), op, t, t)
-			if _, err := db.Exec(q); err != nil {
+			if _, err := db.ExecContext(bg, q); err != nil {
 				return nil, err
 			}
 		}
@@ -89,7 +95,7 @@ func etag(id string, rev int) string { return fmt.Sprintf(`"%s-%d"`, id, rev) }
 // Create inserts a draft at revision 1.
 func (s drafts) Create(doc []byte) (domain.Draft, error) {
 	id := newID()
-	if _, err := s.db.Exec(`INSERT INTO drafts(id, rev, doc) VALUES(?, 1, ?)`, id, doc); err != nil {
+	if _, err := s.db.ExecContext(bg, `INSERT INTO drafts(id, rev, doc) VALUES(?, 1, ?)`, id, doc); err != nil {
 		return domain.Draft{}, err
 	}
 	return domain.Draft{ID: id, Rev: 1, Doc: doc, ETag: etag(id, 1)}, nil
@@ -98,7 +104,7 @@ func (s drafts) Create(doc []byte) (domain.Draft, error) {
 // Get reads a draft.
 func (s drafts) Get(id string) (domain.Draft, error) {
 	d := domain.Draft{ID: id}
-	err := s.db.QueryRow(`SELECT rev, doc FROM drafts WHERE id = ?`, id).Scan(&d.Rev, &d.Doc)
+	err := s.db.QueryRowContext(bg, `SELECT rev, doc FROM drafts WHERE id = ?`, id).Scan(&d.Rev, &d.Doc)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Draft{}, app.ErrNotFound
 	}
@@ -115,7 +121,7 @@ func (s drafts) Replace(id, ifMatch string, doc []byte) (domain.Draft, error) {
 	if cur.ETag != ifMatch {
 		return domain.Draft{}, app.ErrPreconditionFailed
 	}
-	res, err := s.db.Exec(`UPDATE drafts SET rev = rev + 1, doc = ? WHERE id = ? AND rev = ?`, doc, id, cur.Rev)
+	res, err := s.db.ExecContext(bg, `UPDATE drafts SET rev = rev + 1, doc = ? WHERE id = ? AND rev = ?`, doc, id, cur.Rev)
 	if err != nil {
 		return domain.Draft{}, err
 	}
@@ -140,14 +146,14 @@ func (s candidates) Insert(c domain.Candidate) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.db.Exec(`INSERT INTO candidates(id, data) VALUES(?, ?)`, c.ID, b)
+	_, err = s.db.ExecContext(bg, `INSERT INTO candidates(id, data) VALUES(?, ?)`, c.ID, b)
 	return err
 }
 
 // Get reads a candidate and applies its decision, if any.
 func (s candidates) Get(id string) (domain.Candidate, error) {
 	var b []byte
-	err := s.db.QueryRow(`SELECT data FROM candidates WHERE id = ?`, id).Scan(&b)
+	err := s.db.QueryRowContext(bg, `SELECT data FROM candidates WHERE id = ?`, id).Scan(&b)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Candidate{}, app.ErrNotFound
 	}
@@ -161,7 +167,7 @@ func (s candidates) Get(id string) (domain.Candidate, error) {
 	c := sc.Candidate
 	c.Package = sc.Package
 	var state, comment string
-	switch err := s.db.QueryRow(`SELECT state, comment FROM candidate_decisions WHERE candidate_id = ?`, id).Scan(&state, &comment); {
+	switch err := s.db.QueryRowContext(bg, `SELECT state, comment FROM candidate_decisions WHERE candidate_id = ?`, id).Scan(&state, &comment); {
 	case err == nil:
 		c.State, c.Comment = domain.CandidateState(state), comment
 	case !errors.Is(err, sql.ErrNoRows):
@@ -172,7 +178,7 @@ func (s candidates) Get(id string) (domain.Candidate, error) {
 
 // Reject appends a rejection decision.
 func (s candidates) Reject(id, comment string) error {
-	_, err := s.db.Exec(`INSERT INTO candidate_decisions(candidate_id, state, comment) VALUES(?, ?, ?)`, id, domain.Rejected, comment)
+	_, err := s.db.ExecContext(bg, `INSERT INTO candidate_decisions(candidate_id, state, comment) VALUES(?, ?, ?)`, id, domain.Rejected, comment)
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return app.ErrInvalidState
 	}
@@ -188,20 +194,20 @@ func (s releases) AppendRelease(r domain.Release, from string) error {
 	if err != nil {
 		return err
 	}
-	tx, err := s.db.Begin()
+	tx, err := s.db.BeginTx(bg, nil)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	if _, err := tx.Exec(`INSERT INTO releases(version, manifest, data) VALUES(?, ?, ?)`, r.Record.Version.String(), string(r.Record.Manifest), b); err != nil {
+	if _, err := tx.ExecContext(bg, `INSERT INTO releases(version, manifest, data) VALUES(?, ?, ?)`, r.Record.Version.String(), string(r.Record.Manifest), b); err != nil {
 		return err
 	}
 	for _, e := range r.Entries {
-		if _, err := tx.Exec(`INSERT INTO release_files(version, path, hex) VALUES(?, ?, ?)`, r.Record.Version.String(), e.Path, e.Digest.Hex()); err != nil {
+		if _, err := tx.ExecContext(bg, `INSERT INTO release_files(version, path, hex) VALUES(?, ?, ?)`, r.Record.Version.String(), e.Path, e.Digest.Hex()); err != nil {
 			return err
 		}
 	}
-	if _, err := tx.Exec(`INSERT INTO candidate_decisions(candidate_id, state, comment) VALUES(?, ?, '')`, from, domain.Approved); err != nil {
+	if _, err := tx.ExecContext(bg, `INSERT INTO candidate_decisions(candidate_id, state, comment) VALUES(?, ?, '')`, from, domain.Approved); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -213,17 +219,17 @@ func (s releases) AppendRevocation(rv domain.Revocation) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.db.Exec(`INSERT INTO revocations(version, data) VALUES(?, ?)`, rv.Version.String(), b)
+	_, err = s.db.ExecContext(bg, `INSERT INTO revocations(version, data) VALUES(?, ?)`, rv.Version.String(), b)
 	return err
 }
 
 // Releases reads every release.
 func (s releases) Releases() ([]domain.Release, error) {
-	rows, err := s.db.Query(`SELECT data FROM releases`)
+	rows, err := s.db.QueryContext(bg, `SELECT data FROM releases`)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []domain.Release
 	for rows.Next() {
 		var b []byte
@@ -246,11 +252,11 @@ func (s releases) Records() ([]lifecycle.Record, error) {
 		return nil, err
 	}
 	revs := map[string]timex.Instant{}
-	rows, err := s.db.Query(`SELECT data FROM revocations`)
+	rows, err := s.db.QueryContext(bg, `SELECT data FROM revocations`)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var b []byte
 		var rv domain.Revocation
@@ -276,7 +282,7 @@ func (s releases) Records() ([]lifecycle.Record, error) {
 // one reads a single release with a query and argument.
 func (s releases) one(q string, arg any) (domain.Release, error) {
 	var b []byte
-	err := s.db.QueryRow(q, arg).Scan(&b)
+	err := s.db.QueryRowContext(bg, q, arg).Scan(&b)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Release{}, app.ErrNotFound
 	}
@@ -300,7 +306,7 @@ func (s releases) ByManifest(d ni.Digest) (domain.Release, error) {
 // HasBlob reports whether some release references the blob.
 func (s releases) HasBlob(hex string) (bool, error) {
 	var n int
-	err := s.db.QueryRow(`SELECT COUNT(*) FROM release_files WHERE hex = ?`, hex).Scan(&n)
+	err := s.db.QueryRowContext(bg, `SELECT COUNT(*) FROM release_files WHERE hex = ?`, hex).Scan(&n)
 	return n > 0, err
 }
 
@@ -309,7 +315,7 @@ type listings struct{ *Store }
 
 // Put inserts an issued listing.
 func (s listings) Put(l app.StoredListing) error {
-	_, err := s.db.Exec(`INSERT INTO listings(sequence, raw) VALUES(?, ?)`, l.Sequence, l.Raw)
+	_, err := s.db.ExecContext(bg, `INSERT INTO listings(sequence, raw) VALUES(?, ?)`, l.Sequence, l.Raw)
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return app.ErrSequenceTaken
 	}
@@ -319,7 +325,7 @@ func (s listings) Put(l app.StoredListing) error {
 // Latest reads the listing with the highest sequence.
 func (s listings) Latest() (app.StoredListing, bool, error) {
 	var l app.StoredListing
-	err := s.db.QueryRow(`SELECT sequence, raw FROM listings ORDER BY sequence DESC LIMIT 1`).Scan(&l.Sequence, &l.Raw)
+	err := s.db.QueryRowContext(bg, `SELECT sequence, raw FROM listings ORDER BY sequence DESC LIMIT 1`).Scan(&l.Sequence, &l.Raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return app.StoredListing{}, false, nil
 	}
@@ -339,7 +345,7 @@ type events struct{ *Store }
 
 // Append inserts an event and returns its id.
 func (s events) Append(e domain.Event) (int64, error) {
-	res, err := s.db.Exec(`INSERT INTO events(ts, type, principal, subject) VALUES(?, ?, ?, ?)`, e.TS.String(), e.Type, e.Principal, e.Subject)
+	res, err := s.db.ExecContext(bg, `INSERT INTO events(ts, type, principal, subject) VALUES(?, ?, ?, ?)`, e.TS.String(), e.Type, e.Principal, e.Subject)
 	if err != nil {
 		return 0, err
 	}
@@ -348,11 +354,11 @@ func (s events) Append(e domain.Event) (int64, error) {
 
 // After reads events after an id.
 func (s events) After(after int64, limit int) ([]domain.Event, error) {
-	rows, err := s.db.Query(`SELECT id, ts, type, principal, subject FROM events WHERE id > ? ORDER BY id LIMIT ?`, after, limit)
+	rows, err := s.db.QueryContext(bg, `SELECT id, ts, type, principal, subject FROM events WHERE id > ? ORDER BY id LIMIT ?`, after, limit)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []domain.Event
 	for rows.Next() {
 		var e domain.Event

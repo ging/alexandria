@@ -1,4 +1,4 @@
-// Level N4: diff of a profile or space against its previous release and the minimum SemVer bump of §14.
+// Package dsl implements level N4: diff of a profile or space against its previous release and the minimum SemVer bump of §14.
 // Terms are never removed; retiring requires a previous deprecation; a released version never changes content.
 package dsl
 

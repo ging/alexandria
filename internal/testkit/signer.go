@@ -1,4 +1,4 @@
-// In-memory Ed25519 signer with key rotation, implementing the server Signer port for tests.
+// Package testkit provides an in-memory Ed25519 signer with key rotation, implementing the server Signer port for tests.
 // Rotation publishes a key before activating it, as REQ-HUB-015 requires.
 package testkit
 

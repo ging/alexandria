@@ -1,4 +1,4 @@
-// Verifier of the fake transparency receipts: checks the digest and an Ed25519 signature by a hub assertion key.
+// Package receipt_scitt_fake is the verifier of the fake transparency receipts: checks the digest and an Ed25519 signature by a hub assertion key.
 // NOT conformant with SCITT; it stands behind the ReceiptVerifier port until Q2/Q17 are decided (DP-8, REQ-CLI-006).
 package receipt_scitt_fake
 

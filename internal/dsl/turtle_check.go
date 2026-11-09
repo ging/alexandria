@@ -1,4 +1,4 @@
-// Lightweight Turtle well-formedness check for N5: balanced brackets and parentheses, closed strings and IRIs, final dot.
+// Package dsl provides a lightweight Turtle well-formedness check for N5: balanced brackets and parentheses, closed strings and IRIs, final dot.
 // Not a full parser: a semantic check needs an RDF library, which this module does not depend on (§12 N5).
 package dsl
 

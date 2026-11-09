@@ -1,4 +1,4 @@
-// DID, DID URL and DID document types with Ed25519 key lookup in assertionMethod.
+// Package did defines DID, DID URL and DID document types with Ed25519 key lookup in assertionMethod.
 // Used by the hub to publish its key and by the client to verify signatures (REQ-SYS-009, REQ-HUB-010, REQ-CLI-024, DP-4, DP-5).
 package did
 

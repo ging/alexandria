@@ -1,4 +1,4 @@
-// Driving adapter serving the hub DID document at /.well-known/did.json, generated from Signer.PublishedKeys().
+// Package http_did is the driving adapter serving the hub DID document at /.well-known/did.json, generated from Signer.PublishedKeys().
 // One process publishes keys and signs, so a key is always published before it signs (Q15 proposal, REQ-HUB-010, REQ-HUB-015).
 package http_did
 
@@ -15,7 +15,7 @@ type Handler struct{ Listing *app.Listing }
 
 // Register mounts the DID route on mux.
 func (h Handler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("GET /.well-known/did.json", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /.well-known/did.json", func(w http.ResponseWriter, _ *http.Request) {
 		b, _ := json.Marshal(h.Listing.DIDDocument())
 		w.Header().Set("Cache-Control", "no-cache")
 		httpx.JSON(w, http.StatusOK, b)

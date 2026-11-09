@@ -1,4 +1,4 @@
-// PoC-only finding codes of compiler_poc, outside the closed F5 catalog and marked as such (DP-6).
+// Package compiler_poc declares the PoC-only finding codes of compiler_poc, outside the closed F5 catalog and marked as such (DP-6).
 // They stand in for the N1–N5 codes of the profile-language spec, which is not available (REQ-HUB-001).
 package compiler_poc
 

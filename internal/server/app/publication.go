@@ -1,4 +1,4 @@
-// Publication use case behind /pub: head redirect, versioned files, package files and blobs by hash.
+// Package app implements the publication use case behind /pub: head redirect, versioned files, package files and blobs by hash.
 // Only content referenced by a stored release is served, so an aborted release is never visible (REQ-SYS-005, REQ-HUB-011, REQ-HUB-016, DP-15).
 package app
 
@@ -23,7 +23,7 @@ func (pb *Publication) Head(slug string) (semver.Version, error) {
 		return semver.Version{}, err
 	}
 	if space == "" || domain.SlugOf(space) != slug {
-		return semver.Version{}, codes.New(codes.ApiNotFound, "space %s not found", slug)
+		return semver.Version{}, codes.New(codes.APINotFound, "space %s not found", slug)
 	}
 	recs, err := pb.d.Releases.Records()
 	if err != nil {
@@ -31,7 +31,7 @@ func (pb *Publication) Head(slug string) (semver.Version, error) {
 	}
 	set := lifecycle.InForceSet(recs, pb.d.Clock.Now(), 0)
 	if len(set) == 0 {
-		return semver.Version{}, codes.New(codes.ApiNotFound, "no version of %s is in force", slug)
+		return semver.Version{}, codes.New(codes.APINotFound, "no version of %s is in force", slug)
 	}
 	return set[0].Version, nil
 }
@@ -40,11 +40,11 @@ func (pb *Publication) Head(slug string) (semver.Version, error) {
 func (pb *Publication) VersionedFile(slug, version, path string) ([]byte, string, error) {
 	v, err := semver.Parse(version)
 	if err != nil {
-		return nil, "", codes.New(codes.ApiNotFound, "version %s not found", version)
+		return nil, "", codes.New(codes.APINotFound, "version %s not found", version)
 	}
 	rel, err := pb.d.Releases.Release(v)
 	if err != nil || domain.SlugOf(rel.Space) != slug {
-		return nil, "", codes.New(codes.ApiNotFound, "version %s of %s not found", version, slug)
+		return nil, "", codes.New(codes.APINotFound, "version %s of %s not found", version, slug)
 	}
 	switch path {
 	case "manifest.json":
@@ -58,14 +58,14 @@ func (pb *Publication) VersionedFile(slug, version, path string) ([]byte, string
 			return b, e.MediaType, err
 		}
 	}
-	return nil, "", codes.New(codes.ApiNotFound, "%s not in %s", path, version)
+	return nil, "", codes.New(codes.APINotFound, "%s not in %s", path, version)
 }
 
 // PackageFile returns manifest.json, manifest.sig, manifest.receipt or space-lock.json of a package.
 func (pb *Publication) PackageFile(segment, name string) ([]byte, error) {
 	d, err := ni.FromSegment(segment)
 	if err != nil {
-		return nil, codes.New(codes.ApiNotFound, "package %s not found", segment)
+		return nil, codes.New(codes.APINotFound, "package %s not found", segment)
 	}
 	rel, err := pb.d.Releases.ByManifest(d)
 	if err != nil {
@@ -81,7 +81,7 @@ func (pb *Publication) PackageFile(segment, name string) ([]byte, error) {
 	case "space-lock.json":
 		return rel.SpaceLock, nil
 	}
-	return nil, codes.New(codes.ApiNotFound, "%s not in package", name)
+	return nil, codes.New(codes.APINotFound, "%s not in package", name)
 }
 
 // Blob returns a file by its SHA-256 if a release references it.
@@ -91,7 +91,7 @@ func (pb *Publication) Blob(hex string) ([]byte, error) {
 		return nil, err
 	}
 	if !ok {
-		return nil, codes.New(codes.ApiNotFound, "blob %s not found", hex)
+		return nil, codes.New(codes.APINotFound, "blob %s not found", hex)
 	}
 	return pb.d.Blobs.Get(hex)
 }

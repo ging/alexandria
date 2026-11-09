@@ -1,4 +1,4 @@
-// N5 check of context.jsonld with json-gold: the context processes offline and every alias expands to its term IRI.
+// Package dsl implements the N5 check of context.jsonld with json-gold: the context processes offline and every alias expands to its term IRI.
 // This is what a policy_intake gate relies on when it expands a message with the profile context (§11.5, §13.1).
 package dsl
 

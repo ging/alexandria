@@ -1,4 +1,4 @@
-// Loader of the PoC server.json, validated against its own JSON Schema; relative paths resolve from the file's folder.
+// Package config is the loader of the PoC server.json, validated against its own JSON Schema; relative paths resolve from the file's folder.
 // The server has no normative configuration (Q16), so this format is a PoC decision (DP-12, REQ-HUB-008, REQ-HUB-010).
 package config
 
@@ -37,7 +37,7 @@ type Server struct {
 
 // Load reads and validates a server.json.
 func Load(path string) (Server, error) {
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(path) // #nosec G304 -- path chosen by the operator on the command line.
 	if err != nil {
 		return Server{}, err
 	}
@@ -56,7 +56,7 @@ func Load(path string) (Server, error) {
 		return Server{}, err
 	}
 	if errs := c.Defaults.Validate(); len(errs) > 0 {
-		return Server{}, fmt.Errorf("server.json lifecycle: %v", errs[0])
+		return Server{}, fmt.Errorf("server.json lifecycle: %w", errs[0])
 	}
 	dir := filepath.Dir(path)
 	for _, p := range []*string{&c.SQLitePath, &c.BlobDir, &c.SigningKeyPath, &c.TokensPath, &c.ClockFile, &c.VendorDir} {

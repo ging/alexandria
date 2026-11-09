@@ -1,4 +1,4 @@
-// PoC evaluator: runs json-schema artefacts offline and, for SHACL slots, expands the message with json-gold restricted to the manifest contexts.
+// Package evaluator_poc implements the PoC evaluator: runs json-schema artefacts offline and, for SHACL slots, expands the message with json-gold restricted to the manifest contexts.
 // SHACL shapes themselves are not run (POC_EVAL_UNSUPPORTED_ROLE info event); the §4.7 slot algorithm is kept (DP-7, REQ-CLI-010).
 package evaluator_poc
 

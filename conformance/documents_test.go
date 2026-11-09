@@ -23,7 +23,7 @@ import (
 // fetch performs a GET with an optional bearer token.
 func fetch(t *testing.T, u, token string) (int, []byte) {
 	t.Helper()
-	req, _ := http.NewRequest("GET", u, nil)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, u, nil)
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}

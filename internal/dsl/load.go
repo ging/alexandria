@@ -1,4 +1,4 @@
-// Loader of YAML streams restricted to the JSON data model, and level N1 against the normative schema.
+// Package dsl is the loader of YAML streams restricted to the JSON data model, and level N1 against the normative schema.
 // Rejects anchors, aliases and explicit tags, and remembers the line of every JSON pointer for findings (§6, §12 N1).
 package dsl
 
@@ -164,7 +164,7 @@ func scalar(n *yaml.Node) (any, error) {
 	case "!!int":
 		i, err := strconv.ParseInt(n.Value, 0, 64)
 		if err != nil {
-			return nil, fmt.Errorf("line %d: %v", n.Line, err)
+			return nil, fmt.Errorf("line %d: %w", n.Line, err)
 		}
 		return i, nil
 	case "!!float":

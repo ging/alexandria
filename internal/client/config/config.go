@@ -1,4 +1,4 @@
-// Loader of the normative alexandria-client configuration (Appendix A.3) with the CFG-1..CFG-5 startup invariants in order.
+// Package config is the loader of the normative alexandria-client configuration (Appendix A.3) with the CFG-1..CFG-5 startup invariants in order.
 // JSON only in the PoC; YAML is not supported (agent decision). The first failing code is reported (§4.3, REQ-CLI-001, REQ-DOC-003).
 package config
 
@@ -61,7 +61,7 @@ type credentials struct {
 
 // Load reads a configuration and checks CFG-1..CFG-5, returning the first failure.
 func Load(path string) (*Config, *codes.Error) {
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(path) // #nosec G304 -- path chosen by the operator on the command line or in the config.
 	if err != nil {
 		return nil, codes.New(codes.ConfigSchema, "%v", err)
 	}
@@ -105,7 +105,7 @@ func readCredentials(uri string) (string, *codes.Error) {
 	if p == "" {
 		p = u.Opaque
 	}
-	b, err := os.ReadFile(p)
+	b, err := os.ReadFile(p) // #nosec G304 -- path chosen by the operator on the command line or in the config.
 	if err != nil {
 		return "", codes.New(codes.ConfigCredentialsUnreadable, "%v", err)
 	}

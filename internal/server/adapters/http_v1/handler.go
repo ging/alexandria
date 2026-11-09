@@ -1,4 +1,4 @@
-// Driving adapter for the /v1 management API: translates HTTP into use-case calls and coded errors into problem+json.
+// Package http_v1 is the driving adapter for the /v1 management API: translates HTTP into use-case calls and coded errors into problem+json.
 // Holds no business rules; authentication is the auth_static middleware (REQ-HUB-012, REQ-HUB-017, REQ-HUB-018, REQ-HUB-019).
 package http_v1
 
@@ -37,7 +37,7 @@ func (h Handler) authenticated(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := h.Auth.Authenticate(r); !ok {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="vhub"`)
-			httpx.WriteProblem(w, problem.From(codes.New(codes.ApiForbiddenRole, "authentication required"), http.StatusUnauthorized))
+			httpx.WriteProblem(w, problem.From(codes.New(codes.APIForbiddenRole, "authentication required"), http.StatusUnauthorized))
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -109,7 +109,7 @@ func (h Handler) route(w http.ResponseWriter, r *http.Request) {
 		ev, err := h.Hub.Query.Events(p, after, 100)
 		writeJSON(w, http.StatusOK, map[string]any{"events": ev}, err)
 	default:
-		httpx.WriteError(w, codes.New(codes.ApiNotFound, "%s %s is not a /v1 resource", r.Method, r.URL.Path))
+		httpx.WriteError(w, codes.New(codes.APINotFound, "%s %s is not a /v1 resource", r.Method, r.URL.Path))
 	}
 }
 

@@ -1,4 +1,4 @@
-// Forgery helpers that re-sign mutated listings with the hub key, to build S4–S7 negative cases.
+// Package testkit provides forgery helpers that re-sign mutated listings with the hub key, to build S4–S7 negative cases.
 // The signatures are valid, so only the continuity and date checks can reject them (REQ-CLI-004).
 package testkit
 

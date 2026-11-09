@@ -1,4 +1,4 @@
-// Event documents of the client: vhub.verdict (Appendix A.4) and the notices vhub.sync, vhub.state, vhub.agreement and vhub.audit.
+// Package app defines the event documents of the client: vhub.verdict (Appendix A.4) and the notices vhub.sync, vhub.state, vhub.agreement and vhub.audit.
 // Every non-ok gate evaluation and every info finding becomes one event (§4.11, REQ-CLI-021).
 package app
 
@@ -72,7 +72,7 @@ func NewNotice(typ, space string, t timex.Instant, c codes.Code, detail string) 
 
 // notice builds a notice of a type and code at t.
 func notice(typ, space string, t timex.Instant, c codes.Code, detail string) Notice {
-	sev := ""
+	var sev string
 	if c != "" {
 		sev = string(codes.SeverityOf(c))
 	} else {

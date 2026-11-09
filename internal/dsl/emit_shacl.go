@@ -1,4 +1,4 @@
-// Emitter of shapes.ttl following §13.3: closed action and left-operand lists, deprecation warnings and one shape per signature.
+// Package dsl provides the emitter of shapes.ttl following §13.3: closed action and left-operand lists, deprecation warnings and one shape per signature.
 // Signature shapes use the conditional pattern sh:or ( not-X | rules ), validated over the expanded graph.
 package dsl
 

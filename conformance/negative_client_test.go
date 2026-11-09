@@ -4,6 +4,7 @@ package conformance
 
 import (
 	"bytes"
+	"errors"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -26,11 +27,12 @@ func TestN_ConfigCodesStopTheBinary(t *testing.T) {
 	for _, f := range files {
 		code := trimExt(filepath.Base(f))
 		t.Run("N-"+code, func(t *testing.T) {
-			cmd := exec.Command(filepath.Join(binDir, "alexandria-client"), "-config", f, "-state-dir", t.TempDir())
+			cmd := exec.CommandContext(t.Context(), filepath.Join(binDir, "alexandria-client"), "-config", f, "-state-dir", t.TempDir())
 			var stderr bytes.Buffer
 			cmd.Stderr = &stderr
 			err := cmd.Run()
-			ee, ok := err.(*exec.ExitError)
+			var ee *exec.ExitError
+			ok := errors.As(err, &ee)
 			if !ok || ee.ExitCode() == 0 || !strings.Contains(stderr.String(), code+":") {
 				t.Fatalf("exit %v, stderr %q", err, stderr.String())
 			}
@@ -125,16 +127,16 @@ func eventCase(code string, prepare func(t *testing.T, w world)) clientCase {
 
 // clientCases lists the client negative cases of F5 (VERDICT_SHACL_WARNING is unreachable, see OPEN_QUESTIONS.md).
 var clientCases = []clientCase{
-	syncCase("SYNC_UNREACHABLE", func(t *testing.T, w world) string { w.c.Hub.Down = true; return w.syncCode("2026-10-02T00:00:00Z") }),
-	syncCase("SYNC_UNAUTHORIZED", func(t *testing.T, w world) string {
+	syncCase("SYNC_UNREACHABLE", func(_ *testing.T, w world) string { w.c.Hub.Down = true; return w.syncCode("2026-10-02T00:00:00Z") }),
+	syncCase("SYNC_UNAUTHORIZED", func(_ *testing.T, w world) string {
 		w.c.Hub.Unauthorized = true
 		return w.syncCode("2026-10-02T00:00:00Z")
 	}),
-	syncCase("SYNC_SIGNATURE_INVALID", func(t *testing.T, w world) string {
+	syncCase("SYNC_SIGNATURE_INVALID", func(_ *testing.T, w world) string {
 		w.c.Hub.Tamper = altered
 		return w.syncCode("2026-10-02T00:00:00Z")
 	}),
-	syncCase("SYNC_DID_UNRESOLVABLE", func(t *testing.T, w world) string {
+	syncCase("SYNC_DID_UNRESOLVABLE", func(_ *testing.T, w world) string {
 		w.c.Resolver.Down = true
 		return w.syncCode("2026-10-02T00:00:00Z")
 	}),
@@ -177,7 +179,7 @@ var clientCases = []clientCase{
 		w.c.Hub.Tamper = testkit.Serve(w.s.Forge(t, func(l *lifecycle.Listing) { l.Versions[1].PublishedAt = l.Versions[1].NewContentFrom.Add(-timex.Day) }))
 		return w.syncCode("2026-10-10T00:00:00Z")
 	}),
-	syncCase("SYNC_MANIFEST_DIGEST_MISMATCH", func(t *testing.T, w world) string {
+	syncCase("SYNC_MANIFEST_DIGEST_MISMATCH", func(_ *testing.T, w world) string {
 		w.c.Hub.TamperPkg = func(_ ni.Digest, f *pkgv.Files) { f.Manifest = append(f.Manifest, ' ') }
 		return w.syncCode("2026-10-10T00:00:00Z")
 	}),
@@ -201,7 +203,7 @@ var clientCases = []clientCase{
 		}
 		return w.syncCode("2026-10-10T00:00:00Z")
 	}),
-	syncCase("SYNC_FILE_HASH_MISMATCH", func(t *testing.T, w world) string {
+	syncCase("SYNC_FILE_HASH_MISMATCH", func(_ *testing.T, w world) string {
 		w.c.Hub.TamperPkg = func(_ ni.Digest, f *pkgv.Files) {
 			for p, b := range f.Content {
 				f.Content[p] = bytes.Replace(b, []byte("object"), []byte("objecT"), 1)
@@ -209,7 +211,7 @@ var clientCases = []clientCase{
 		}
 		return w.syncCode("2026-10-10T00:00:00Z")
 	}),
-	syncCase("SYNC_FILE_SET_MISMATCH", func(t *testing.T, w world) string {
+	syncCase("SYNC_FILE_SET_MISMATCH", func(_ *testing.T, w world) string {
 		w.c.Hub.TamperPkg = func(_ ni.Digest, f *pkgv.Files) { f.Content["extra.ttl"] = []byte("x") }
 		return w.syncCode("2026-10-10T00:00:00Z")
 	}),
@@ -331,7 +333,7 @@ var clientCases = []clientCase{
 	}),
 	{"AUDIT_WILL_WARN", auditCase("AUDIT_WILL_WARN")},
 	{"AUDIT_WILL_REJECT", auditCase("AUDIT_WILL_REJECT")},
-	eventCase("CLOCK_SKEW_EXCEEDED", func(t *testing.T, w world) {
+	eventCase("CLOCK_SKEW_EXCEEDED", func(_ *testing.T, w world) {
 		w.s.Clock.Set("2026-10-02T00:00:00Z")
 		ahead := w.s.Clock.Now().Add(30)
 		w.c.Hub.Date = &ahead
@@ -348,8 +350,10 @@ func auditCase(code string) func(t *testing.T) (string, *testkit.Recorder) {
 		}
 		s := testkit.NewServer("2026-09-01T10:00:00Z")
 		s.Publish(t, "2026-09-01T10:00:00Z", draft("1.0.0", `["cc-by","odc-by"]`), app.ApproveOptions{})
-		route := domain.Route{Listener: domain.DSPIngress, Match: domain.Match{Method: "POST", Path: "/catalog/request"}, Message: "CatalogRequestMessage",
-			Gates: []domain.Gate{domain.GateDSP}, Mode: domain.Shadow, ValidateResponse: &domain.ValidateResponse{Gate: domain.GateCatalog, Mode: domain.Shadow}}
+		route := domain.Route{
+			Listener: domain.DSPIngress, Match: domain.Match{Method: "POST", Path: "/catalog/request"}, Message: "CatalogRequestMessage",
+			Gates: []domain.Gate{domain.GateDSP}, Mode: domain.Shadow, ValidateResponse: &domain.ValidateResponse{Gate: domain.GateCatalog, Mode: domain.Shadow},
+		}
 		w := world{s, testkit.NewClient(s, []domain.Route{route})}
 		w.sync(t, "2026-09-10T00:00:00Z")
 		w.c.Upstream.Body = []byte(`{"license":"odc-by"}`)

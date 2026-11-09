@@ -1,4 +1,4 @@
-// Date planning (§3.3 table), approval invariants DATE-1/DATE-2, revocation REV-1..REV-4 and the S7 check.
+// Package lifecycle implements date planning (§3.3 table), approval invariants DATE-1/DATE-2, revocation REV-1..REV-4 and the S7 check.
 // Pure functions: the publication instant P and the existing records enter as arguments (REQ-HUB-005, REQ-HUB-006, REQ-HUB-007, REQ-HUB-014, REQ-CLI-004).
 package lifecycle
 

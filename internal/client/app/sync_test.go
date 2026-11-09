@@ -300,7 +300,7 @@ func TestT_CLI_024_RetiredKeyRejected(t *testing.T) {
 	s.Signer.Retire(old)
 	s.Clock.Set("2026-10-02T13:00:00Z")
 	_, l := s.LatestListing(t)
-	l.Sequence += 1
+	l.Sequence++
 	msg, _ := sign.SigningInput(l)
 	sig, _ := json.Marshal(s.Signer.SignWith(old, msg))
 	c.Hub.Tamper = testkit.Serve([]byte(`{"signed":` + string(msg) + `,"signature":` + string(sig) + `}`))

@@ -52,7 +52,7 @@ func setup(t *testing.T, at string) (*testkit.Client, *httptest.Server, *capture
 		t.Fatal(err)
 	}
 	atConnector := &capture{}
-	conn := httptest.NewServer(atConnector.wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	conn := httptest.NewServer(atConnector.wrap(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-Connector", "1")
 		w.WriteHeader(http.StatusCreated)
@@ -67,10 +67,10 @@ func setup(t *testing.T, at string) (*testkit.Client, *httptest.Server, *capture
 	return c, proxy, atProxy, atConnector
 }
 
-// post sends a body with custom headers and returns the response and its body.
-func post(t *testing.T, base, path string, body []byte) (*http.Response, []byte) {
+// post sends a body with custom headers and returns the status, headers and body.
+func post(t *testing.T, base, path string, body []byte) (int, http.Header, []byte) {
 	t.Helper()
-	req, _ := http.NewRequest("POST", base+path, bytes.NewReader(body))
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, base+path, bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer counterparty-token")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header["x-odd-CASE"] = []string{"kept"}
@@ -78,15 +78,15 @@ func post(t *testing.T, base, path string, body []byte) (*http.Response, []byte)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(resp.Body)
-	return resp, b
+	return resp.StatusCode, resp.Header, b
 }
 
 func TestT_SYS_003_RequestForwardedByteForByte(t *testing.T) {
 	_, proxy, atProxy, atConn := setup(t, "2026-10-10T12:00:00Z")
 	body := append(testkit.ContractRequest("odrl:use"), []byte("\n  ")...)
-	post(t, proxy.URL, "/negotiations/request", body)
+	_, _, _ = post(t, proxy.URL, "/negotiations/request", body)
 	if !bytes.Equal(atConn.body, body) || !reflect.DeepEqual(atConn.header, atProxy.header) || atConn.host != atProxy.host || atConn.path != "/protocol/negotiations/request" {
 		t.Fatalf("request changed:\nproxy %v %q\nconn  %v %q", atProxy.header, atProxy.host, atConn.header, atConn.host)
 	}
@@ -94,19 +94,20 @@ func TestT_SYS_003_RequestForwardedByteForByte(t *testing.T) {
 
 func TestT_CLI_014_ResponseUnchangedExceptVerdict(t *testing.T) {
 	_, proxy, _, _ := setup(t, "2026-10-10T12:00:00Z")
-	resp, b := post(t, proxy.URL, "/negotiations/request", testkit.ContractRequest("odrl:use"))
-	if !bytes.Equal(b, connectorBody) || resp.StatusCode != 201 || resp.Header.Get("X-Connector") != "1" || resp.Header.Get(domain.HeaderName) != "" {
-		t.Fatalf("forward changed the response: %d %v %q", resp.StatusCode, resp.Header, b)
+	st, h, b := post(t, proxy.URL, "/negotiations/request", testkit.ContractRequest("odrl:use"))
+	if !bytes.Equal(b, connectorBody) || st != 201 || h.Get("X-Connector") != "1" || h.Get(domain.HeaderName) != "" {
+		t.Fatalf("forward changed the response: %d %v %q", st, h, b)
 	}
-	resp, b = post(t, proxy.URL, "/negotiations/request", testkit.ContractRequest("ex:access"))
-	if !bytes.Equal(b, connectorBody) || resp.Header.Get(domain.HeaderName) == "" {
-		t.Fatalf("forward-notice: %v %q", resp.Header, b)
+	_, h, b = post(t, proxy.URL, "/negotiations/request", testkit.ContractRequest("ex:access"))
+	if !bytes.Equal(b, connectorBody) || h.Get(domain.HeaderName) == "" {
+		t.Fatalf("forward-notice: %v %q", h, b)
 	}
 }
 
 func TestT_CLI_019_AdminNotServedOnDSP(t *testing.T) {
 	_, proxy, _, atConn := setup(t, "2026-10-10T12:00:00Z")
-	resp, err := http.Get(proxy.URL + "/status")
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, proxy.URL+"/status", nil)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +125,9 @@ func TestEgressForwardProxyCapturesProviderAgreement(t *testing.T) {
 	cl := &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(pu)}}
 	conn, _ := url.Parse(c.Edge.Upstream.(*proxy_dsp.Upstream).DSP.String())
 	target := conn.Scheme + "://" + conn.Host + "/negotiations/c-1/agreement"
-	resp, err := cl.Post(target, "application/json", bytes.NewReader(testkit.AgreementMessage("urn:uuid:A1", "ex:access", "")))
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, target, bytes.NewReader(testkit.AgreementMessage("urn:uuid:A1", "ex:access", "")))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := cl.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}

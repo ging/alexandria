@@ -1,4 +1,4 @@
-// Driving adapter that periodically asks the Listing use case to reissue a stale listing.
+// Package scheduler is a driving adapter that periodically asks the Listing use case to reissue a stale listing.
 // Ticks on wall time but decides with the hub Clock, so file_clock jumps trigger issuance (REQ-HUB-008).
 package scheduler
 

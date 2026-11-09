@@ -1,4 +1,4 @@
-// Minimal profile compiler for the PoC draft format of Part 5.1: N1–N5 checks and package compilation.
+// Package compiler_poc provides a minimal profile compiler for the PoC draft format of Part 5.1: N1–N5 checks and package compilation.
 // Implements the ProfileCompiler port so the real DSL compiler can replace it without touching the domain (DP-6, REQ-HUB-001).
 package compiler_poc
 
@@ -126,7 +126,7 @@ func (c Compiler) parse(doc []byte, ctx app.CompileContext) (*draft, lifecycle.P
 		return &d, params, append(out, finding(PocN2, "/lifecycle", "%v", err))
 	}
 	for g, m := range params.Degraded {
-		if (m != "continue" && m != "reject") || !(gates[g] || g == "agreement_admission") {
+		if (m != "continue" && m != "reject") || (!gates[g] && g != "agreement_admission") {
 			out = append(out, finding(PocN2, "/lifecycle/degraded/"+g, "degraded mode %q is not allowed", m))
 		}
 	}

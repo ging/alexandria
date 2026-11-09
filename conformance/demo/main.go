@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -76,13 +77,13 @@ func ensureBinaries(binDir, fallbackDir string) (string, error) {
 	if allExist {
 		return filepath.Abs(binDir)
 	}
-	if err := os.MkdirAll(fallbackDir, 0o755); err != nil {
+	if err := os.MkdirAll(fallbackDir, 0o750); err != nil {
 		return "", err
 	}
 	for name, pkg := range targets {
-		out, err := exec.Command("go", "build", "-o", filepath.Join(fallbackDir, name), pkg).CombinedOutput()
+		out, err := exec.CommandContext(context.Background(), "go", "build", "-o", filepath.Join(fallbackDir, name), pkg).CombinedOutput() // #nosec G204 -- fixed package list of this repository.
 		if err != nil {
-			return "", fmt.Errorf("build %s: %v\n%s", name, err, out)
+			return "", fmt.Errorf("build %s: %w\n%s", name, err, out)
 		}
 	}
 	return fallbackDir, nil

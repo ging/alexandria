@@ -1,4 +1,4 @@
-// Immutable snapshot of the last accepted listing with its verified packages and head lifecycle parameters.
+// Package domain defines the immutable snapshot of the last accepted listing with its verified packages and head lifecycle parameters.
 // Published atomically by Sync and read by the hot path, so a package is used whole or not at all (§4.4, §4.6, REQ-CLI-007).
 package domain
 
