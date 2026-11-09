@@ -98,7 +98,7 @@ func (r *Release) steps(c domain.Candidate, o ApproveOptions, pInstant timex.Ins
 	}
 	rel := domain.Release{
 		Record: rec, Space: c.Space, Params: c.Params, Manifest: c.Package.Manifest, ManifestSig: sigBytes,
-		Receipt: receipt, SpaceLock: c.Package.SpaceLock, Entries: c.Package.Entries,
+		Receipt: receipt, SpaceLock: c.Package.SpaceLock, Entries: c.Package.Entries, Source: c.Package.Source,
 	}
 	if err := r.d.Releases.AppendRelease(rel, c.ID); err != nil {
 		return lifecycle.Record{}, codes.New(codes.ReleaseAborted, "step 4, release rows: %v", err)

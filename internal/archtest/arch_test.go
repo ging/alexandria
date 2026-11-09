@@ -19,7 +19,7 @@ const module = "github.com/ging/alexandria/"
 var root = filepath.Join("..", "..")
 
 // allowedExternal lists the only non-standard modules production code may import (DP-1).
-var allowedExternal = []string{"modernc.org/sqlite", "github.com/santhosh-tekuri/jsonschema/v6"}
+var allowedExternal = []string{"modernc.org/sqlite", "github.com/santhosh-tekuri/jsonschema/v6", "gopkg.in/yaml.v3"}
 
 // pkgFile is one production Go file with its package directory and imports.
 type pkgFile struct {
@@ -32,7 +32,7 @@ type pkgFile struct {
 func productionFiles(t *testing.T) []pkgFile {
 	t.Helper()
 	var out []pkgFile
-	for _, top := range []string{"internal/core", "internal/server", "internal/client", "internal/clock", "cmd/vhub-server", "cmd/vhub-client"} {
+	for _, top := range []string{"internal/core", "internal/dsl", "internal/server", "internal/client", "internal/clock", "cmd/vhub-server", "cmd/vhub-client", "cmd/vhubc"} {
 		_ = filepath.Walk(filepath.Join(root, top), func(p string, info os.FileInfo, err error) error {
 			if err != nil || info.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
 				return nil
@@ -60,6 +60,8 @@ func layerOf(dir string) string {
 	switch {
 	case strings.HasPrefix(dir, "internal/core"):
 		return "core"
+	case strings.HasPrefix(dir, "internal/dsl"):
+		return "lang"
 	case strings.Contains(dir, "/domain"):
 		return "domain"
 	case strings.Contains(dir, "/app"):
@@ -88,6 +90,7 @@ func TestLayersPointInward(t *testing.T) {
 		"core":   {"/domain", "/app", "/adapters", "internal/clock", "internal/testkit", "internal/server", "internal/client"},
 		"domain": {"/app", "/adapters", "internal/clock", "internal/testkit"},
 		"app":    {"/adapters", "internal/clock", "internal/testkit"},
+		"lang":   {"internal/server", "internal/client", "internal/clock", "internal/testkit"},
 	}
 	for _, f := range productionFiles(t) {
 		for _, imp := range f.imports {

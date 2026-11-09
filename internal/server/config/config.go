@@ -29,6 +29,8 @@ type Server struct {
 	SigningKeyPath string           `json:"signing_key_path"`
 	TokensPath     string           `json:"tokens_path"`
 	ClockFile      string           `json:"clock_file,omitempty"`
+	Compiler       string           `json:"compiler,omitempty"`
+	VendorDir      string           `json:"vendor_dir,omitempty"`
 	Lifecycle      json.RawMessage  `json:"lifecycle,omitempty"`
 	Defaults       lifecycle.Params `json:"-"`
 }
@@ -57,7 +59,7 @@ func Load(path string) (Server, error) {
 		return Server{}, fmt.Errorf("server.json lifecycle: %v", errs[0])
 	}
 	dir := filepath.Dir(path)
-	for _, p := range []*string{&c.SQLitePath, &c.BlobDir, &c.SigningKeyPath, &c.TokensPath, &c.ClockFile} {
+	for _, p := range []*string{&c.SQLitePath, &c.BlobDir, &c.SigningKeyPath, &c.TokensPath, &c.ClockFile, &c.VendorDir} {
 		if *p != "" && !filepath.IsAbs(*p) {
 			*p = filepath.Join(dir, *p)
 		}

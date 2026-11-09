@@ -85,7 +85,7 @@ func compileContext(d Deps) (CompileContext, error) {
 	for _, r := range rels {
 		v := r.Record.Version
 		if ctx.Latest == nil || semver.Less(*ctx.Latest, v) {
-			ctx.Latest = &v
+			ctx.Latest, ctx.Previous = &v, r.Source
 		}
 		ctx.Space = r.Space
 	}

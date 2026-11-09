@@ -35,3 +35,9 @@ El único código no alcanzable en la PoC es:
 | **Q15** | Quién sirve el DID document del hub y en qué ruta (`G1`) | No | **DP-4**: `vhub-server` sirve `GET /.well-known/did.json` generado desde `Signer.PublishedKeys()` (`internal/server/adapters/http_did`). |
 | **Q16** | Configuración del `vhub-server` (`G2`) | No | **DP-12**: `config/server.json` validado con `config/server.schema.json` (`internal/server/config`). |
 | **Q17** | Interfaz de `TransparencyLog` y `ReceiptVerifier` (`G5`) | Sí | **DP-8**: puertos definidos en `internal/server/app/ports.go` e `internal/client/app/ports.go`. |
+
+---
+
+## 3. Especificación del lenguaje de perfiles
+
+La revisión del borrador rev. 2 está en [`PROFILES_DSL.md`](PROFILES_DSL.md) §4 (R1–R15). Los puntos que bloquean el ejemplo §30 son R1 (binding `internal` de `dcp` imposible; formato de vendorizado sin definir) y R2–R3 (Apéndice A de la rev. 1, `lifecycle` en dos sitios). R13–R15 son incoherencias con la spec de vhub 0.2.1.

@@ -5,6 +5,7 @@ package f6
 import (
 	"bufio"
 	"bytes"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -83,16 +84,19 @@ var (
 	order   = []string{"m1 odrl:use", "m2 ex:access", "m3 odrl:read"}
 )
 
-// contractRequest builds a ContractRequestMessage using action.
+// Profile is the policy profile every F6 offer and agreement declares (governance rule of the language, §5).
+const Profile = "https://example.com/odrl/profile/f6"
+
+// contractRequest builds a ContractRequestMessage whose profiled offer uses action.
 func contractRequest(action string) []byte {
-	return []byte(`{"@context":["https://w3id.org/dspace/2025/1/context.jsonld"],"@type":"ContractRequestMessage","consumerPid":"urn:uuid:c-1",` +
-		`"offer":{"@id":"urn:uuid:offer-1","@type":"Offer","target":"urn:uuid:ds-1","permission":[{"action":"` + action + `"}]},"callbackAddress":"http://consumer/cb"}`)
+	return []byte(`{"@context":["https://w3id.org/dspace/2025/1/context.jsonld","` + Profile + `/context.jsonld"],"@type":"ContractRequestMessage","consumerPid":"urn:uuid:c-1",` +
+		`"offer":{"@id":"urn:uuid:offer-1","@type":"Offer","profile":"` + Profile + `","target":"urn:uuid:ds-1","permission":[{"action":"` + action + `"}]},"callbackAddress":"http://consumer/cb"}`)
 }
 
 // agreement builds the ContractAgreementMessage of A1.
 func agreement() []byte {
 	return []byte(`{"@context":["https://w3id.org/dspace/2025/1/context.jsonld"],"@type":"ContractAgreementMessage","providerPid":"urn:uuid:p-1","consumerPid":"urn:uuid:c-1",` +
-		`"agreement":{"@id":"urn:uuid:A1","@type":"Agreement","target":"urn:uuid:ds-1","permission":[{"action":"ex:access"}]},"callbackAddress":"http://provider/cb"}`)
+		`"agreement":{"@id":"urn:uuid:A1","@type":"Agreement","profile":"` + Profile + `/1.0.0","target":"urn:uuid:ds-1","permission":[{"action":"ex:access"}]},"callbackAddress":"http://provider/cb"}`)
 }
 
 // transfer builds the TransferRequestMessage of A1.
@@ -100,12 +104,18 @@ func transfer() []byte {
 	return []byte(`{"@context":["https://w3id.org/dspace/2025/1/context.jsonld"],"@type":"TransferRequestMessage","consumerPid":"urn:uuid:t-1","agreementId":"urn:uuid:A1","format":"HTTP_PULL","callbackAddress":"http://consumer/cb"}`)
 }
 
-// Draft builds the Part 5.1 draft of a version admitting the given actions.
-func Draft(v string, acts ...string) []byte {
-	enum, _ := json.Marshal(acts)
-	return []byte(`{"space":"https://example.com/spaces/demo","version":"` + v + `","slots":[{"slot":"odrl","obligation":"mandatory","profiles":["https://example.com/profiles/odrl/` + v + `"]}],` +
-		`"files":[{"path":"schemas/policy.schema.json","media_type":"application/schema+json","role":"json-schema","slot":"odrl","applies_to":["policy_intake"],` +
-		`"content":{"type":"object","properties":{"action":{"enum":` + string(enum) + `}},"required":["action"]}}]}`)
+// drafts holds the F6 releases written in the eunomia.profiles/v1 language.
+//
+//go:embed drafts/*.yaml
+var drafts embed.FS
+
+// Draft returns the YAML bundle of an F6 release (v1.0.0 or v2.0.0).
+func Draft(v string) []byte {
+	b, err := drafts.ReadFile("drafts/v" + v + ".yaml")
+	if err != nil {
+		panic(err)
+	}
+	return b
 }
 
 // logf writes progress when a log is set.
@@ -292,13 +302,13 @@ func Run(e Env) ([]Row, error) {
 	if err := e.setClock("2026-09-01T10:00:00Z"); err != nil {
 		return nil, err
 	}
-	if err := e.publish(Draft("1.0.0", "odrl:use", "ex:access")); err != nil {
+	if err := e.publish(Draft("1.0.0")); err != nil {
 		return nil, err
 	}
 	if err := e.setClock("2026-10-01T10:00:00Z"); err != nil {
 		return nil, err
 	}
-	if err := e.publish(Draft("2.0.0", "odrl:use", "odrl:read")); err != nil {
+	if err := e.publish(Draft("2.0.0")); err != nil {
 		return nil, err
 	}
 	steps := []struct {

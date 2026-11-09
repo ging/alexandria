@@ -125,6 +125,16 @@ make test conformance trace
 make demo
 ```
 
+### Lenguaje de perfiles (YAML → artefactos)
+
+Los vocabularios se escriben en YAML (`eunomia.profiles/v1`) y los artefactos se generan al vuelo:
+
+```bash
+go run ./cmd/vhubc compile -o out internal/dsl/testdata/colors.profile.yaml
+```
+
+Con `"compiler": "dsl"` en `server.json`, el hub acepta borradores YAML. Detalles y revisión de la especificación en [`PROFILES_DSL.md`](PROFILES_DSL.md).
+
 ### Objetivos del `Makefile`
 
 | Comando | Descripción |

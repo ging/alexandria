@@ -127,6 +127,7 @@ func (a *Authoring) Propose(p domain.Principal, id string) (domain.Candidate, er
 	if err != nil {
 		return domain.Candidate{}, err
 	}
+	comp.Source = d.Doc
 	recs, err := a.d.Releases.Records()
 	if err != nil {
 		return domain.Candidate{}, err

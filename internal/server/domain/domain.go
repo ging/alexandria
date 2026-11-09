@@ -118,6 +118,7 @@ type Compiled struct {
 	SpaceLock []byte            `json:"space_lock"`
 	Files     map[string][]byte `json:"files"`
 	Entries   []pkgv.File       `json:"entries"`
+	Source    []byte            `json:"source,omitempty"`
 }
 
 // Release is an immutable published version.
@@ -130,6 +131,7 @@ type Release struct {
 	Receipt     []byte           `json:"receipt"`
 	SpaceLock   []byte           `json:"space_lock"`
 	Entries     []pkgv.File      `json:"entries"`
+	Source      []byte           `json:"source,omitempty"`
 }
 
 // Revocation is the signed addition of revoked_from to a release (REQ-HUB-007).

@@ -5,7 +5,7 @@ Generado automáticamente por `go run ./conformance/trace`.
 ## Resumen de cobertura
 
 - **Requisitos normativos (F2, F3, F4):** 61 / 61 cubiertos con módulos y pruebas `TestT_*`.
-- **Paquetes de producción verificados (`cmd/` + `internal/`):** 43 paquetes con referencia explícita a `REQ-*`.
+- **Paquetes de producción verificados (`cmd/` + `internal/`):** 44 paquetes con referencia explícita a `REQ-*`.
 - **Códigos del catálogo cerrado F5:** 63 / 64 cubiertos con casos negativos `N-<CÓDIGO>` (1 inalcanzable en la PoC por DP-7 y documentado en `OPEN_QUESTIONS.md`).
 
 ## 1. Trazabilidad Requisito → Sección → Módulo(s) → Prueba(s) `T-*`
@@ -21,10 +21,10 @@ Generado automáticamente por `go run ./conformance/trace`.
 | `REQ-SYS-007` | §2.11, §3.3, §4.6, §4.7 | `internal/client/domain`, `internal/core/lifecycle` | `TestT_SYS_007_VersionRejectsOnlyAfterEnforcedPlusLease (internal/client/app/edge_test.go)`, `TestT_SYS_007_ContractOnlyAfterEnforcedPlusLease (internal/core/lifecycle/lifecycle_test.go)` |
 | `REQ-SYS-008` | §2.11, §4.5 | `internal/client/domain` | `TestT_SYS_008_FailClosedRejectsEverything (internal/client/app/edge_test.go)` |
 | `REQ-SYS-009` | §2.11, §3.4, §4.4.1 | `internal/core/did`, `internal/core/sign` | `TestT_SYS_009_UnpublishedKeyNeverTrusted (internal/client/app/sync_test.go)` |
-| `REQ-HUB-001` | §2.10, §3.8 | `internal/core/lifecycle`, `internal/server/adapters/compiler_poc`, `internal/server/app` | `TestT_HUB_001_NegativeDraftCorpus (internal/server/app/app_test.go)`, `TestT_HUB_001_N4AndN5OnPropose (internal/server/app/app_test.go)` |
+| `REQ-HUB-001` | §2.10, §3.8 | `internal/core/lifecycle`, `internal/server/adapters/compiler_dsl`, `internal/server/adapters/compiler_poc`, `internal/server/app` | `TestT_HUB_001_NegativeDraftCorpus (internal/server/app/app_test.go)`, `TestT_HUB_001_N4AndN5OnPropose (internal/server/app/app_test.go)` |
 | `REQ-HUB-002` | §3.6, §3.8 | `internal/server/app`, `internal/server/domain` | `TestT_HUB_002_CandidateImmutableAfterDraftEdit (internal/server/app/app_test.go)`, `TestT_HUB_002_ApproveTwiceInvalidState (internal/server/app/app_test.go)` |
 | `REQ-HUB-003` | §3.6, §3.8 | `internal/server/app`, `internal/server/domain` | `TestT_HUB_003_EditorCannotApprove (internal/server/app/app_test.go)` |
-| `REQ-HUB-004` | §3.6, §3.8 | `internal/server/adapters/scitt_fake`, `internal/server/app` | `TestT_HUB_004_FaultInjectionPerStep (internal/server/app/app_test.go)`, `TestT_HUB_004_ReleaseVisibleAfterAllSteps (internal/server/app/app_test.go)` |
+| `REQ-HUB-004` | §3.6, §3.8 | `internal/server/adapters/compiler_dsl`, `internal/server/adapters/scitt_fake`, `internal/server/app` | `TestT_HUB_004_FaultInjectionPerStep (internal/server/app/app_test.go)`, `TestT_HUB_004_ReleaseVisibleAfterAllSteps (internal/server/app/app_test.go)` |
 | `REQ-HUB-005` | §3.3, §3.8 | `internal/core/lifecycle`, `internal/server/app` | `TestT_HUB_005_Row1_InitialEnforcedAtNewContent (internal/core/lifecycle/lifecycle_test.go)`, `TestT_HUB_005_Row2_CompatibleInheritsOpenIGW (internal/core/lifecycle/lifecycle_test.go)`, `TestT_HUB_005_Row2_CompatibleAfterIGWUsesNewContent (internal/core/lifecycle/lifecycle_test.go)`, `TestT_HUB_005_Row3_GraceOnCompatible (internal/core/lifecycle/lifecycle_test.go)`, `TestT_HUB_005_Row4_EmergencyOnCompatible (internal/core/lifecycle/lifecycle_test.go)`, `TestT_HUB_005_Row5_BreakingDefaultGrace (internal/core/lifecycle/lifecycle_test.go)`, `TestT_HUB_005_Row6_BreakingExplicitGrace (internal/core/lifecycle/lifecycle_test.go)`, `TestT_HUB_005_Row7_ZeroGraceWithoutEmergency (internal/core/lifecycle/lifecycle_test.go)`, `TestT_HUB_005_Row8_EmergencyEnforcesAtNewContent (internal/core/lifecycle/lifecycle_test.go)`, `TestT_HUB_005_Row8_EmergencyRequiresJustification (internal/core/lifecycle/lifecycle_test.go)`, `TestT_HUB_005_Row9_EmergencyWithGrace (internal/core/lifecycle/lifecycle_test.go)`, `TestT_HUB_005_ApproveUsesPublicationInstant (internal/server/app/app_test.go)` |
 | `REQ-HUB-006` | §3.3, §3.8 | `internal/core/lifecycle`, `internal/server/app` | `TestT_HUB_006_Date1NonMonotonic (internal/core/lifecycle/lifecycle_test.go)`, `TestT_HUB_006_Date2TooManyVersions (internal/core/lifecycle/lifecycle_test.go)`, `TestT_HUB_006_F6ApprovalPasses (internal/core/lifecycle/lifecycle_test.go)`, `TestT_HUB_006_ApprovalRejectedOnDate1 (internal/server/app/app_test.go)` |
 | `REQ-HUB-007` | §3.3, §3.8 | `internal/core/lifecycle`, `internal/server/app` | `TestT_HUB_007_MergeKeepsDatesAndContinuityDetectsChanges (internal/core/lifecycle/lifecycle_test.go)`, `TestT_HUB_007_DatesStableAcrossListings (internal/server/app/app_test.go)` |
@@ -109,6 +109,7 @@ Generado automáticamente por `go run ./conformance/trace`.
 | `internal/server` | `REQ-HUB-008` |
 | `internal/server/adapters/auth_static` | `REQ-HUB-017` |
 | `internal/server/adapters/blob_fs` | `REQ-HUB-011`, `REQ-SYS-005` |
+| `internal/server/adapters/compiler_dsl` | `REQ-HUB-001`, `REQ-HUB-004` |
 | `internal/server/adapters/compiler_poc` | `REQ-HUB-001` |
 | `internal/server/adapters/http_did` | `REQ-HUB-010`, `REQ-HUB-015` |
 | `internal/server/adapters/http_pub` | `REQ-HUB-011`, `REQ-HUB-016`, `REQ-SYS-005` |

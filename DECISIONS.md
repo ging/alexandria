@@ -41,3 +41,9 @@ Este documento recoge las 15 decisiones de la PoC fijadas por el prompt de imple
    - En lugar de `httputil.ReverseProxy` (que inyecta `X-Forwarded-For` o reescribe `User-Agent`), `internal/client/adapters/proxy_dsp` usa `http.Transport.RoundTrip` directo copiando los bytes exactos del cuerpo y las cabeceras de entrada/salida, añadiendo únicamente `VHub-Verdict` cuando corresponde según §4.8.
 7. **Cabecera `Date` del servidor generada desde `timex.Clock`:**
    - `internal/server/adapters/httpx` fija la cabecera HTTP `Date` a partir del `timex.Clock` inyectado en el servidor, permitiendo probar determinísticamente la estimación de deriva de reloj y la emisión de `CLOCK_SKEW_EXCEEDED` (`REQ-CLI-025`) con `file_clock`.
+
+8. **Lenguaje de perfiles `eunomia.profiles/v1` como compilador del hub (sustituye opcionalmente a DP-6):**
+   - `internal/dsl` implementa el lenguaje YAML (`OdrlProfile`, `SpaceProfile`; sin `ConformanceSuite`) con N1–N5 y genera `vocab.ttl`, `context.jsonld`, `shapes.ttl`, `schema.json`, `prof.ttl`, `spec.html`, Cedar y los artefactos del espacio. `cmd/vhubc` los genera desde la línea de comandos.
+   - `internal/server/adapters/compiler_dsl` lo conecta al puerto `ProfileCompiler`; se activa con `"compiler": "dsl"` en `server.json`. El e2e F6 usa ya borradores YAML (`conformance/f6/drafts`).
+   - Para N4, cada release conserva su fuente (`Release.Source`) y el hub la pasa como `CompileContext.Previous`.
+   - `gopkg.in/yaml.v3` entra en la lista de DP-1 solo para leer YAML. La revisión de la especificación y el resto de decisiones están en [`PROFILES_DSL.md`](PROFILES_DSL.md).

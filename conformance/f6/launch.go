@@ -35,9 +35,9 @@ func writeJSON(path string, v any) error {
 func Routes() []map[string]any {
 	return []map[string]any{
 		{"listener": "dsp-ingress", "match": map[string]string{"method": "POST", "path": "/negotiations/request"}, "message": "ContractRequestMessage",
-			"gates": []string{"dsp_message", "policy_intake"}, "mode": "enforce", "body": map[string]string{"select": "$.offer.permission[0]"}},
+			"gates": []string{"dsp_message", "policy_intake"}, "mode": "enforce", "body": map[string]string{"select": "$.offer"}},
 		{"listener": "dsp-egress", "match": map[string]string{"method": "POST", "path": "/negotiations/:consumerPid/agreement"}, "message": "ContractAgreementMessage",
-			"gates": []string{"dsp_message", "policy_intake"}, "mode": "enforce", "body": map[string]string{"select": "$.agreement.permission[0]"}},
+			"gates": []string{"dsp_message", "policy_intake"}, "mode": "enforce", "body": map[string]string{"select": "$.agreement"}},
 		{"listener": "dsp-ingress", "match": map[string]string{"method": "POST", "path": "/transfers/request"}, "message": "TransferRequestMessage",
 			"gates": []string{"dsp_message", "agreement_admission"}, "mode": "enforce"},
 	}
@@ -73,7 +73,7 @@ func Launch(binDir, work string, log io.Writer) (Env, func(), error) {
 	_ = writeJSON(filepath.Join(work, "tokens.json"), tokens)
 	_ = writeJSON(filepath.Join(work, "server.json"), map[string]any{
 		"listen": fmt.Sprintf("127.0.0.1:%d", hub), "public_base_url": e.HubURL, "did": did,
-		"sqlite_path": "hub/hub.db", "blob_dir": "hub/blobs", "signing_key_path": "hub/hub.key", "tokens_path": "tokens.json",
+		"sqlite_path": "hub/hub.db", "blob_dir": "hub/blobs", "signing_key_path": "hub/hub.key", "tokens_path": "tokens.json", "compiler": "dsl",
 	})
 	_ = os.WriteFile(filepath.Join(work, "credentials.json"), []byte(`{"token":"member-token"}`), 0o600)
 	_ = writeJSON(filepath.Join(work, "config.json"), map[string]any{

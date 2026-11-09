@@ -1,0 +1,66 @@
+dsl: eunomia.profiles/v1
+kind: OdrlProfile
+
+profile:
+  id: https://example.com/odrl/profile/colors
+  version: 0.1.0
+  title:
+    en: Color Labels ODRL Profile
+    es: Perfil ODRL de etiquetas de color
+  description:
+    en: ODRL profile for applying colour labels to assets.
+  publisher: GING-DIT, Universidad Politécnica de Madrid
+  license: https://creativecommons.org/licenses/by/4.0/
+  base_url: https://example.com/odrl/profile/colors
+
+namespaces:
+  col: https://example.com/ns/colors#
+
+adopted:
+  left_operands:
+    - term: odrl:dateTime
+      signature:
+        datatype: xsd:dateTime
+        operators: [eq, lt, lteq, gt, gteq]
+
+terms:
+  - id: putColor
+    kind: action
+    included_in: odrl:use
+    label: { en: Put color }
+    definition:
+      en: To assign a colour label to the Asset.
+
+  - id: color
+    kind: left_operand
+    label: { en: Color }
+    definition:
+      en: The colour label assigned by the action.
+    signature:
+      value_kind: iri
+      values: [col:red, col:green, col:blue, col:yellow]
+      operators: [eq, neq]
+    enforcement:
+      cedar_path: context.color
+      pdp_level: PDP-4
+      eval_timing: once
+
+  - id: red
+    kind: right_operand
+    label: { en: Red }
+    definition: { en: The colour red (#FF0000). }
+  - id: green
+    kind: right_operand
+    label: { en: Green }
+    definition: { en: The colour green (#00FF00). }
+  - id: blue
+    kind: right_operand
+    label: { en: Blue }
+    definition: { en: The colour blue (#0000FF). }
+  - id: yellow
+    kind: right_operand
+    label: { en: Yellow }
+    definition: { en: The colour yellow (#FFFF00). }
+
+rules:
+  actions: closed        # closed | open

@@ -12,8 +12,10 @@ import (
 
 	"github.com/ging/alexandria/internal/core/did"
 	"github.com/ging/alexandria/internal/core/timex"
+	"github.com/ging/alexandria/internal/dsl"
 	"github.com/ging/alexandria/internal/server/adapters/auth_static"
 	"github.com/ging/alexandria/internal/server/adapters/blob_fs"
+	"github.com/ging/alexandria/internal/server/adapters/compiler_dsl"
 	"github.com/ging/alexandria/internal/server/adapters/compiler_poc"
 	"github.com/ging/alexandria/internal/server/adapters/http_did"
 	"github.com/ging/alexandria/internal/server/adapters/http_pub"
@@ -93,7 +95,7 @@ func New(deps Deps) (*Module, error) {
 		Blobs:      blobs,
 		Log:        scitt_fake.Log{Signer: signer, Clock: deps.Clock},
 		Signer:     signer,
-		Compiler:   compiler_poc.Compiler{Defaults: cfg.Defaults},
+		Compiler:   profileCompiler(cfg),
 		Events:     store.Events(),
 		Clock:      deps.Clock,
 		DID:        did.DID(cfg.DID),
@@ -111,6 +113,18 @@ func New(deps Deps) (*Module, error) {
 		did:     cfg.DID,
 		listen:  cfg.Listen,
 	}, nil
+}
+
+// profileCompiler selects the draft compiler: the YAML language (dsl) or the PoC JSON drafts (poc, the default).
+func profileCompiler(cfg config.Server) app.ProfileCompiler {
+	if cfg.Compiler != "dsl" {
+		return compiler_poc.Compiler{Defaults: cfg.Defaults}
+	}
+	c := compiler_dsl.Compiler{}
+	if cfg.VendorDir != "" {
+		c.Vendor = dsl.FSVendor{FS: os.DirFS(cfg.VendorDir)}
+	}
+	return c
 }
 
 // Name returns the module identifier.

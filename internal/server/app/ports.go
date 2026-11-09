@@ -79,8 +79,9 @@ type Signer interface {
 
 // CompileContext is what N4 and N2 need to know about published versions.
 type CompileContext struct {
-	Latest *semver.Version
-	Space  string
+	Latest   *semver.Version
+	Space    string
+	Previous []byte
 }
 
 // ProfileCompiler validates drafts (N1–N5) and compiles them into a package (DP-6).

@@ -58,13 +58,18 @@ type Server struct {
 
 // NewServer builds a hub whose clock starts at t0.
 func NewServer(t0 string) *Server {
+	return NewServerWith(t0, compiler_poc.Compiler{Defaults: lifecycle.Defaults()})
+}
+
+// NewServerWith builds a hub whose clock starts at t0 and that compiles drafts with c.
+func NewServerWith(t0 string, c app.ProfileCompiler) *Server {
 	db := NewMemDB()
 	clk := NewClock(t0)
 	signer := NewKeySigner(HubDID)
 	hub := app.New(app.Deps{
 		Drafts: MemDrafts{db}, Candidates: MemCandidates{db}, Releases: MemReleases{db}, Listings: MemListings{db},
 		Blobs: MemBlobs{db}, Log: FailingLog{scitt_fake.Log{Signer: signer, Clock: clk}, db}, Signer: signer,
-		Compiler: compiler_poc.Compiler{Defaults: lifecycle.Defaults()}, Events: MemEvents{db}, Clock: clk, DID: HubDID,
+		Compiler: c, Events: MemEvents{db}, Clock: clk, DID: HubDID,
 		Defaults: lifecycle.Defaults(),
 	})
 	return &Server{Hub: hub, DB: db, Clock: clk, Signer: signer}
