@@ -114,7 +114,7 @@ func (e *Edge) Gate(g domain.Gate, body, selected []byte, unparseable bool, snap
 	}
 	in := domain.ClassifyInput{Snap: snap, State: state, Degraded: degraded, TL: tL, Unparseable: unparseable}
 	return domain.Classify(in, func(v lifecycle.Record) domain.EvalResult {
-		return e.Evaluator.Evaluate(selected, g, snap.Package(v))
+		return e.Evaluator.Evaluate(domain.Message{Root: body, Selected: selected}, g, snap.Package(v))
 	})
 }
 

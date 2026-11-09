@@ -41,7 +41,7 @@ type DIDResolver interface {
 
 // Evaluator evaluates a selected body against one package for one gate, without network.
 type Evaluator interface {
-	Evaluate(body []byte, g domain.Gate, p *pkgv.Package) domain.EvalResult
+	Evaluate(m domain.Message, g domain.Gate, p *pkgv.Package) domain.EvalResult
 }
 
 // ReceiptVerifier checks manifest.receipt for a digest with the hub keys (shape: Q2, DP-8).

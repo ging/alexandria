@@ -47,3 +47,5 @@ Este documento recoge las 15 decisiones de la PoC fijadas por el prompt de imple
    - `internal/server/adapters/compiler_dsl` lo conecta al puerto `ProfileCompiler`; se activa con `"compiler": "dsl"` en `server.json`. El e2e F6 usa ya borradores YAML (`conformance/f6/drafts`).
    - Para N4, cada release conserva su fuente (`Release.Source`) y el hub la pasa como `CompileContext.Previous`.
    - `gopkg.in/yaml.v3` entra en la lista de DP-1 solo para leer YAML. La revisión de la especificación y el resto de decisiones están en [`PROFILES_DSL.md`](PROFILES_DSL.md).
+
+9. **JSON-LD con `json-gold` (sin red):** `internal/core/jsonld` envuelve `github.com/piprate/json-gold` (resuelto al fork de trustbloc que ya usa Alexandria) con un `DocumentLoader` que solo sirve documentos dados. El compilador lo usa en N5 para comprobar `context.jsonld`, y `evaluator_poc` para expandir el mensaje completo con los contextos del manifiesto (`CONTEXT_NOT_IN_PACKAGE`, `REQ-CLI-010`). El puerto `Evaluator` recibe ahora `domain.Message{Root, Selected}`. `json-gold` entra en la lista de DP-1. Turtle y SHACL quedan pendientes (ver `PROFILES_DSL.md` §4, Límites).

@@ -1,14 +1,14 @@
-// PoC evaluator: runs json-schema artefacts offline and only checks @context URLs against the manifest for SHACL slots.
-// SHACL and JSON-LD artefacts are ignored with a POC_EVAL_UNSUPPORTED_ROLE info event; the §4.7 slot algorithm is kept (DP-7, REQ-CLI-010).
+// PoC evaluator: runs json-schema artefacts offline and, for SHACL slots, expands the message with json-gold restricted to the manifest contexts.
+// SHACL shapes themselves are not run (POC_EVAL_UNSUPPORTED_ROLE info event); the §4.7 slot algorithm is kept (DP-7, REQ-CLI-010).
 package evaluator_poc
 
 import (
-	"encoding/json"
 	"sync"
 
 	"github.com/ging/alexandria/internal/client/app"
 	"github.com/ging/alexandria/internal/client/domain"
 	"github.com/ging/alexandria/internal/core/codes"
+	"github.com/ging/alexandria/internal/core/jsonld"
 	"github.com/ging/alexandria/internal/core/pkgv"
 	"github.com/ging/alexandria/internal/core/schemas"
 	"github.com/ging/alexandria/internal/core/timex"
@@ -16,11 +16,12 @@ import (
 
 // Evaluator compiles package schemas once and validates bodies without network.
 type Evaluator struct {
-	Events app.EventSink
-	Clock  timex.Clock
-	Space  string
-	cache  sync.Map
-	warned sync.Map
+	Events  app.EventSink
+	Clock   timex.Clock
+	Space   string
+	cache   sync.Map
+	loaders sync.Map
+	warned  sync.Map
 }
 
 var _ app.Evaluator = (*Evaluator)(nil)
@@ -40,7 +41,7 @@ func (e *Evaluator) compiled(p *pkgv.Package, f pkgv.File) (*schemas.Schema, err
 }
 
 // Evaluate is evaluate(m, g, v) of §4.7 for the PoC roles.
-func (e *Evaluator) Evaluate(body []byte, g domain.Gate, p *pkgv.Package) domain.EvalResult {
+func (e *Evaluator) Evaluate(m domain.Message, g domain.Gate, p *pkgv.Package) domain.EvalResult {
 	if p == nil {
 		return domain.EvalResult{Findings: []domain.Finding{{Slot: "odrl", Source: "loader", Severity: "Violation", Message: "package not available"}}}
 	}
@@ -54,7 +55,7 @@ func (e *Evaluator) Evaluate(body []byte, g domain.Gate, p *pkgv.Package) domain
 			if f.Slot != s.Slot || !contains(f.AppliesTo, string(g)) {
 				continue
 			}
-			found = append(found, e.apply(body, p, f, s.Slot)...)
+			found = append(found, e.apply(m, p, f, s.Slot)...)
 		}
 		violated := false
 		for _, f := range found {
@@ -71,8 +72,8 @@ func (e *Evaluator) Evaluate(body []byte, g domain.Gate, p *pkgv.Package) domain
 	return res
 }
 
-// apply runs one artefact against the body.
-func (e *Evaluator) apply(body []byte, p *pkgv.Package, f pkgv.File, slot string) []domain.Finding {
+// apply runs one artefact against the message.
+func (e *Evaluator) apply(m domain.Message, p *pkgv.Package, f pkgv.File, slot string) []domain.Finding {
 	switch f.Role {
 	case "json-schema":
 		s, err := e.compiled(p, f)
@@ -80,42 +81,43 @@ func (e *Evaluator) apply(body []byte, p *pkgv.Package, f pkgv.File, slot string
 			return []domain.Finding{{Slot: slot, Source: "json-schema", Severity: "Violation", Message: "schema " + f.Path + ": " + err.Error()}}
 		}
 		var out []domain.Finding
-		for _, l := range s.Errors(body) {
+		for _, l := range s.Errors(m.Selected) {
 			out = append(out, domain.Finding{Slot: slot, Source: "json-schema", Severity: "Violation", Path: l.Path, Message: l.Message})
 		}
 		return out
 	case "shacl":
 		e.warnOnce(p, f)
-		return contextFindings(body, p.Manifest.URLs(), slot)
+		return e.expansionFindings(m.Root, p, slot)
 	}
 	e.warnOnce(p, f)
 	return nil
 }
 
-// contextFindings reports every @context URL not declared in the manifest (D-PVP-1), without any network access.
-func contextFindings(body []byte, allowed map[string]bool, slot string) []domain.Finding {
-	var obj map[string]any
-	if json.Unmarshal(body, &obj) != nil {
+// loader returns the offline loader of a package: only the contexts its manifest declares with url (D-PVP-1).
+func (e *Evaluator) loader(p *pkgv.Package) *jsonld.Loader {
+	if l, ok := e.loaders.Load(p.Digest); ok {
+		return l.(*jsonld.Loader)
+	}
+	l := jsonld.NewLoader()
+	for _, f := range p.Manifest.Files {
+		if f.URL != "" {
+			_ = l.Add(f.URL, p.Raw.Content[f.Path])
+		}
+	}
+	e.loaders.Store(p.Digest, l)
+	return l
+}
+
+// expansionFindings expands the whole message as the SHACL gate would; a context outside the package is CONTEXT_NOT_IN_PACKAGE.
+func (e *Evaluator) expansionFindings(root []byte, p *pkgv.Package, slot string) []domain.Finding {
+	_, err := jsonld.Expand(root, e.loader(p))
+	if err == nil {
 		return nil
 	}
-	var urls []string
-	switch c := obj["@context"].(type) {
-	case string:
-		urls = append(urls, c)
-	case []any:
-		for _, x := range c {
-			if s, ok := x.(string); ok {
-				urls = append(urls, s)
-			}
-		}
+	if url, ok := jsonld.MissingContext(err); ok {
+		return []domain.Finding{{Slot: slot, Source: "loader", Severity: "Violation", Message: "@context " + url + " is not in the package", Code: codes.ContextNotInPackage}}
 	}
-	var out []domain.Finding
-	for _, u := range urls {
-		if !allowed[u] {
-			out = append(out, domain.Finding{Slot: slot, Source: "loader", Severity: "Violation", Message: "@context " + u + " is not in the package", Code: codes.ContextNotInPackage})
-		}
-	}
-	return out
+	return []domain.Finding{{Slot: slot, Source: "loader", Severity: "Violation", Message: "JSON-LD expansion failed: " + err.Error()}}
 }
 
 // warnOnce emits POC_EVAL_UNSUPPORTED_ROLE once per package file.

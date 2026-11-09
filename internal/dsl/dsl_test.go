@@ -374,3 +374,16 @@ func TestClosedListWithoutLeftOperandsForbidsConstraints(t *testing.T) {
 		t.Fatal("a constraint passed a profile without left operands")
 	}
 }
+
+func TestN5ContextAliasesExpandToTermIRIs(t *testing.T) {
+	r := Compile(Options{}, colors(t))
+	expectErrors(t, r)
+	ix := r.Profiles[0]
+	if err := checkContext(ix, artifact(t, r, "profiles/odrl/colors/0.1.0/context.jsonld")); err != nil {
+		t.Fatal(err)
+	}
+	broken := []byte(`{"@context":{"@version":1.1,"col":"https://example.com/ns/other#","putColor":"col:putColor"}}`)
+	if err := checkContext(ix, broken); err == nil {
+		t.Fatal("a context that maps aliases to other IRIs passed")
+	}
+}

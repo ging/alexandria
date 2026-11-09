@@ -29,6 +29,12 @@ type Finding struct {
 	Code     codes.Code `json:"-"`
 }
 
+// Message is what a gate evaluates: Root is the whole message (with its @context), Selected the node of body.select.
+type Message struct {
+	Root     []byte
+	Selected []byte
+}
+
 // EvalResult is evaluate(m, g, v) of §4.7.
 type EvalResult struct {
 	Pass                  bool

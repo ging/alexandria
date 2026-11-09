@@ -395,7 +395,7 @@ func (r *Result) spaceSpec() []byte {
 	return []byte(b.String())
 }
 
-// checkOutputs is N5: JSON parses, generated schemas compile and Turtle is well balanced.
+// checkOutputs is N5: JSON parses, schemas compile, contexts expand offline and Turtle is well balanced.
 func (r *Result) checkOutputs() {
 	for _, a := range r.Artifacts {
 		var err error
@@ -409,10 +409,23 @@ func (r *Result) checkOutputs() {
 		case a.MediaType == "text/turtle":
 			err = checkTurtle(a.Bytes)
 		}
+		if err == nil && a.Role == "mapping" {
+			err = r.checkMapping(a)
+		}
 		if err != nil {
 			r.Findings.add(r.Space, "N5", Error, CodeOutputInvalid, "", "%s: %v", a.Path, err)
 		}
 	}
+}
+
+// checkMapping runs the JSON-LD check on the context of the profile that produced a mapping artefact.
+func (r *Result) checkMapping(a Artifact) error {
+	for _, ix := range r.Profiles {
+		if a.Path == path.Join(ProfileDir(ix), "context.jsonld") {
+			return checkContext(ix, a.Bytes)
+		}
+	}
+	return nil
 }
 
 // sortedKeysOf returns the keys of a byte map in order.

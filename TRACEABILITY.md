@@ -5,14 +5,14 @@ Generado automáticamente por `go run ./conformance/trace`.
 ## Resumen de cobertura
 
 - **Requisitos normativos (F2, F3, F4):** 61 / 61 cubiertos con módulos y pruebas `TestT_*`.
-- **Paquetes de producción verificados (`cmd/` + `internal/`):** 44 paquetes con referencia explícita a `REQ-*`.
+- **Paquetes de producción verificados (`cmd/` + `internal/`):** 45 paquetes con referencia explícita a `REQ-*`.
 - **Códigos del catálogo cerrado F5:** 63 / 64 cubiertos con casos negativos `N-<CÓDIGO>` (1 inalcanzable en la PoC por DP-7 y documentado en `OPEN_QUESTIONS.md`).
 
 ## 1. Trazabilidad Requisito → Sección → Módulo(s) → Prueba(s) `T-*`
 
 | Requisito | Sección | Módulo(s) | Prueba(s) `T-*` |
 | --- | --- | --- | --- |
-| `REQ-SYS-001` | §2.11, §4.6, §4.7, §4.9 | `internal/client/app`, `internal/client/domain`, `internal/clock`, `internal/core/semver`, `internal/core/timex` | `TestT_SYS_001_TwoClientsSameOutputs (internal/client/app/edge_test.go)` |
+| `REQ-SYS-001` | §2.11, §4.6, §4.7, §4.9 | `internal/client/app`, `internal/client/domain`, `internal/clock`, `internal/core/jsonld`, `internal/core/semver`, `internal/core/timex` | `TestT_SYS_001_TwoClientsSameOutputs (internal/client/app/edge_test.go)` |
 | `REQ-SYS-002` | §2.11, §4.7 | `cmd/vhub-client`, `internal/client`, `internal/client/adapters/http_hub`, `internal/client/app` | `TestT_SYS_002_EdgeHasNoHubAccess (internal/client/app/edge_test.go)` |
 | `REQ-SYS-003` | §2.11, §4.2, §4.8 | `internal/client/adapters/proxy_dsp`, `internal/client/app` | `TestT_SYS_003_RequestForwardedByteForByte (internal/client/adapters/proxy_dsp/proxy_test.go)` |
 | `REQ-SYS-004` | §2.11, §3.3, §4.6 | `internal/core/lifecycle` | `TestT_SYS_004_FrontiersComeFromListing (internal/client/app/edge_test.go)` |
@@ -51,7 +51,7 @@ Generado automáticamente por `go run ./conformance/trace`.
 | `REQ-CLI-007` | §4.4, §4.12 | `internal/client/app`, `internal/client/domain`, `internal/core/ni`, `internal/core/pkgv` | `TestT_CLI_007_S11FileByteAltered (internal/client/app/sync_test.go)`, `TestT_CLI_007_S12ExtraFile (internal/client/app/sync_test.go)`, `TestT_CLI_007_S13VersionIncoherent (internal/client/app/sync_test.go)`, `TestT_CLI_007_PartialDownloadNeverUsed (internal/client/app/sync_test.go)` |
 | `REQ-CLI-008` | §4.5, §4.12 | `internal/client/domain` | `TestT_CLI_008_StateMachineCells (internal/client/app/edge_test.go)`, `TestT_CLI_008_E2AtExactExpiry (internal/client/app/edge_test.go)` |
 | `REQ-CLI-009` | §4.6, §4.12 | `internal/core/lifecycle` | `TestT_CLI_009_BoundariesWithLease (internal/core/lifecycle/lifecycle_test.go)`, `TestT_CLI_009_RevocationBoundaryWithLease (internal/core/lifecycle/lifecycle_test.go)` |
-| `REQ-CLI-010` | §4.7, §4.12 | `internal/client/adapters/evaluator_poc`, `internal/client/app` | `TestT_CLI_010_ContextNotInPackageWithoutNetwork (internal/client/app/edge_test.go)` |
+| `REQ-CLI-010` | §4.7, §4.12 | `internal/client/adapters/evaluator_poc`, `internal/client/app`, `internal/core/jsonld` | `TestT_CLI_010_ContextNotInPackageWithoutNetwork (internal/client/app/edge_test.go)` |
 | `REQ-CLI-011` | §4.7, §4.12 | `internal/client/app`, `internal/client/domain` | `TestT_CLI_011_UnparseableAndNoVersion (internal/client/app/edge_test.go)`, `TestT_CLI_011_RecommendedViolationIsInfo (internal/client/app/edge_test.go)`, `TestT_CLI_011_F6Table (internal/client/app/f6_test.go)` |
 | `REQ-CLI-012` | §4.7, §4.12 | `internal/client/app`, `internal/client/domain` | `TestT_CLI_012_ShadowForwardsWithEventObserveIsSilent (internal/client/app/edge_test.go)`, `TestT_CLI_012_ModeTimesClassification (internal/client/domain/domain_test.go)`, `TestT_CLI_012_CombinationUpToFourGates (internal/client/domain/domain_test.go)`, `TestT_CLI_012_EventsOnlyOutsideObserve (internal/client/domain/domain_test.go)` |
 | `REQ-CLI-013` | §4.8, §4.12 | `internal/client/app`, `internal/client/domain` | `TestT_CLI_013_RejectBodiesPerMessageType (internal/client/app/edge_test.go)`, `TestT_CLI_013_CatalogErrorAndManagementProblem (internal/client/app/edge_test.go)`, `TestT_CLI_013_ForwardAddsNoHeader (internal/client/app/edge_test.go)`, `TestT_CLI_013_HeaderSerialization (internal/client/domain/domain_test.go)` |
@@ -98,6 +98,7 @@ Generado automáticamente por `go run ./conformance/trace`.
 | `internal/core/canon` | `REQ-HUB-010` |
 | `internal/core/codes` | `REQ-CLI-021`, `REQ-HUB-017`, `REQ-HUB-019` |
 | `internal/core/did` | `REQ-CLI-024`, `REQ-HUB-010`, `REQ-SYS-009` |
+| `internal/core/jsonld` | `REQ-CLI-010`, `REQ-SYS-001` |
 | `internal/core/lifecycle` | `REQ-CLI-004`, `REQ-CLI-009`, `REQ-HUB-001`, `REQ-HUB-005`, `REQ-HUB-006`, `REQ-HUB-007`, `REQ-HUB-008`, `REQ-HUB-009`, `REQ-HUB-014`, `REQ-SYS-004`, `REQ-SYS-007` |
 | `internal/core/ni` | `REQ-CLI-006`, `REQ-CLI-007` |
 | `internal/core/pkgv` | `REQ-CLI-006`, `REQ-CLI-007` |

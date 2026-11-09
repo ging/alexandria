@@ -43,7 +43,7 @@ La salida es determinista: las mismas fuentes producen los mismos bytes.
 | N2 | IDs únicos, colisiones con adoptados y de alias, prefijos declarados, id del perfil ≠ namespace, tabla §9.4 operador–tipo, `enforcement` ⇒ firma, un binding por slot, `mandatory` ⇒ gate, `via` sin ciclos, invariantes `LIFECYCLE_*` |
 | N3 | Adoptados contra una copia local de ODRL 2.2 o contra perfiles del bundle; resolución de rangos SemVer (`=`, `^`, `~`); vendorizados desde copia local; artefacto de cada `conformance` presente |
 | N4 | Diff contra la release anterior con los bumps de §14 (perfil y espacio); `TERM_REMOVED`, `TERM_RETIRED_WITHOUT_DEPRECATION`, `NAMESPACE_CHANGED`, versión publicada inmutable |
-| N5 | JSON válido, `schema.json` compila, Turtle bien formado (comprobación estructural, ver Límites en §4) |
+| N5 | JSON válido, `schema.json` compila, `context.jsonld` se procesa con json-gold sin red y cada alias se expande al IRI de su término, Turtle bien formado (comprobación estructural, ver Límites en §4) |
 
 ## 4. Revisión de la especificación
 
@@ -94,7 +94,11 @@ Todos los hallazgos se han comprobado al implementar. Están ordenados por grave
 
 ### Límites de esta implementación
 
-- **N5 sobre Turtle es estructural:** comprueba corchetes, cadenas, IRIs y el punto final, no la sintaxis completa. La validación semántica de SHACL (las filas SHACL del §33) necesita un motor RDF (por ejemplo pyshacl), y vhub-client tampoco lo ejecuta (DP-7).
+- **JSON-LD:** se usa `json-gold`, la implementación de referencia en Go, que el módulo ya tenía a través del fork de trustbloc. Su `DocumentLoader` solo sirve los contextos que declara el manifiesto, así que la expansión nunca sale a la red. La usan el N5 del compilador y `evaluator_poc`, que ahora expande el mensaje completo y detecta también los contextos anidados.
+- **Turtle y SHACL siguen con la comprobación estructural**, por decisión pendiente: en Go no hay librería estándar con licencia limpia.
+  - `knakk/rdf`, la más usada, tiene por licencia una sola frase ("Do what thou wilt shall be the whole of the Law."), que no es una licencia OSI. Descartada.
+  - Las referencias reales son pySHACL/RDFLib y Apache Jena. goRDFlib (BSD-3) es la opción en Go, pero es de un solo autor y reciente.
+  - Hasta decidir, no se ejecuta la semántica SHACL (las filas SHACL del §33), ni en el compilador ni en vhub-client (DP-7).
 - **La copia de ODRL 2.2** (`internal/dsl/odrlvocab.go`) está escrita a mano. Hay que contrastarla con el TTL oficial.
 - **El tipo `datetime` de Cedar** depende de la versión de Cedar.
 

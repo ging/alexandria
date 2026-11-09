@@ -59,7 +59,7 @@ func (a *Audit) OnNewVersion(x lifecycle.Record, snap *domain.Snapshot) {
 		sel, ok := domain.SelectBody(body, "$")
 		for _, at := range []timex.Instant{x.NewContentFrom, x.EnforcedFrom} {
 			c := domain.Classify(domain.ClassifyInput{Snap: &ref, State: domain.Active, TL: at, Unparseable: !ok}, func(v lifecycle.Record) domain.EvalResult {
-				return a.Evaluator.Evaluate(sel, domain.GateCatalog, ref.Package(v))
+				return a.Evaluator.Evaluate(domain.Message{Root: body, Selected: sel}, domain.GateCatalog, ref.Package(v))
 			})
 			code := codes.Code("")
 			switch c.Result {
