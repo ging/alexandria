@@ -131,3 +131,31 @@ func (l lookaheadRegexp) MatchString(s string) bool {
 
 // String returns the original pattern.
 func (l lookaheadRegexp) String() string { return strings.Clone(l.src) }
+
+// Leaf is one validation error with its instance location.
+type Leaf struct {
+	Path    string
+	Message string
+}
+
+// Errors validates doc and returns one leaf per basic-output error, or nil when valid.
+func (s *Schema) Errors(doc []byte) []Leaf {
+	err := s.Validate(doc)
+	if err == nil {
+		return nil
+	}
+	ve, ok := err.(*jsonschema.ValidationError)
+	if !ok {
+		return []Leaf{{Message: err.Error()}}
+	}
+	var out []Leaf
+	for _, u := range ve.BasicOutput().Errors {
+		if u.Error != nil {
+			out = append(out, Leaf{Path: u.InstanceLocation, Message: u.Error.String()})
+		}
+	}
+	if len(out) == 0 {
+		out = append(out, Leaf{Message: err.Error()})
+	}
+	return out
+}

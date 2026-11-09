@@ -114,3 +114,15 @@ func (s *KeySigner) Sign(msg []byte) (sign.Signature, error) {
 
 // Document returns the current DID document.
 func (s *KeySigner) Document() did.Document { return did.NewDocument(s.did, s.PublishedKeys()) }
+
+// SignWith signs msg with kid even if it is no longer published (to forge stale or retired signatures).
+func (s *KeySigner) SignWith(kid string, msg []byte) sign.Signature {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, k := range s.keys {
+		if k.pub.Kid == kid {
+			return sign.Signature{Kid: kid, Alg: sign.AlgEdDSA, Sig: sign.Encode(ed25519.Sign(k.priv, msg))}
+		}
+	}
+	return sign.Signature{}
+}
