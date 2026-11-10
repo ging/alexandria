@@ -1,58 +1,58 @@
-# Tutorial Interactivo en Jupyter Notebooks — Alexandria (`alexandria`, `alexandria-server`, `alexandria-client`, `alexandriac`)
+# Interactive Jupyter Notebook Tutorials — Alexandria (`alexandria`, `alexandria-server`, `alexandria-client`, `alexandriac`)
 
-Esta carpeta contiene **6 Jupyter Notebooks incrementales** (`.ipynb`) que recorren de extremo a extremo todos los flujos de **Alexandria** (`alexandria`, `alexandria-server`, `alexandria-client` y `alexandriac`) realizando **peticiones HTTP reales** contra los binarios Go compilados localmente.
+This directory contains **6 incremental Jupyter Notebooks** (`.ipynb`) that walk end to end through all flows of **Alexandria** (`alexandria`, `alexandria-server`, `alexandria-client`, and `alexandriac`) by sending **real HTTP requests** against the locally compiled Go binaries.
 
-Todos los notebooks ya incluyen las **salidas de ejecución pre-capturadas** (`stdout`, widgets HTML interactivos, códigos HTTP, cabeceras `VHub-Verdict`, manifiestos firmados JCS + Ed25519 y eventos JSONL), por lo que puedes leerlos directamente o volver a ejecutar celda por celda.
+Every notebook comes with **pre-captured execution outputs** (`stdout`, interactive HTML widgets, HTTP status codes, `VHub-Verdict` headers, JCS + Ed25519 signed manifests, and JSONL events), so you can browse them directly or re-run them cell by cell.
 
 ---
 
-## Contenido de la Serie Incremental
+## Incremental Notebook Series
 
-| # | Notebook | Flujos y Peticiones HTTP Cubiertos |
+| # | Notebook | Flows & HTTP Requests Covered |
 | :- | :--- | :--- |
-| **01** | [`01_dsl_y_compilacion_alexandriac.ipynb`](./01_dsl_y_compilacion_alexandriac.ipynb) | Lenguaje declarativo **`eunomia.profiles/v1`** (`OdrlProfile` y `SpaceProfile`), validación en 5 niveles (`N1`–`N5`), compilación determinista de los 8 artefactos con `bin/alexandriac` y evolución de términos (`active -> deprecated -> retired`). |
-| **02** | [`02_alexandria_server_gobernanza_y_pub.ipynb`](./02_alexandria_server_gobernanza_y_pub.ipynb) | API de Gobernanza (`/v1/*`) y Distribución Inmutable (`/pub/*`) en **`alexandria-server`**: identidad `GET /.well-known/did.json`, autenticación Bearer y matriz de roles (`401`/`403`), borradores (`POST/PUT /v1/drafts`) con `ETag`/`If-Match` (`428`/`412`), propuesta de candidatos (`:propose`), aprobación firmada (`:approve`), listado `GET /v1/versions`, redirección `303 See Other` en `/pub/demo` y auditoría en `GET /v1/events`. |
-| **03** | [`03_alexandria_client_sincronizacion_y_proxy_dsp.ipynb`](./03_alexandria_client_sincronizacion_y_proxy_dsp.ipynb) | Sidecar **`alexandria-client`**: protocolo de sincronización verificada **`S1`–`S13`**, API de administración (`GET /status`, `GET /versions`, `GET /metrics`), validación en caliente L7 de mensajes DSP (`ContractRequestMessage`, `ContractOfferMessage`), comparación entre modos `enforce`, `shadow` y `observe`, bloqueo de `@context` externos (`CONTEXT_NOT_IN_PACKAGE`) y emisión de eventos `vhub.verdict`. |
-| **04** | [`04_ciclo_de_vida_f6_transiciones_acuerdos_y_revocacion.ipynb`](./04_ciclo_de_vida_f6_transiciones_acuerdos_y_revocacion.ipynb) | **Escenario Normativo F6 completo** con viaje en el tiempo (`clock_file`, `DP-9`) de septiembre a noviembre de 2026: transición `1.0.0 -> 2.0.0`, ventana de propagación (`Announced`), ventana de gracia (`Transition`) con cabecera RFC 9651 `VHub-Verdict: warning;...;sunset=@1793613600`, captura del acuerdo `urn:uuid:A1` en `dsp-egress`, margen de contrato (`lease_margin`), continuidad de acuerdos tras retirada (`Retired`) y bloqueo tras revocación (`AGREEMENT_REVOCATION_SCHEDULED` -> `AGREEMENT_VERSION_REVOKED`). |
-| **05** | [`05_resiliencia_seguridad_y_casos_negativos.ipynb`](./05_resiliencia_seguridad_y_casos_negativos.ipynb) | Catálogo cerrado de errores **F5 (`N-<CÓDIGO>`)**: invariantes de la tabla de 9 filas de aprobación (`DATES_GRACE_ON_COMPATIBLE`, `DATES_EMERGENCY_ON_COMPATIBLE`, `DATES_ZERO_GRACE_WITHOUT_EMERGENCY`, `DATES_JUSTIFICATION_REQUIRED`, `DATES_EMERGENCY_WITH_GRACE`), invariantes de revocación (`REV-1` a `REV-4`) y máquina de estados del cliente (`Active -> Degraded -> FailClosed` con `CLIENT_FAIL_CLOSED`) ante caída prolongada del Hub. |
-| **06** | [`06_alexandria_wallets_fafnir_e_identityhub.ipynb`](./06_alexandria_wallets_fafnir_e_identityhub.ipynb) | Gateway de Identidad Soberana **`cmd/alexandria`** (`/api/v1/wallet/*`): enlace de wallet (`/is-linked`, `/link`, `/info`), ciclo de vida de claves asimétricas (`/keys`, `:rotate`), gestión de DIDs y Service Endpoints (`/did/:id/endpoints`, `:publish`), manejo de errores estructurados con `originalResponse` de IdentityHub (`409 Conflict`), participantes (`/participants`), credenciales verificables (`/credential`, `/vcs?type=...`) y protocolo DCP (`/dcp/request`). |
+| **01** | [`01_dsl_and_alexandriac_compiler.ipynb`](./01_dsl_and_alexandriac_compiler.ipynb) | Declarative **`eunomia.profiles/v1`** profile DSL (`OdrlProfile` and `SpaceProfile`), 5-level validation (`N1`–`N5`), deterministic compilation of all 8 artifacts with `bin/alexandriac`, and term evolution (`active -> deprecated -> retired`). |
+| **02** | [`02_alexandria_server_governance_and_pub.ipynb`](./02_alexandria_server_governance_and_pub.ipynb) | Governance API (`/v1/*`) and Immutable Distribution (`/pub/*`) on **`alexandria-server`**: `GET /.well-known/did.json` identity, Bearer authentication and role matrix (`401`/`403`), drafts (`POST/PUT /v1/drafts`) with `ETag`/`If-Match` (`428`/`412`), candidate proposal (`:propose`), signed release approval (`:approve`), `GET /v1/versions` listing, `303 See Other` redirect on `/pub/demo`, and `GET /v1/events` audit log. |
+| **03** | [`03_alexandria_client_sync_and_dsp_proxy.ipynb`](./03_alexandria_client_sync_and_dsp_proxy.ipynb) | Sidecar **`alexandria-client`**: verified synchronization protocol **`S1`–`S13`**, Admin API (`GET /status`, `GET /versions`, `GET /metrics`), L7 hot-path validation of DSP messages (`ContractRequestMessage`, `ContractOfferMessage`), comparison of `enforce`, `shadow`, and `observe` modes, blocking external `@context` URIs (`CONTEXT_NOT_IN_PACKAGE`), and `vhub.verdict` event emission. |
+| **04** | [`04_f6_lifecycle_transitions_agreements_and_revocation.ipynb`](./04_f6_lifecycle_transitions_agreements_and_revocation.ipynb) | **Full Normative Scenario F6** with deterministic time travel (`clock_file`, `DP-9`) from September to November 2026: `1.0.0 -> 2.0.0` transition, propagation window (`Announced`), grace window (`Transition`) with RFC 9651 `VHub-Verdict: warning;...;sunset=@1793613600`, `urn:uuid:A1` agreement capture on `dsp-egress`, `lease_margin`, agreement continuity after retirement (`Retired`), and transfer blocking after revocation (`AGREEMENT_REVOCATION_SCHEDULED` -> `AGREEMENT_VERSION_REVOKED`). |
+| **05** | [`05_resilience_security_and_negative_cases.ipynb`](./05_resilience_security_and_negative_cases.ipynb) | Closed error catalog **F5 (`N-<CODE>`)**: 9-row approval table invariants (`DATES_GRACE_ON_COMPATIBLE`, `DATES_EMERGENCY_ON_COMPATIBLE`, `DATES_ZERO_GRACE_WITHOUT_EMERGENCY`, `DATES_JUSTIFICATION_REQUIRED`, `DATES_EMERGENCY_WITH_GRACE`), revocation invariants (`REV-1` to `REV-4`), and client operational state machine (`Active -> Degraded -> FailClosed` with `CLIENT_FAIL_CLOSED`) during prolonged Hub outages. |
+| **06** | [`06_alexandria_wallets_fafnir_and_identityhub.ipynb`](./06_alexandria_wallets_fafnir_and_identityhub.ipynb) | Self-Sovereign Identity Gateway **`cmd/alexandria`** (`/api/v1/wallet/*`): wallet linking (`/is-linked`, `/link`, `/info`), asymmetric key lifecycle (`/keys`, `:rotate`), DID and Service Endpoint management (`/did/:id/endpoints`, `:publish`), structured error handling with IdentityHub `originalResponse` (`409 Conflict`), participants (`/participants`), verifiable credentials (`/credential`, `/vcs?type=...`), and DCP protocol (`/dcp/request`). |
 
 ---
 
-## Arquitectura del Laboratorio Local ([`lab.py`](./lab.py))
+## Local Lab Architecture ([`lab.py`](./lab.py))
 
-El módulo auxiliar [`lab.py`](./lab.py) está escrito **100 % en librería estándar de Python 3** (`urllib.request`, `subprocess`, `socket`, `json`, `tempfile`), por lo que **no requiere instalar paquetes externos** (`requests`, etc.) para ejecutar las celdas de código:
+The helper module [`lab.py`](./lab.py) is written **100% in the Python 3 standard library** (`urllib.request`, `subprocess`, `socket`, `json`, `tempfile`), so **no external packages** (`requests`, etc.) are required to execute code cells:
 
-- **`ensure_binaries()`**: Compila automáticamente `bin/alexandriac`, `bin/alexandria-server`, `bin/alexandria-client` y `bin/fake-connector` si aún no existen.
-- **`AlexandriaLab`**: Orquesta procesos reales de `alexandria-server`, `alexandria-client` y `fake-connector` en puertos locales libres, compartiendo un archivo de reloj (`clock_file`, `DP-9`) que permite avanzar el tiempo de forma determinista con `lab.set_clock("2026-10-10T12:00:00Z")`.
-- **`http_request(method, url, ...)`**: Ejecuta peticiones HTTP reales (incluyendo soporte de forward proxy para `dsp-egress`) y renderiza widgets HTML interactivos con el método, cabeceras relevantes (`ETag`, `Cache-Control`, `Location`, `VHub-Verdict`, `WWW-Authenticate`) y el cuerpo JSON formateado.
+- **`ensure_binaries()`**: Automatically compiles `bin/alexandriac`, `bin/alexandria-server`, `bin/alexandria-client`, and `bin/fake-connector` if not already built.
+- **`AlexandriaLab`**: Orchestrates real `alexandria-server`, `alexandria-client`, and `fake-connector` processes on free local TCP ports, sharing a clock file (`clock_file`, `DP-9`) for deterministic time travel via `lab.set_clock("2026-10-10T12:00:00Z")`.
+- **`http_request(method, url, ...)`**: Executes real HTTP requests (including forward-proxy support for `dsp-egress`) and renders interactive HTML widgets displaying the method, key headers (`ETag`, `Cache-Control`, `Location`, `VHub-Verdict`, `WWW-Authenticate`), and syntax-highlighted JSON payloads.
 
 ---
 
-## Cómo Ejecutar los Notebooks
+## How to Run the Notebooks
 
-### 1. Levantar JupyterLab con un solo comando (ejecutable [`./tutorial/run`](./run))
-Compila automáticamente los binarios Go (`bin/alexandriac`, `bin/alexandria-server`, `bin/alexandria-client`, `bin/fake-connector`), crea el entorno virtual `tutorial/.venv` (si no existe), instala `jupyterlab` y abre el navegador directamente en `tutorial/`:
+### 1. Launch JupyterLab with a Single Command ([`./tutorial/run`](./run))
+Automatically builds the Go binaries (`bin/alexandriac`, `bin/alexandria-server`, `bin/alexandria-client`, `bin/fake-connector`), creates `tutorial/.venv` (if needed), installs `jupyterlab`, and opens your browser directly in `tutorial/`:
 
 ```bash
 ./tutorial/run
-# o desde la raíz con Make o Task:
+# or from the repository root with Make or Task:
 make tutorial
 task tutorial
 ```
 
-### 2. Ejecutar y verificar todos los notebooks en consola (modo headless)
-Ejecuta las 35 celdas de código de los 6 notebooks contra los binarios Go reales y actualiza las salidas dentro de cada `.ipynb`:
+### 2. Execute and Verify All Notebooks Headlessly in the Terminal
+Executes all 35 code cells across the 6 notebooks against the real Go binaries and updates the outputs in each `.ipynb` file in place:
 
 ```bash
 make tutorial-exec
-# o con Task:
+# or with Task:
 task tutorial:exec
-# o filtrando un notebook específico (ej. el 04):
+# or filtering a specific notebook (e.g., 04):
 ./tutorial/run.py exec -f 04 -v
 ```
 
-### 3. Directamente en VS Code / Cursor / GoLand / JetBrains
-1. Abre cualquiera de los archivos `.ipynb` de esta carpeta `tutorial/`.
-2. Selecciona cualquier intérprete **Python 3.10+** del sistema (o `tutorial/.venv/bin/python`).
-3. Pulsa **Run All**.
+### 3. Directly in VS Code / Cursor / GoLand / JetBrains
+1. Open any `.ipynb` file in this `tutorial/` directory.
+2. Select any system **Python 3.10+** interpreter (or `tutorial/.venv/bin/python`).
+3. Click **Run All**.
