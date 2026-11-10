@@ -29,5 +29,5 @@ echo "Starting JupyterLab in ${TUTORIAL_DIR} (port ${PORT})..."
 exec "${VENV_DIR}/bin/jupyter" lab \
   --port="${PORT}" \
   --ServerApp.root_dir="${TUTORIAL_DIR}" \
-  --ServerApp.default_url="/lab/tree/01_dsl_y_compilacion_alexandriac.ipynb" \
+  --ServerApp.default_url="/lab/tree/01_dsl_and_alexandriac_compiler.ipynb" \
   "$@"

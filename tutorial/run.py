@@ -106,7 +106,7 @@ def launch_jupyter(port: int) -> None:
         subprocess.run([str(pip_bin), "install", "--upgrade", "pip"], check=True)
         subprocess.run([str(pip_bin), "install", "-r", str(TUTORIAL_DIR / "requirements.txt")], check=True)
 
-    default_nb = "01_dsl_y_compilacion_alexandriac.ipynb"
+    default_nb = "01_dsl_and_alexandriac_compiler.ipynb"
     cmd = [
         str(jupyter_bin),
         "lab",
