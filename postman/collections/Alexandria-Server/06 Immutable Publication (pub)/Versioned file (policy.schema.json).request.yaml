@@ -1,0 +1,10 @@
+$kind: http-request
+method: GET
+url: '{{hubUrl}}/pub/{{namespace}}/1.0.0/schemas/policy.schema.json'
+order: 5000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('200 immutable JSON Schema artifact and capture SHA-256 hex', () => {\n  pm.response.to.have.status(200);\n\
+    \  const etag = (pm.response.headers.get('ETag') || '').replace(/\"/g, '');\n  pm.collectionVariables.set('blobHex',\
+    \ etag);\n});"

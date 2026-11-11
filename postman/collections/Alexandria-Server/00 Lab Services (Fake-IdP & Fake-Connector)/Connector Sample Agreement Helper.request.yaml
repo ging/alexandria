@@ -1,0 +1,9 @@
+$kind: http-request
+method: GET
+url: '{{connectorUrl}}/_agreement?id=urn:uuid:A1&action=ex:access'
+order: 5000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('200 sample ContractAgreementMessage', () => {\n  pm.response.to.have.status(200);\n\
+    \  pm.expect(pm.response.json()['@type']).to.eql('ContractAgreementMessage');\n});"

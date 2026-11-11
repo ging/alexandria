@@ -1,0 +1,4 @@
+$kind: request-group
+description: Register hosted and proxied vocabularies, upload revisions, refresh upstreams, and dereference
+  /pub/{ns}/vocab/* (§3.6, REQ-HUB-026..028, F6.1).
+order: 3000

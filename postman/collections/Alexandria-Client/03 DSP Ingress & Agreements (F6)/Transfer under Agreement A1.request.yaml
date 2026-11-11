@@ -1,0 +1,16 @@
+$kind: http-request
+method: POST
+url: '{{clientIngress}}/transfers/request'
+order: 6000
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: text
+  content: "{\n  \"@type\": \"TransferRequestMessage\",\n  \"consumerPid\": \"urn:uuid:t-1\",\n  \"agreementId\"\
+    : \"urn:uuid:A1\"\n}"
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: pm.test('200 admitted or 400 AGREEMENT_VERSION_REVOKED after revocation+L', () => pm.expect([200,
+    400]).to.include(pm.response.code));

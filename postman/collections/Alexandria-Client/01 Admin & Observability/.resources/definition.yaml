@@ -1,0 +1,4 @@
+$kind: request-group
+description: Health, readiness, sync state, cached versions, passive catalog audit report, and Prometheus
+  metrics (§4.11–§4.12).
+order: 1000

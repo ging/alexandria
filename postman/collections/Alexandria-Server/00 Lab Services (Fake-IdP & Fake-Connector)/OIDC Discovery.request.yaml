@@ -1,0 +1,9 @@
+$kind: http-request
+method: GET
+url: '{{idpUrl}}/.well-known/openid-configuration'
+order: 1000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('200 OIDC discovery with issuer and jwks_uri', () => {\n  pm.response.to.have.status(200);\n\
+    \  pm.expect(pm.response.json().jwks_uri).to.include('/jwks.json');\n});"

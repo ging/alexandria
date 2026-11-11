@@ -1,0 +1,10 @@
+$kind: http-request
+method: GET
+url: '{{hubUrl}}/pub/{{namespace}}/vocab/dcat-ap-context'
+order: 7000
+auth:
+  type: noauth
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: pm.test('303 redirect to latest revision or 200 after redirect', () => pm.expect([200, 303]).to.include(pm.response.code));

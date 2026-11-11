@@ -1,0 +1,14 @@
+$kind: http-request
+method: POST
+url: '{{hubUrl}}/v1/namespaces'
+order: 1000
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: text
+  content: "{\n  \"slug\": \"{{namespace}}\",\n  \"title\": \"Demo Dataspace Namespace\"\n}"
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: pm.test('201 Created or 409 NS_EXISTS', () => pm.expect([201, 409]).to.include(pm.response.code));

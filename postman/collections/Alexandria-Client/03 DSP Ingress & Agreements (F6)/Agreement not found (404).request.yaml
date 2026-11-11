@@ -1,0 +1,9 @@
+$kind: http-request
+method: GET
+url: '{{clientAdmin}}/agreements/urn:uuid:missing'
+order: 7000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('404 API_NOT_FOUND', () => {\n  pm.response.to.have.status(404);\n  pm.expect(pm.response.json().code).to.eql('API_NOT_FOUND');\n\
+    });"

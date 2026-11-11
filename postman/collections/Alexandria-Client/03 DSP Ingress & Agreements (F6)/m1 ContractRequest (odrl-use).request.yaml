@@ -1,0 +1,16 @@
+$kind: http-request
+method: POST
+url: '{{clientIngress}}/negotiations/urn:uuid:p-1/request'
+order: 1000
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: text
+  content: "{\n  \"@type\": \"ContractRequestMessage\",\n  \"providerPid\": \"urn:uuid:p-1\",\n  \"consumerPid\"\
+    : \"urn:uuid:c-1\",\n  \"action\": \"odrl:use\"\n}"
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: pm.test('200 forwarded when version is in force (or 400 NO_VERSION_IN_FORCE if still Scheduled)',
+    () => pm.expect([200, 400]).to.include(pm.response.code));

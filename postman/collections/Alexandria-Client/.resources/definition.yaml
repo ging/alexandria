@@ -1,0 +1,13 @@
+$kind: collection
+description: |-
+  Alexandria Vocabulary Hub — alexandria-client L7 DSP Proxy & Admin API (Specification v0.3.0 §4).
+
+  Local setup:
+    1. Start fake-idp, fake-connector, and alexandria-server (with -clock-file var/clock), and approve version 1.0.0 in namespace demo.
+    2. Advance var/clock past 1.0.0 new_content_from (e.g. echo '2026-09-04T00:00:00Z' > var/clock, or '2026-10-10T12:00:00Z' during 1.0.0+2.0.0 coexistence).
+    3. Copy the hub DID printed by alexandria-server into config/client.yaml (did_config.hub_did).
+    4. ./bin/alexandria-client -config config/client.yaml -clock-file var/clock
+    5. Run Folder 01 (Admin & Observability), Folder 02 (Dynamic Rules & Explain), and Folder 03 (DSP Ingress & Agreements).
+variables:
+  rulesEtag: '"1"'
+  fullRulesetJson: ""

@@ -1,0 +1,11 @@
+$kind: http-request
+description: Returns 303 See Other (or 200 after redirect) once a version is in force (t >= new_content_from),
+  or 404 API_NOT_FOUND while still Scheduled.
+method: GET
+url: '{{hubUrl}}/pub/{{namespace}}'
+order: 3000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('303/200 when head is in force, or 404 while Scheduled before new_content_from', () =>\
+    \ {\n  pm.expect([200, 303, 404]).to.include(pm.response.code);\n});"

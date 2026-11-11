@@ -1,0 +1,22 @@
+$kind: http-request
+method: PUT
+url: '{{hubUrl}}/v1/namespaces/{{namespace}}/vocabularies/odrl-ext/content'
+order: 4000
+headers:
+- key: Content-Type
+  value: text/turtle
+body:
+  type: text
+  content: '@prefix ex: <https://example.com/ns#> .
+
+    @prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+
+    ex:access a odrl:Action .
+
+    '
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('201/200 with SHA-256 ETag', () => {\n  pm.expect([200, 201]).to.include(pm.response.code);\n\
+    \  if (pm.response.headers.get('ETag')) {\n    pm.collectionVariables.set('vocabEtag', pm.response.headers.get('ETag'));\n\
+    \  }\n});"

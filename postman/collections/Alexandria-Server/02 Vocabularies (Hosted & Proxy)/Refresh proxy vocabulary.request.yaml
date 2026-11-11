@@ -1,0 +1,8 @@
+$kind: http-request
+method: POST
+url: '{{hubUrl}}/v1/namespaces/{{namespace}}/vocabularies/dcat-ap-context:refresh'
+order: 2000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: pm.test('200 unchanged bytes or 201 new revision (REQ-HUB-028)', () => pm.expect([200, 201]).to.include(pm.response.code));

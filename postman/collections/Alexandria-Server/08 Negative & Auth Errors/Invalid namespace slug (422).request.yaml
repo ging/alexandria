@@ -1,0 +1,19 @@
+$kind: http-request
+method: POST
+url: '{{hubUrl}}/v1/namespaces'
+order: 3000
+auth:
+  type: bearer
+  credentials:
+    token: '{{adminToken}}'
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: text
+  content: "{\n  \"slug\": \"Invalid_Slug!\"\n}"
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('422 NS_SLUG_INVALID', () => {\n  pm.response.to.have.status(422);\n  pm.expect(pm.response.json().code).to.eql('NS_SLUG_INVALID');\n\
+    });"

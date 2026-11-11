@@ -1,0 +1,15 @@
+$kind: http-request
+method: POST
+url: '{{hubUrl}}/v1/namespaces/{{namespace}}/vocabularies'
+order: 1000
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: text
+  content: "{\n  \"name\": \"dcat-ap-context\",\n  \"kind\": \"proxy\",\n  \"media_type\": \"application/ld+json\"\
+    ,\n  \"upstream\": \"{{connectorUrl}}/dcat-ap.jsonld\"\n}"
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: pm.test('201 with initial revision r/1 or 409 VOCAB_EXISTS', () => pm.expect([201, 409]).to.include(pm.response.code));

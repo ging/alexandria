@@ -1,0 +1,15 @@
+$kind: http-request
+method: POST
+url: '{{hubUrl}}/v1/namespaces/{{namespace}}/candidates/{{candidate2Id}}:approve'
+order: 3000
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: text
+  content: "{\n  \"grace_window\": \"P3D\"\n}"
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('422 DATES_GRACE_TOO_SHORT', () => {\n  pm.response.to.have.status(422);\n  pm.expect(pm.response.json().code).to.eql('DATES_GRACE_TOO_SHORT');\n\
+    });"

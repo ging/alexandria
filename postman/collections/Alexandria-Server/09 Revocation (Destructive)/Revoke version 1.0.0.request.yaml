@@ -1,0 +1,19 @@
+$kind: http-request
+description: Requires 2.0.0 to be in force at R + propagation_window (e.g. set var/clock to 2026-11-10T00:00:00Z
+  after approving 2.0.0 at 2026-10-01T10:00:00Z).
+method: POST
+url: '{{hubUrl}}/v1/namespaces/{{namespace}}/versions/1.0.0:revoke'
+order: 2000
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: text
+  content: "{\n  \"justification\": \"ex:access is unsafe\"\n}"
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('200 VersionRecord with revoked_from (or 422 DATES_REVOKE_LEAVES_NO_HEAD if replacement\
+    \ not yet in force)', () => {\n  pm.expect([200, 422]).to.include(pm.response.code);\n  if (pm.response.code\
+    \ === 200) {\n    pm.expect(pm.response.json().credentialSubject.revoked_from).to.be.a('string');\n\
+    \  }\n});"

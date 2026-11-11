@@ -1,0 +1,4 @@
+$kind: request-group
+description: Revoke version 1.0.0 with justification once 2.0.0 is in force at R + propagation_window
+  (REV-1..REV-4, F6.4).
+order: 10000

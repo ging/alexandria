@@ -1,0 +1,11 @@
+$kind: http-request
+method: GET
+url: '{{hubUrl}}/v1/namespaces/{{namespace}}/vocabularies/dcat-ap-context'
+order: 5000
+auth:
+  type: noauth
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('200 vocabulary metadata with revisions', () => {\n  pm.response.to.have.status(200);\n\
+    \  pm.expect(pm.response.json().name).to.eql('dcat-ap-context');\n});"

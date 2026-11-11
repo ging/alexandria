@@ -1,0 +1,17 @@
+$kind: http-request
+method: POST
+url: '{{clientIngress}}/negotiations/urn:uuid:c-1/agreement'
+order: 4000
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: text
+  content: "{\n  \"@type\": \"ContractAgreementMessage\",\n  \"providerPid\": \"urn:uuid:p-1\",\n  \"\
+    consumerPid\": \"urn:uuid:c-1\",\n  \"action\": \"ex:access\",\n  \"agreement\": {\n    \"@id\": \"\
+    urn:uuid:A1\"\n  }\n}"
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: pm.test('200 agreement forwarded & captured (or 400 if 1.0.0 not in force)', () => pm.expect([200,
+    400]).to.include(pm.response.code));

@@ -1,0 +1,9 @@
+$kind: http-request
+method: GET
+url: '{{clientAdmin}}/rules/contract-request'
+order: 2000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('200 single rule with ETag', () => {\n  pm.response.to.have.status(200);\n  pm.expect(pm.response.json().id).to.eql('contract-request');\n\
+    \  pm.collectionVariables.set('rulesEtag', pm.response.headers.get('ETag'));\n});"

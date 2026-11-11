@@ -1,0 +1,11 @@
+$kind: http-request
+method: GET
+url: '{{hubUrl}}/pub/{{namespace}}/vocab/dcat-ap-context/r/1'
+order: 8000
+auth:
+  type: noauth
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('200 immutable with Link rel=via', () => {\n  pm.response.to.have.status(200);\n  pm.expect(pm.response.headers.get('Cache-Control')).to.include('immutable');\n\
+    \  pm.expect(pm.response.headers.get('Link')).to.include('rel=\"via\"');\n});"

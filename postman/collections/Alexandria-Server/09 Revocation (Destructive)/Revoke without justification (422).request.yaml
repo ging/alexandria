@@ -1,0 +1,15 @@
+$kind: http-request
+method: POST
+url: '{{hubUrl}}/v1/namespaces/{{namespace}}/versions/1.0.0:revoke'
+order: 1000
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: text
+  content: "{\n  \"justification\": \"\"\n}"
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('422 DATES_JUSTIFICATION_REQUIRED', () => {\n  pm.response.to.have.status(422);\n  pm.expect(pm.response.json().code).to.eql('DATES_JUSTIFICATION_REQUIRED');\n\
+    });"

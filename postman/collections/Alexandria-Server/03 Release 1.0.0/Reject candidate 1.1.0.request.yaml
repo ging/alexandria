@@ -1,0 +1,15 @@
+$kind: http-request
+method: POST
+url: '{{hubUrl}}/v1/namespaces/{{namespace}}/candidates/{{rejectCandidateId}}:reject'
+order: 10000
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: text
+  content: "{\n  \"comment\": \"Proceeding directly to breaking release 2.0.0\"\n}"
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('200 candidate rejected', () => {\n  pm.response.to.have.status(200);\n  pm.expect(pm.response.json().status).to.eql('rejected');\n\
+    });"

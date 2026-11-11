@@ -1,0 +1,19 @@
+$kind: http-request
+method: POST
+url: '{{clientAdmin}}/rules'
+order: 10000
+headers:
+- key: Content-Type
+  value: application/json
+- key: If-Match
+  value: '{{rulesEtag}}'
+body:
+  type: text
+  content: "{\n  \"id\": \"contract-request\",\n  \"priority\": 999,\n  \"listener\": \"dsp-ingress\"\
+    ,\n  \"match\": {\n    \"method\": \"POST\",\n    \"path\": \"/x\"\n  },\n  \"message\": \"ContractRequestMessage\"\
+    ,\n  \"verify\": {\n    \"gates\": [\n      \"dsp_message\"\n    ]\n  }\n}"
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('422 RULES_DUPLICATE_ID', () => {\n  pm.response.to.have.status(422);\n  pm.expect(pm.response.json().code).to.eql('RULES_DUPLICATE_ID');\n\
+    });"

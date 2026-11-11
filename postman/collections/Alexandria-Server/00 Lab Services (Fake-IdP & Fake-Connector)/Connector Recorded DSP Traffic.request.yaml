@@ -1,0 +1,8 @@
+$kind: http-request
+method: GET
+url: '{{connectorUrl}}/_received'
+order: 4000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: pm.test('200 recorded connector requests', () => pm.response.to.have.status(200));

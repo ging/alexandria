@@ -1,0 +1,11 @@
+$kind: http-request
+method: GET
+url: '{{hubUrl}}/pub/{{namespace}}/vocab/odrl-ext/r/1'
+order: 9000
+auth:
+  type: noauth
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('200 immutable text/turtle', () => {\n  pm.response.to.have.status(200);\n  pm.expect(pm.response.headers.get('Content-Type')).to.include('text/turtle');\n\
+    \  pm.expect(pm.response.headers.get('Cache-Control')).to.include('immutable');\n});"

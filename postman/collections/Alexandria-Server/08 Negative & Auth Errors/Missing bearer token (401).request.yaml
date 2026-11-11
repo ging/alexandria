@@ -1,0 +1,18 @@
+$kind: http-request
+method: POST
+url: '{{hubUrl}}/v1/namespaces'
+order: 1000
+auth:
+  type: noauth
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: text
+  content: "{\n  \"slug\": \"unauthorized-ns\"\n}"
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('401 API_UNAUTHENTICATED with WWW-Authenticate Bearer', () => {\n  pm.response.to.have.status(401);\n\
+    \  pm.expect(pm.response.headers.get('WWW-Authenticate')).to.include('Bearer');\n  pm.expect(pm.response.json().code).to.eql('API_UNAUTHENTICATED');\n\
+    });"

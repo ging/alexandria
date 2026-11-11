@@ -1,0 +1,6 @@
+$kind: request-group
+description: Public unauthenticated endpoints serving W3C VC 2.0 eddsa-jcs-2022 VersionListing and VersionRecord
+  credentials (§3.7–§3.9).
+order: 6000
+auth:
+  type: noauth

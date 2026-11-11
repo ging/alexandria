@@ -1,0 +1,15 @@
+$kind: http-request
+method: POST
+url: '{{hubUrl}}/v1/namespaces/{{namespace}}/candidates/{{candidateId}}:approve'
+order: 6000
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: text
+  content: '{}'
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('409 API_INVALID_STATE', () => {\n  pm.response.to.have.status(409);\n  pm.expect(pm.response.json().code).to.eql('API_INVALID_STATE');\n\
+    });"

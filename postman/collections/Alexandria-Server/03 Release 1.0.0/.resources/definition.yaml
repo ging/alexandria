@@ -1,0 +1,4 @@
+$kind: request-group
+description: Create, validate, propose, reject, and approve initial release 1.0.0 admitting odrl:use and
+  ex:access (F6.2, §3.7–§3.9).
+order: 4000

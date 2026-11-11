@@ -1,0 +1,9 @@
+$kind: http-request
+method: GET
+url: '{{hubUrl}}/pub/_vhub/v1/context.jsonld'
+order: 1000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('200 immutable context.jsonld (DP-9)', () => {\n  pm.response.to.have.status(200);\n\
+    \  pm.expect(pm.response.headers.get('Cache-Control')).to.include('immutable');\n});"

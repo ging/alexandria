@@ -1,0 +1,22 @@
+$kind: http-request
+method: PUT
+url: '{{clientAdmin}}/rules/contract-agreement-in'
+order: 3000
+headers:
+- key: Content-Type
+  value: application/json
+- key: If-Match
+  value: '{{rulesEtag}}'
+body:
+  type: text
+  content: "{\n  \"id\": \"contract-agreement-in\",\n  \"priority\": 120,\n  \"listener\": \"dsp-ingress\"\
+    ,\n  \"match\": {\n    \"method\": \"POST\",\n    \"path\": \"/negotiations/{pid}/agreement\",\n \
+    \   \"body\": [\n      {\n        \"pointer\": \"/@type\",\n        \"equals\": \"ContractAgreementMessage\"\
+    \n      }\n    ]\n  },\n  \"message\": \"ContractAgreementMessage\",\n  \"verify\": {\n    \"gates\"\
+    : [\n      \"dsp_message\",\n      \"policy_intake\"\n    ]\n  },\n  \"mode\": \"enforce\"\n}"
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('200 rule updated and revision incremented', () => {\n  pm.response.to.have.status(200);\n\
+    \  pm.collectionVariables.set('rulesEtag', pm.response.headers.get('ETag'));\n  pm.collectionVariables.set('fullRulesetJson',\
+    \ pm.response.text());\n});"

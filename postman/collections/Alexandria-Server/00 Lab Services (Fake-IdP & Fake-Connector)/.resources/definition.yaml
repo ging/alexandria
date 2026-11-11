@@ -1,0 +1,6 @@
+$kind: request-group
+description: OIDC Discovery & JWKS served by deploy/fake-idp (DP-4) and helper endpoints on deploy/fake-connector
+  (Part 5.2).
+order: 1000
+auth:
+  type: noauth

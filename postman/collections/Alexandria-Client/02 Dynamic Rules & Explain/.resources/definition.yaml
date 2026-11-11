@@ -1,0 +1,4 @@
+$kind: request-group
+description: Full CRUD on the dynamic rule set with If-Match optimistic concurrency (RULE-1..5) and side-effect-free
+  dry-run evaluation via :explain (§4.3.2, §4.12).
+order: 2000

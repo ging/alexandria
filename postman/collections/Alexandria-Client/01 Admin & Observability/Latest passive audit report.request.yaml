@@ -1,0 +1,8 @@
+$kind: http-request
+method: GET
+url: '{{clientAdmin}}/audit/reports/latest'
+order: 5000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: pm.test('200 report or 404 API_NOT_FOUND before catalog traffic', () => pm.expect([200, 404]).to.include(pm.response.code));

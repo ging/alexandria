@@ -1,0 +1,10 @@
+$kind: http-request
+method: GET
+url: '{{hubUrl}}/v1/namespaces/{{namespace}}/vocabularies'
+order: 6000
+auth:
+  type: noauth
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: pm.test('200 public vocabulary list', () => pm.response.to.have.status(200));

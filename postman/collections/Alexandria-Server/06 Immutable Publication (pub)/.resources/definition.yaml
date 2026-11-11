@@ -1,0 +1,6 @@
+$kind: request-group
+description: Self-hosted JSON-LD context & Turtle vocabulary, 303 head redirect, signed PackageManifest,
+  versioned files, and SHA-256 blobs (§3.10).
+order: 7000
+auth:
+  type: noauth

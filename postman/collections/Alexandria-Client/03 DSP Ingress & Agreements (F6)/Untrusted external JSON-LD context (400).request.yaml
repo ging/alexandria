@@ -1,0 +1,18 @@
+$kind: http-request
+method: POST
+url: '{{clientIngress}}/negotiations/urn:uuid:p-1/request'
+order: 9000
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: text
+  content: "{\n  \"@context\": [\n    \"https://evil.example/untrusted.jsonld\"\n  ],\n  \"@type\": \"\
+    ContractRequestMessage\",\n  \"providerPid\": \"urn:uuid:p-1\",\n  \"consumerPid\": \"urn:uuid:c-1\"\
+    ,\n  \"action\": \"odrl:use\"\n}"
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('400 CONTEXT_NOT_IN_PACKAGE (or NO_VERSION_IN_FORCE if Scheduled)', () => {\n  pm.response.to.have.status(400);\n\
+    \  pm.expect(['CONTEXT_NOT_IN_PACKAGE', 'NO_VERSION_IN_FORCE', 'CLIENT_NOT_READY']).to.include(pm.response.json().code);\n\
+    });"
