@@ -73,3 +73,42 @@ func TestUnknownFieldRejected(t *testing.T) {
 		t.Fatal("unknown field accepted")
 	}
 }
+
+// TestObservabilityNodeLayoutParsed verifies observability fields in the config.yaml section layout.
+func TestObservabilityNodeLayoutParsed(t *testing.T) {
+	raw := []byte(`{
+		"common_config": {
+			"hosts": {"http": {"protocol": "https", "url": "127.0.0.1", "port": "8443"}},
+			"db": {"database": "file:d", "blobs": "file:b"},
+			"connection": {"is_prod": true}
+		},
+		"auth_config": {"issuer": "https://idp.example.com", "audience": "alexandria-vhub"},
+		"did_config": {"signing_key": "file:k"},
+		"observability": {
+			"log_level": "debug",
+			"log_format": "json",
+			"otlp_endpoint": "http://127.0.0.1:4318",
+			"otlp_insecure": true,
+			"service_name": "vhub-prod"
+		}
+	}`)
+	c, err := Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	obs := c.Observability
+	if obs.LogLevel != "debug" || obs.LogFormat != "json" || obs.OTLPEndpoint != "http://127.0.0.1:4318" || !obs.OTLPInsecure || obs.ServiceName != "vhub-prod" || obs.Environment != "production" {
+		t.Fatalf("got %+v", obs)
+	}
+}
+
+// TestInvalidObservabilitySettingsRejected verifies rejection of unsupported log levels and formats.
+func TestInvalidObservabilitySettingsRejected(t *testing.T) {
+	base := `{"listen":"a:1","base":"http://h","signing":{"key":"file:k"},"auth":{"issuers":[{"iss":"i","discovery_url":"http://i"}],"audience":"a"},"storage":{"database":"file:d","blobs":"file:b"},`
+	if _, err := Parse([]byte(base + `"observability":{"log_level":"verbose"}}`)); err == nil {
+		t.Fatal("expected invalid log_level to fail")
+	}
+	if _, err := Parse([]byte(base + `"observability":{"log_format":"xml"}}`)); err == nil {
+		t.Fatal("expected invalid log_format to fail")
+	}
+}

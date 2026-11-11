@@ -5,12 +5,14 @@ package status_http
 import (
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/ging/alexandria/internal/client/adapters/metrics"
 	"github.com/ging/alexandria/internal/client/app"
 	"github.com/ging/alexandria/internal/client/domain"
 	"github.com/ging/alexandria/internal/core/codes"
+	"github.com/ging/alexandria/internal/core/logx"
 	"github.com/ging/alexandria/internal/core/problem"
 )
 
@@ -23,6 +25,7 @@ type Admin struct {
 	Audit      *app.Audit
 	Cell       *app.Cell
 	Metrics    *metrics.Registry
+	Logger     *slog.Logger
 }
 
 // Handler returns the admin mux.
@@ -43,7 +46,7 @@ func (a Admin) Handler() http.Handler {
 	mux.HandleFunc("GET /rules/{id}", func(w http.ResponseWriter, r *http.Request) {
 		rule, err := a.Rules.GetRule(r.PathValue("id"))
 		if err != nil {
-			writeError(w, err)
+			a.writeError(w, err)
 			return
 		}
 		w.Header().Set("ETag", app.ETag(a.Rules.Get().Revision))
@@ -56,7 +59,7 @@ func (a Admin) Handler() http.Handler {
 	mux.HandleFunc("DELETE /rules/{id}", func(w http.ResponseWriter, r *http.Request) {
 		rs, err := a.Rules.Delete(r.Header.Get("If-Match"), r.PathValue("id"))
 		if err != nil {
-			writeError(w, err)
+			a.writeError(w, err)
 			return
 		}
 		w.Header().Set("ETag", app.ETag(rs.Revision))
@@ -65,7 +68,7 @@ func (a Admin) Handler() http.Handler {
 	mux.HandleFunc("GET /agreements/{id...}", func(w http.ResponseWriter, r *http.Request) {
 		v, err := a.Agreements.Get(r.PathValue("id"), a.Cell.Load(), a.Status.Clock.Now())
 		if err != nil {
-			writeError(w, err)
+			a.writeError(w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, v)
@@ -73,7 +76,7 @@ func (a Admin) Handler() http.Handler {
 	mux.HandleFunc("GET /audit/reports/latest", func(w http.ResponseWriter, _ *http.Request) {
 		rep := a.Audit.Latest()
 		if rep == nil {
-			writeError(w, codes.New(codes.APINotFound, "no audit report yet"))
+			a.writeError(w, codes.New(codes.APINotFound, "no audit report yet"))
 			return
 		}
 		writeJSON(w, http.StatusOK, rep)
@@ -124,7 +127,7 @@ func (a Admin) explain(w http.ResponseWriter, r *http.Request) {
 // ruleset writes a rule set with its revision as ETag.
 func (a Admin) ruleset(w http.ResponseWriter, status int, rs *domain.Ruleset, err error) {
 	if err != nil {
-		writeError(w, err)
+		a.writeError(w, err)
 		return
 	}
 	w.Header().Set("ETag", app.ETag(rs.Revision))
@@ -163,10 +166,11 @@ func status(c codes.Code) int {
 }
 
 // writeError maps coded errors to problem+json.
-func writeError(w http.ResponseWriter, err error) {
+func (a Admin) writeError(w http.ResponseWriter, err error) {
 	if ce, ok := codes.As(err); ok {
 		writeProblem(w, problem.From(ce, status(ce.Code)))
 		return
 	}
+	logx.Default(a.Logger).Error("unhandled admin API error", logx.Err(err))
 	writeProblem(w, problem.Problem{Type: "about:blank", Title: "internal error", Status: http.StatusInternalServerError, Detail: err.Error(), Severity: "error"})
 }

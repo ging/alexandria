@@ -4,15 +4,17 @@ package scheduler
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
+	"github.com/ging/alexandria/internal/core/logx"
 	"github.com/ging/alexandria/internal/core/timex"
 	"github.com/ging/alexandria/internal/server/app"
 )
 
 // Run reissues stale listings every tick and re-resolves the hub DID every keyEvery of hub time, until ctx ends.
-func Run(ctx context.Context, h *app.Hub, c timex.Clock, tick time.Duration, keyEvery timex.Duration) {
+func Run(ctx context.Context, h *app.Hub, c timex.Clock, tick time.Duration, keyEvery timex.Duration, logger *slog.Logger) {
+	log := logx.Component(logger, "scheduler")
 	t := time.NewTicker(tick)
 	defer t.Stop()
 	lastKey := c.Now()
@@ -27,7 +29,7 @@ func Run(ctx context.Context, h *app.Hub, c timex.Clock, tick time.Duration, key
 				lastKey = now
 			}
 			if err := h.Listing.Tick(now); err != nil {
-				log.Printf("scheduler: %v", err)
+				log.ErrorContext(ctx, "listing tick failed", logx.Err(err))
 			}
 		}
 	}

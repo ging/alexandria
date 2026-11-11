@@ -3,6 +3,7 @@
 package app
 
 import (
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/ging/alexandria/internal/client/domain"
 	"github.com/ging/alexandria/internal/core/codes"
+	"github.com/ging/alexandria/internal/core/logx"
 	"github.com/ging/alexandria/internal/core/timex"
 )
 
@@ -19,6 +21,7 @@ type Rules struct {
 	Cell          *RulesCell
 	Events        EventSink
 	Clock         timex.Clock
+	Logger        *slog.Logger
 	Namespace     string
 	HasManagement bool
 	mu            sync.Mutex
@@ -54,6 +57,7 @@ func (r *Rules) Init(seed string) *codes.Error {
 		}
 	}
 	r.Cell.Store(rs)
+	logx.Default(r.Logger).Info("ruleset initialized", slog.Int("revision", rs.Revision), slog.Int("rules", len(rs.Rules)), slog.Bool("seeded", !ok && seed != ""))
 	return nil
 }
 
@@ -145,5 +149,6 @@ func (r *Rules) change(ifMatch string, rule []byte, build func(*domain.Ruleset) 
 	n := notice(EvRules, r.Namespace, r.Clock.Now(), "", "rule set changed")
 	n.Revision, n.Rules = next.Revision, ids
 	r.Events.Emit(n)
+	logx.Default(r.Logger).Info("ruleset updated", slog.Int("revision", next.Revision), slog.Int("changed_rules", len(ids)))
 	return next, nil
 }

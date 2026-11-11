@@ -4,10 +4,12 @@ package httpx
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/ging/alexandria/internal/core/codes"
+	"github.com/ging/alexandria/internal/core/logx"
 	"github.com/ging/alexandria/internal/core/problem"
 	"github.com/ging/alexandria/internal/core/timex"
 	"github.com/ging/alexandria/internal/server/app"
@@ -44,7 +46,10 @@ func Status(c codes.Code) int {
 }
 
 // Problems writes problem documents with a JSON-LD @context.
-type Problems struct{ Context string }
+type Problems struct {
+	Context string
+	Logger  *slog.Logger
+}
 
 // Write writes a problem document; 401 adds WWW-Authenticate (RFC 6750).
 func (ps Problems) Write(w http.ResponseWriter, p problem.Problem) {
@@ -64,9 +69,14 @@ func (ps Problems) Error(w http.ResponseWriter, err error) {
 		return
 	}
 	if ce, ok := codes.As(err); ok {
-		ps.Write(w, problem.From(ce, Status(ce.Code)))
+		st := Status(ce.Code)
+		if st >= http.StatusInternalServerError {
+			logx.Default(ps.Logger).Error("coded server error", logx.Err(ce))
+		}
+		ps.Write(w, problem.From(ce, st))
 		return
 	}
+	logx.Default(ps.Logger).Error("unhandled server error", logx.Err(err))
 	ps.Write(w, problem.Problem{Type: "about:blank", Title: "internal error", Status: http.StatusInternalServerError, Detail: err.Error(), Severity: "error"})
 }
 

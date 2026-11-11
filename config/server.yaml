@@ -48,6 +48,8 @@ did_config:
 observability:
   log_level: "info"
   log_format: "auto"
+  # Optional OpenTelemetry OTLP/HTTP collector endpoint (or set OTEL_EXPORTER_OTLP_ENDPOINT).
+  # otlp_endpoint: "http://127.0.0.1:4318"
   metrics: true
   pprof: false
   port: "2112"

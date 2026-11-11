@@ -4,10 +4,12 @@ package app
 
 import (
 	"encoding/json"
+	"log/slog"
 	"sync"
 
 	"github.com/ging/alexandria/internal/core/codes"
 	"github.com/ging/alexandria/internal/core/did"
+	"github.com/ging/alexandria/internal/core/logx"
 	"github.com/ging/alexandria/internal/core/timex"
 	"github.com/ging/alexandria/internal/core/vc"
 )
@@ -20,6 +22,7 @@ type HubTrust struct {
 	clock       timex.Clock
 	ttl         timex.Duration
 	events      EventSink
+	Logger      *slog.Logger
 	ns          string
 	cache       *did.Document
 	resolvedAt  timex.Instant
@@ -74,8 +77,10 @@ func (h *HubTrust) Verify(secured []byte, invalid codes.Code) *codes.Error {
 	if h.cache == nil || now.Sub(h.resolvedAt) >= h.ttl {
 		if err := h.resolve(now); err != nil {
 			if h.cache == nil {
+				logx.Default(h.Logger).Warn("initial hub DID resolution failed", slog.String("hub_did", string(h.did)), logx.Err(err))
 				return codes.New(codes.SyncDidUnresolvable, "%s: %v", h.did, err)
 			}
+			logx.Default(h.Logger).Warn("hub DID refresh failed; retaining cached document", slog.String("hub_did", string(h.did)), logx.Err(err))
 			h.events.Emit(notice(EvSync, h.ns, now, codes.DidRefreshFailed, err.Error()))
 		}
 	}
@@ -87,6 +92,7 @@ func (h *HubTrust) Verify(secured []byte, invalid codes.Code) *codes.Error {
 		// V3: the new resolution replaces the cache whether or not the proof then verifies.
 		if err := h.resolve(now); err == nil && verifies(h.cache, secured, p.VerificationMethod) {
 			if !known {
+				logx.Default(h.Logger).Info("hub DID signing key rotated", slog.String("hub_did", string(h.did)), slog.String("verification_method", p.VerificationMethod))
 				h.events.Emit(notice(EvSync, h.ns, now, codes.DidKeyRotated, p.VerificationMethod))
 			}
 			return nil

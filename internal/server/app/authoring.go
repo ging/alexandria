@@ -5,6 +5,7 @@ package app
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"sort"
 
 	"github.com/ging/alexandria/internal/core/codes"
@@ -46,7 +47,11 @@ func (a *Authoring) CreateDraft(p *domain.Principal, ns string, doc []byte) (dom
 	if err != nil {
 		return domain.Draft{}, err
 	}
-	return d, a.d.emit(p, domain.EvDraftCreated, ns, d.ID)
+	if err := a.d.emit(p, domain.EvDraftCreated, ns, d.ID); err != nil {
+		return domain.Draft{}, err
+	}
+	a.d.log().Info("draft created", slog.String("namespace", ns), slog.String("draft_id", d.ID), slog.Int("rev", d.Rev))
+	return d, nil
 }
 
 // GetDraft returns a draft.
@@ -83,7 +88,11 @@ func (a *Authoring) ReplaceDraft(p *domain.Principal, ns, id, ifMatch string, do
 	if err != nil {
 		return domain.Draft{}, notFound(err, "draft "+id)
 	}
-	return d, a.d.emit(p, domain.EvDraftUpdated, ns, d.ID)
+	if err := a.d.emit(p, domain.EvDraftUpdated, ns, d.ID); err != nil {
+		return domain.Draft{}, err
+	}
+	a.d.log().Info("draft updated", slog.String("namespace", ns), slog.String("draft_id", d.ID), slog.Int("rev", d.Rev))
+	return d, nil
 }
 
 // Validate runs N1–N5 without effects.
@@ -147,7 +156,11 @@ func (a *Authoring) Propose(p *domain.Principal, ns, id string) (domain.Candidat
 	if err := a.d.Store.InsertCandidate(c); err != nil {
 		return domain.Candidate{}, err
 	}
-	return c, a.d.emit(p, domain.EvCandidateProposed, ns, c.ID)
+	if err := a.d.emit(p, domain.EvCandidateProposed, ns, c.ID); err != nil {
+		return domain.Candidate{}, err
+	}
+	a.d.log().Info("candidate proposed", slog.String("namespace", ns), slog.String("candidate_id", c.ID), slog.String("draft_id", id), slog.String("version", c.Version.String()), slog.String("class", string(c.Class)))
+	return c, nil
 }
 
 // check runs validation up to level and returns findings as an error.

@@ -15,7 +15,7 @@ import (
 )
 
 // modules are the production package roots of the vhub PoC.
-var modules = []string{"internal/core", "internal/server", "internal/client", "internal/clock", "cmd/alexandria-server", "cmd/alexandria-client", "deploy/fake-idp", "deploy/fake-connector"}
+var modules = []string{"internal/core", "internal/server", "internal/client", "internal/clock", "internal/telemetry", "cmd/alexandria-server", "cmd/alexandria-client", "deploy/fake-idp", "deploy/fake-connector"}
 
 // Patterns of requirement, decision, test and code references.
 var (

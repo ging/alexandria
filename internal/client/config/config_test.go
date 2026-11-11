@@ -56,11 +56,58 @@ func TestNodeLayoutMatchesDeployJSON(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", path, err)
 		}
+		if c.HubCA == "" {
+			t.Fatalf("%s: expected HubCA to be resolved", path)
+		}
+		c.HubCA = ""
 		if !reflect.DeepEqual(c, baseCfg) {
 			t.Fatalf("%s mismatch:\ngot  %+v\nwant %+v", path, c, baseCfg)
 		}
 	}
 	if _, cerr := Parse([]byte(`{"common_config":{"unknown":true}}`)); cerr == nil || cerr.Code != codes.ConfigSchema {
 		t.Fatalf("expected CONFIG_SCHEMA on unknown field in common_config, got %v", cerr)
+	}
+}
+
+// TestObservabilityNodeLayoutParsed verifies observability fields in the config.yaml section layout.
+func TestObservabilityNodeLayoutParsed(t *testing.T) {
+	raw := []byte(`{
+		"common_config": {
+			"hosts": {"http": {"protocol": "http", "url": "127.0.0.1", "port": "9080"}},
+			"connection": {"is_prod": true}
+		},
+		"did_config": {"hub_did": "did:key:z6MkpTHR8VNsBxYAAWHut2Geadd9jSwuBV8xRoAnwWsdvktH"},
+		"observability": {
+			"log_level": "warn",
+			"log_format": "json",
+			"otlp_endpoint": "http://127.0.0.1:4318",
+			"otlp_insecure": true,
+			"service_name": "client-prod",
+			"port": "9090",
+			"events_sink": "file:var/events.jsonl"
+		},
+		"client_config": {
+			"trust": {"hub": "https://hub.example.com", "namespace": "demo"},
+			"upstreams": {"dsp": "http://127.0.0.1:8282/dsp"}
+		}
+	}`)
+	c, cerr := Parse(raw)
+	if cerr != nil {
+		t.Fatal(cerr)
+	}
+	if c.Log.Level != "warn" || c.Log.Format != "json" || c.Log.OTLPEndpoint != "http://127.0.0.1:4318" || !c.Log.OTLPInsecure || c.Log.ServiceName != "client-prod" || c.Log.Environment != "production" {
+		t.Fatalf("got %+v", c.Log)
+	}
+}
+
+// TestInvalidObservabilitySettingsRejected verifies CONFIG_SCHEMA rejection on invalid log levels or formats.
+func TestInvalidObservabilitySettingsRejected(t *testing.T) {
+	badLevel := []byte("common_config: {}\ndid_config: {hub_did: 'did:key:z6Mk'}\nobservability: {log_level: bogus, port: '9090', events_sink: 'file:///e'}\nclient_config: {trust: {hub: 'https://h', namespace: demo}, upstreams: {dsp: 'http://c'}}\n")
+	if _, cerr := Parse(badLevel); cerr == nil || cerr.Code != codes.ConfigSchema {
+		t.Fatalf("expected CONFIG_SCHEMA on invalid log_level, got %v", cerr)
+	}
+	badFormat := []byte("common_config: {}\ndid_config: {hub_did: 'did:key:z6Mk'}\nobservability: {log_format: xml, port: '9090', events_sink: 'file:///e'}\nclient_config: {trust: {hub: 'https://h', namespace: demo}, upstreams: {dsp: 'http://c'}}\n")
+	if _, cerr := Parse(badFormat); cerr == nil || cerr.Code != codes.ConfigSchema {
+		t.Fatalf("expected CONFIG_SCHEMA on invalid log_format, got %v", cerr)
 	}
 }

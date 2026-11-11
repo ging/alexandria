@@ -5,6 +5,7 @@ package app
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"slices"
 	"sync"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/ging/alexandria/internal/core/codes"
 	"github.com/ging/alexandria/internal/core/did"
 	"github.com/ging/alexandria/internal/core/lifecycle"
+	"github.com/ging/alexandria/internal/core/logx"
 	"github.com/ging/alexandria/internal/core/ni"
 	"github.com/ging/alexandria/internal/core/pkgv"
 	"github.com/ging/alexandria/internal/core/schemas"
@@ -32,6 +34,7 @@ type Sync struct {
 	Cell       *Cell
 	Clock      timex.Clock
 	Events     EventSink
+	Logger     *slog.Logger
 	Namespace  string
 	HubDID     did.DID
 	Context    string
@@ -75,6 +78,7 @@ func (s *Sync) Restore() error {
 		}
 	}
 	s.Cell.Store(snapshot(l, c.Accepted.Known, pkgs))
+	logx.Default(s.Logger).Info("restored snapshot from continuity", slog.String("namespace", s.Namespace), slog.Uint64("sequence", c.Accepted.Sequence), slog.Int("packages", len(pkgs)))
 	return nil
 }
 
@@ -116,6 +120,7 @@ func (s *Sync) Run() *codes.Error {
 	err := s.run(now)
 	s.failed = err != nil
 	if err != nil {
+		logx.Default(s.Logger).Warn("hub synchronization failed", slog.String("namespace", s.Namespace), logx.Err(err))
 		s.Events.Emit(notice(EvSync, s.Namespace, now, err.Code, err.Detail))
 		return err
 	}
@@ -279,6 +284,7 @@ func (s *Sync) accept(l listingCredential, raw []byte, pkgs map[ni.Digest]*pkgv.
 			s.Audit.OnNewVersion(r, snap)
 		}
 	}
+	logx.Default(s.Logger).Info("hub listing accepted", slog.String("namespace", s.Namespace), slog.Uint64("sequence", l.Subject.Sequence), slog.Int("versions", len(l.Subject.Versions)), slog.Int("fresh_packages", len(fresh)))
 	return nil
 }
 

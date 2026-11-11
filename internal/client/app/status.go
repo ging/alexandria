@@ -3,12 +3,14 @@
 package app
 
 import (
+	"log/slog"
 	"sync"
 
 	"github.com/ging/alexandria/internal/client/domain"
 	"github.com/ging/alexandria/internal/core/codes"
 	"github.com/ging/alexandria/internal/core/did"
 	"github.com/ging/alexandria/internal/core/lifecycle"
+	"github.com/ging/alexandria/internal/core/logx"
 	"github.com/ging/alexandria/internal/core/ni"
 	"github.com/ging/alexandria/internal/core/timex"
 )
@@ -21,6 +23,7 @@ type Status struct {
 	Packages  PackageStore
 	Events    EventSink
 	Clock     timex.Clock
+	Logger    *slog.Logger
 	Namespace string
 	HubDID    did.DID
 
@@ -78,6 +81,7 @@ func (s *Status) ObserveSkew(hubDate, local timex.Instant) {
 		limit = snap.Params.ClockSkew
 	}
 	if abs(skew) > int64(limit)*1000 {
+		logx.Default(s.Logger).Warn("clock skew exceeded threshold", slog.String("namespace", s.Namespace), slog.Int64("skew_ms", skew), slog.Int64("limit_ms", int64(limit)*1000), logx.Code(codes.ClockSkewExceeded))
 		s.Events.Emit(notice(EvState, s.Namespace, local, codes.ClockSkewExceeded, "estimated skew "+timex.Duration(abs(skew)/1000).String()))
 	}
 }
@@ -166,6 +170,7 @@ func (s *Status) Watch() {
 	s.last, s.watched = st, true
 	s.mu.Unlock()
 	if watched && prev != st {
+		logx.Default(s.Logger).Info("client state changed", slog.String("namespace", s.Namespace), slog.String("from", string(prev)), slog.String("to", string(st)))
 		n := notice(EvState, s.Namespace, s.Clock.Now(), "", "state changed")
 		n.From, n.To = string(prev), string(st)
 		s.Events.Emit(n)

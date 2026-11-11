@@ -3,8 +3,11 @@
 package app
 
 import (
+	"log/slog"
+
 	"github.com/ging/alexandria/internal/core/codes"
 	"github.com/ging/alexandria/internal/core/lifecycle"
+	"github.com/ging/alexandria/internal/core/logx"
 	"github.com/ging/alexandria/internal/core/ni"
 	"github.com/ging/alexandria/internal/core/pkgv"
 	"github.com/ging/alexandria/internal/core/semver"
@@ -50,6 +53,7 @@ func (r *Release) Approve(p *domain.Principal, ns, id string, o ApproveOptions) 
 	rel, err := r.steps(ns, c, o, recs, pInstant)
 	if err != nil {
 		_ = r.d.emit(p, domain.EvReleaseAborted, ns, id)
+		r.d.log().Error("release approval aborted", slog.String("namespace", ns), slog.String("candidate_id", id), slog.String("version", c.Version.String()), logx.Err(err))
 		if ce, ok := codes.As(err); ok {
 			return nil, ce
 		}
@@ -61,8 +65,11 @@ func (r *Release) Approve(p *domain.Principal, ns, id string, o ApproveOptions) 
 	if err := r.d.emit(p, domain.EvReleasePublished, ns, rel.Record.ID); err != nil {
 		return nil, err
 	}
+	r.d.log().Info("release published", slog.String("namespace", ns), slog.String("candidate_id", id), slog.String("version", c.Version.String()), slog.String("class", string(c.Class)))
 	// Step 4: a failure here leaves the release stored; the scheduler issues the listing on its next pass.
-	_, _ = r.listing.Issue(ns, pInstant)
+	if _, lerr := r.listing.Issue(ns, pInstant); lerr != nil {
+		r.d.log().Warn("initial listing issuance deferred to scheduler", slog.String("namespace", ns), logx.Err(lerr))
+	}
 	return rel.SignedRec, nil
 }
 
@@ -117,5 +124,9 @@ func (r *Release) Reject(p *domain.Principal, ns, id, comment string) (domain.Ca
 		return domain.Candidate{}, err
 	}
 	c.State, c.Comment = domain.Rejected, comment
-	return c, r.d.emit(p, domain.EvCandidateRejected, ns, id)
+	if err := r.d.emit(p, domain.EvCandidateRejected, ns, id); err != nil {
+		return domain.Candidate{}, err
+	}
+	r.d.log().Info("candidate rejected", slog.String("namespace", ns), slog.String("candidate_id", id), slog.String("version", c.Version.String()))
+	return c, nil
 }

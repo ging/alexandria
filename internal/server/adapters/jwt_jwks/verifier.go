@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"slices"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
 
+	"github.com/ging/alexandria/internal/core/logx"
 	"github.com/ging/alexandria/internal/core/timex"
 	"github.com/ging/alexandria/internal/server/domain"
 )
@@ -37,6 +39,7 @@ type Verifier struct {
 	CacheTTL   timex.Duration
 	Clock      timex.Clock
 	Client     *http.Client
+	Logger     *slog.Logger
 
 	mu    sync.Mutex
 	cache map[string]cached
@@ -144,8 +147,10 @@ func (v *Verifier) key(iss Issuer, kid string) (*jose.JSONWebKey, error) {
 		if stale {
 			set, err := v.fetch(iss)
 			if err != nil {
+				logx.Default(v.Logger).Warn("jwks refresh failed", slog.String("issuer", iss.Iss), slog.String("discovery_url", iss.DiscoveryURL), logx.Err(err))
 				return nil, err
 			}
+			logx.Default(v.Logger).Debug("jwks refreshed", slog.String("issuer", iss.Iss), slog.Int("keys", len(set.Keys)))
 			c = cached{set: set, at: v.Clock.Now()}
 			v.cache[iss.Iss] = c
 		}

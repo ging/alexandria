@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -15,6 +16,7 @@ import (
 	"github.com/ging/alexandria/internal/core/codes"
 	"github.com/ging/alexandria/internal/core/schemas"
 	"github.com/ging/alexandria/internal/core/timex"
+	"github.com/ging/alexandria/internal/telemetry"
 )
 
 // DefaultContext is the default value of trust.context (§3.4).
@@ -40,6 +42,16 @@ type Listener struct {
 	Bind string `json:"bind"`
 }
 
+// LogConfig holds structured logging and OpenTelemetry export settings extracted from observability.
+type LogConfig struct {
+	Level        string
+	Format       string
+	OTLPEndpoint string
+	OTLPInsecure bool
+	ServiceName  string
+	Environment  string
+}
+
 // Config is the client configuration document.
 type Config struct {
 	Trust     Trust               `json:"trust"`
@@ -62,6 +74,8 @@ type Config struct {
 
 	DIDTTL     timex.Duration `json:"-"`
 	GCInterval timex.Duration `json:"-"`
+	HubCA      string         `json:"-"`
+	Log        LogConfig      `json:"-"`
 }
 
 // Endpoint models one HTTP transport address (public and internal) in the config.yaml layout.
@@ -84,6 +98,9 @@ type NodeConfig struct {
 			IsLocal     bool `json:"is_local"`
 			IsProd      bool `json:"is_prod"`
 			HasTLSProxy bool `json:"has_tls_proxy"`
+			TLS         struct {
+				CA string `json:"ca,omitempty"`
+			} `json:"tls,omitempty"`
 		} `json:"connection"`
 	} `json:"common_config"`
 	DID struct {
@@ -92,13 +109,16 @@ type NodeConfig struct {
 		DIDTTL string `json:"did_ttl,omitempty"`
 	} `json:"did_config"`
 	Observability struct {
-		LogLevel    string `json:"log_level,omitempty"`
-		LogFormat   string `json:"log_format,omitempty"`
-		Metrics     *bool  `json:"metrics,omitempty"`
-		Pprof       *bool  `json:"pprof,omitempty"`
-		Port        string `json:"port,omitempty"`
-		EventsSink  string `json:"events_sink,omitempty"`
-		AuditWindow int    `json:"audit_window,omitempty"`
+		LogLevel     string `json:"log_level,omitempty"`
+		LogFormat    string `json:"log_format,omitempty"`
+		OTLPEndpoint string `json:"otlp_endpoint,omitempty"`
+		OTLPInsecure *bool  `json:"otlp_insecure,omitempty"`
+		ServiceName  string `json:"service_name,omitempty"`
+		Metrics      *bool  `json:"metrics,omitempty"`
+		Pprof        *bool  `json:"pprof,omitempty"`
+		Port         string `json:"port,omitempty"`
+		EventsSink   string `json:"events_sink,omitempty"`
+		AuditWindow  int    `json:"audit_window,omitempty"`
 	} `json:"observability"`
 	Client struct {
 		ClassID   string              `json:"class_id,omitempty"`
@@ -129,7 +149,18 @@ func Load(path string) (*Config, *codes.Error) {
 	if err != nil {
 		return nil, codes.New(codes.ConfigSchema, "%v", err)
 	}
-	return Parse(b)
+	c, cerr := Parse(b)
+	if cerr != nil {
+		return nil, cerr
+	}
+	if c.HubCA != "" {
+		p := strings.TrimPrefix(strings.TrimPrefix(c.HubCA, "file://"), "file:")
+		if p != "" && !filepath.IsAbs(p) {
+			p = filepath.Join(filepath.Dir(path), p)
+		}
+		c.HubCA = p
+	}
+	return c, nil
 }
 
 // Parse applies CFG-1 and the defaults of §4.3.1 to a JSON or YAML configuration document.
@@ -138,8 +169,10 @@ func Parse(raw []byte) (*Config, *codes.Error) {
 	if err != nil {
 		return nil, codes.New(codes.ConfigSchema, "%v", err)
 	}
+	var hubCA string
+	var logCfg LogConfig
 	if isNodeLayout(b) {
-		if b, err = convertNodeConfig(b); err != nil {
+		if b, hubCA, logCfg, err = convertNodeConfig(b); err != nil {
 			return nil, codes.New(codes.ConfigSchema, "%v", err)
 		}
 	}
@@ -150,7 +183,15 @@ func Parse(raw []byte) (*Config, *codes.Error) {
 	if err := json.Unmarshal(b, &c); err != nil {
 		return nil, codes.New(codes.ConfigSchema, "%v", err)
 	}
+	c.HubCA = hubCA
+	c.Log = logCfg
 	c.applyDefaults()
+	if _, err := telemetry.ParseLevel(c.Log.Level); err != nil {
+		return nil, codes.New(codes.ConfigSchema, "log_level: %v", err)
+	}
+	if err := telemetry.ValidateFormat(c.Log.Format); err != nil {
+		return nil, codes.New(codes.ConfigSchema, "log_format: %v", err)
+	}
 	if c.DIDTTL, err = timex.ParseDuration(c.Trust.DIDTTL); err != nil {
 		return nil, codes.New(codes.ConfigSchema, "did_ttl: %v", err)
 	}
@@ -193,12 +234,12 @@ func isNodeLayout(b []byte) bool {
 }
 
 // convertNodeConfig translates a NodeConfig document into the canonical Appendix A.3 JSON format.
-func convertNodeConfig(b []byte) ([]byte, error) {
+func convertNodeConfig(b []byte) ([]byte, string, LogConfig, error) {
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
 	var nc NodeConfig
 	if err := dec.Decode(&nc); err != nil {
-		return nil, err
+		return nil, "", LogConfig{}, err
 	}
 	trust := nc.Client.Trust
 	if trust.HubDID == "" && nc.DID.HubDID != "" {
@@ -255,7 +296,20 @@ func convertNodeConfig(b []byte) ([]byte, error) {
 		sink = nc.Observability.EventsSink
 	}
 	out["events"] = map[string]string{"sink": sink}
-	return json.Marshal(out)
+	logCfg := LogConfig{
+		Level:        nc.Observability.LogLevel,
+		Format:       nc.Observability.LogFormat,
+		OTLPEndpoint: nc.Observability.OTLPEndpoint,
+		ServiceName:  nc.Observability.ServiceName,
+	}
+	if nc.Observability.OTLPInsecure != nil {
+		logCfg.OTLPInsecure = *nc.Observability.OTLPInsecure
+	}
+	if nc.Common.Connection.IsProd {
+		logCfg.Environment = "production"
+	}
+	rawOut, err := json.Marshal(out)
+	return rawOut, nc.Common.Connection.TLS.CA, logCfg, err
 }
 
 // applyDefaults fills the defaults of §4.3.1.
@@ -270,6 +324,8 @@ func (c *Config) applyDefaults() {
 	set(&c.DefaultAction, "forward")
 	set(&c.UnknownAgreement, "forward")
 	set(&c.Retention.GCInterval, "P1D")
+	set(&c.Log.Level, "info")
+	set(&c.Log.Format, "auto")
 	if c.Audit.Window == 0 {
 		c.Audit.Window = 100
 	}

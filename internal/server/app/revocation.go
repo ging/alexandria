@@ -3,8 +3,11 @@
 package app
 
 import (
+	"log/slog"
+
 	"github.com/ging/alexandria/internal/core/codes"
 	"github.com/ging/alexandria/internal/core/lifecycle"
+	"github.com/ging/alexandria/internal/core/logx"
 	"github.com/ging/alexandria/internal/core/semver"
 	"github.com/ging/alexandria/internal/core/timex"
 	"github.com/ging/alexandria/internal/core/vc"
@@ -64,6 +67,9 @@ func (r *Revocation) Revoke(p *domain.Principal, ns, version string, o RevokeOpt
 	if err := r.d.emit(p, domain.EvVersionRevoked, ns, rec.ID); err != nil {
 		return nil, err
 	}
-	_, _ = r.listing.Issue(ns, now)
+	r.d.log().Warn("version revoked", slog.String("namespace", ns), slog.String("version", v.String()), slog.String("revoked_from", rf.String()), slog.String("principal", p.String()))
+	if _, lerr := r.listing.Issue(ns, now); lerr != nil {
+		r.d.log().Warn("revocation listing issuance deferred to scheduler", slog.String("namespace", ns), logx.Err(lerr))
+	}
 	return signed, nil
 }

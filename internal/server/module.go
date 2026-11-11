@@ -5,13 +5,18 @@ package server
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/ging/alexandria/internal/core/did"
+	"github.com/ging/alexandria/internal/core/logx"
 	"github.com/ging/alexandria/internal/core/timex"
 	"github.com/ging/alexandria/internal/dsl"
 	"github.com/ging/alexandria/internal/server/adapters/blob_fs"
@@ -28,6 +33,7 @@ import (
 	"github.com/ging/alexandria/internal/server/adapters/sqlite"
 	"github.com/ging/alexandria/internal/server/app"
 	"github.com/ging/alexandria/internal/server/config"
+	"github.com/ging/alexandria/internal/telemetry"
 )
 
 // Name identifies the alexandria-server bounded context in logs and startup reports.
@@ -35,11 +41,14 @@ const Name = "alexandria-server"
 
 // Deps groups the configuration and optional port overrides for the server module.
 type Deps struct {
-	Config   config.Server
-	Clock    timex.Clock
-	Signer   app.KeySigner
-	Tokens   http_v1.TokenVerifier
-	Resolver app.DIDResolver
+	Config     config.Server
+	Clock      timex.Clock
+	Signer     app.KeySigner
+	Tokens     http_v1.TokenVerifier
+	Resolver   app.DIDResolver
+	Logger     *slog.Logger
+	Tracer     trace.Tracer
+	Propagator propagation.TextMapPropagator
 }
 
 // Module is the assembled alexandria-server context with its HTTP surface and background scheduler.
@@ -48,6 +57,7 @@ type Module struct {
 	handler http.Handler
 	store   *sqlite.Store
 	clock   timex.Clock
+	logger  *slog.Logger
 	did     did.DID
 	listen  string
 	keyTick timex.Duration
@@ -91,31 +101,40 @@ func New(deps Deps) (*Module, error) {
 	if resolver == nil {
 		resolver = did_resolver.Resolver{AllowInsecureLocalhost: cfg.DIDResolver.AllowInsecureLocalhost}
 	}
+	logger := logx.Default(deps.Logger)
 	hub := app.New(app.Deps{
 		Store: store, Blobs: blobs, Signer: signer, Resolver: resolver, Compiler: profileCompiler(cfg), Clock: deps.Clock,
+		Logger:  logx.Component(logger, "hub"),
 		Fetcher: fetch_http.Fetcher{Timeout: time.Duration(cfg.Timeout) * time.Second, Allow: cfg.Vocab.ProxyAllow, AllowInsecureLocalhost: cfg.Vocab.AllowInsecureLocalhost},
 		Base:    cfg.Base, DID: hubDID, Context: cfg.Context(), Defaults: cfg.Defaults, VocabMaxSize: cfg.Vocab.MaxSize,
 		AllowInsecureLocalhost: cfg.Vocab.AllowInsecureLocalhost,
 	})
 	tokens := deps.Tokens
 	if tokens == nil {
-		tokens = verifier(cfg, deps.Clock)
+		tokens = verifier(cfg, deps.Clock, logx.Component(logger, "auth.jwks"))
 	}
 	mux := http.NewServeMux()
-	http_v1.Handler{Hub: hub, Tokens: tokens, Context: cfg.Context(), Base: cfg.Base}.Register(mux)
-	http_pub.Handler{Pub: hub.Publication, Problems: httpx.Problems{Context: cfg.Context()}}.Register(mux)
+	http_v1.Handler{Hub: hub, Tokens: tokens, Context: cfg.Context(), Base: cfg.Base, Logger: logx.Component(logger, "http.v1")}.Register(mux)
+	http_pub.Handler{Pub: hub.Publication, Problems: httpx.Problems{Context: cfg.Context(), Logger: logx.Component(logger, "http.pub")}}.Register(mux)
 	hub.Keys.CheckSigningKey()
+	wrapped := telemetry.HTTPMiddleware(telemetry.HTTPOptions{
+		Logger:     logger,
+		Tracer:     deps.Tracer,
+		Propagator: deps.Propagator,
+		Component:  "http",
+		Listener:   "hub",
+	}, httpx.WithDate(deps.Clock, mux))
 	return &Module{
-		hub: hub, handler: httpx.WithDate(deps.Clock, mux), store: store, clock: deps.Clock, did: hubDID,
+		hub: hub, handler: wrapped, store: store, clock: deps.Clock, logger: logger, did: hubDID,
 		listen: cfg.Listen, keyTick: cfg.Defaults.Freshness.TTL / 2,
 	}, nil
 }
 
 // verifier builds the jwt_jwks token verifier from server.json.
-func verifier(cfg config.Server, c timex.Clock) *jwt_jwks.Verifier {
+func verifier(cfg config.Server, c timex.Clock, logger *slog.Logger) *jwt_jwks.Verifier {
 	v := &jwt_jwks.Verifier{
 		Audience: cfg.Auth.Audience, Algorithms: cfg.Auth.Algorithms, AdminClaim: cfg.Auth.AdminClaim.Claim, AdminValue: cfg.Auth.AdminClaim.Value,
-		Skew: cfg.Skew, CacheTTL: cfg.JWKSTTL, Clock: c,
+		Skew: cfg.Skew, CacheTTL: cfg.JWKSTTL, Clock: c, Logger: logger,
 	}
 	for _, i := range cfg.Auth.Issuers {
 		v.Issuers = append(v.Issuers, jwt_jwks.Issuer{Iss: i.Iss, DiscoveryURL: i.DiscoveryURL})
@@ -156,7 +175,7 @@ func (m *Module) Start(ctx context.Context) error {
 	m.bg.Add(1)
 	go func() {
 		defer m.bg.Done()
-		scheduler.Run(ctx, m.hub, m.clock, time.Second, m.keyTick)
+		scheduler.Run(ctx, m.hub, m.clock, time.Second, m.keyTick, m.logger)
 	}()
 	return nil
 }

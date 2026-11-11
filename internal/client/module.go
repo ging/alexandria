@@ -4,11 +4,15 @@ package client
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/ging/alexandria/internal/client/adapters/did_resolver"
 	"github.com/ging/alexandria/internal/client/adapters/evaluator_poc"
@@ -25,7 +29,9 @@ import (
 	"github.com/ging/alexandria/internal/client/domain"
 	"github.com/ging/alexandria/internal/core/codes"
 	"github.com/ging/alexandria/internal/core/did"
+	"github.com/ging/alexandria/internal/core/logx"
 	"github.com/ging/alexandria/internal/core/timex"
+	"github.com/ging/alexandria/internal/telemetry"
 )
 
 // Name identifies the alexandria-client bounded context in logs and startup reports.
@@ -39,6 +45,9 @@ type Deps struct {
 	AllowInsecureLocalhost bool
 	HubCA                  string
 	Resolver               app.DIDResolver
+	Logger                 *slog.Logger
+	Tracer                 trace.Tracer
+	Propagator             propagation.TextMapPropagator
 }
 
 // Module is the assembled alexandria-client context.
@@ -57,6 +66,7 @@ type Module struct {
 // New assembles the module; a failing CFG-2 is returned as a coded error.
 func New(deps Deps) (*Module, error) {
 	cfg := deps.Config
+	logger := logx.Default(deps.Logger)
 	if err := os.MkdirAll(deps.StateDir, 0o750); err != nil {
 		return nil, err
 	}
@@ -68,7 +78,7 @@ func New(deps Deps) (*Module, error) {
 	if err != nil {
 		return nil, err
 	}
-	sink, err := events.Open(cfg.Events.Sink)
+	sink, err := events.OpenWithLogger(cfg.Events.Sink, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -84,15 +94,16 @@ func New(deps Deps) (*Module, error) {
 	reg := metrics.New()
 	cell, rulesCell := &app.Cell{}, &app.RulesCell{}
 	trust := app.NewHubTrust(hubDID, resolver, deps.Clock, cfg.DIDTTL, sink, ns)
-	agreements := &app.Agreements{Repo: store_sqlite.Agreements{S: store}, Events: sink, Clock: deps.Clock, Namespace: ns}
+	trust.Logger = logx.Component(logger, "trust")
+	agreements := &app.Agreements{Repo: store_sqlite.Agreements{S: store}, Events: sink, Clock: deps.Clock, Logger: logx.Component(logger, "agreements"), Namespace: ns}
 	ev := &evaluator_poc.Evaluator{Events: sink, Clock: deps.Clock, Namespace: ns}
 	audit := &app.Audit{Window: cfg.Audit.Window, Evaluator: ev, Events: sink, Clock: deps.Clock, Namespace: ns}
-	status := &app.Status{Cell: cell, Rules: rulesCell, Trust: trust, Packages: pkgs, Events: sink, Clock: deps.Clock, Namespace: ns, HubDID: hubDID}
+	status := &app.Status{Cell: cell, Rules: rulesCell, Trust: trust, Packages: pkgs, Events: sink, Clock: deps.Clock, Logger: logx.Component(logger, "status"), Namespace: ns, HubDID: hubDID}
 	syncer := &app.Sync{
 		Hub: hub, Trust: trust, Continuity: store, Packages: pkgs, Agreements: agreements, Audit: audit, Status: status,
-		Cell: cell, Clock: deps.Clock, Events: sink, Namespace: ns, HubDID: hubDID, Context: cfg.Trust.Context,
+		Cell: cell, Clock: deps.Clock, Events: sink, Logger: logx.Component(logger, "sync"), Namespace: ns, HubDID: hubDID, Context: cfg.Trust.Context,
 	}
-	rules := &app.Rules{Store: store_sqlite.Rules{S: store}, Cell: rulesCell, Events: sink, Clock: deps.Clock, Namespace: ns, HasManagement: cfg.Upstreams.Management != ""}
+	rules := &app.Rules{Store: store_sqlite.Rules{S: store}, Cell: rulesCell, Events: sink, Clock: deps.Clock, Logger: logx.Component(logger, "rules"), Namespace: ns, HasManagement: cfg.Upstreams.Management != ""}
 	if cerr := rules.Init(cfg.Rules.Seed); cerr != nil {
 		return nil, cerr
 	}
@@ -107,13 +118,24 @@ func New(deps Deps) (*Module, error) {
 		Snap: cell, Rules: rulesCell, Evaluator: ev, Agreements: store_sqlite.Agreements{S: store}, Clock: deps.Clock,
 		Settings: app.Settings{Namespace: ns, DefaultAction: cfg.DefaultAction, UnknownAgreement: cfg.UnknownAgreement},
 	}
-	edge := &app.Edge{Explainer: explainer, Upstream: up, Capture: agreements, Audit: audit, Events: sink, Metrics: reg}
-	gc := &app.GC{Packages: pkgs, Agreements: agreements, Cell: cell, Events: sink, Clock: deps.Clock, Namespace: ns, Interval: cfg.GCInterval}
+	edge := &app.Edge{Explainer: explainer, Upstream: up, Capture: agreements, Audit: audit, Events: sink, Metrics: reg, Logger: logx.Component(logger, "edge")}
+	gc := &app.GC{Packages: pkgs, Agreements: agreements, Cell: cell, Events: sink, Clock: deps.Clock, Logger: logx.Component(logger, "gc"), Namespace: ns, Interval: cfg.GCInterval}
+	adminMux := status_http.Admin{
+		Status: status, Rules: rules, Explainer: &explainer, Agreements: agreements, Audit: audit, Cell: cell, Metrics: reg,
+		Logger: logx.Component(logger, "http.admin"),
+	}.Handler()
 	handlers := map[string]http.Handler{
-		"admin": status_http.Admin{Status: status, Rules: rules, Explainer: &explainer, Agreements: agreements, Audit: audit, Cell: cell, Metrics: reg}.Handler(),
+		"admin": telemetry.HTTPMiddleware(telemetry.HTTPOptions{
+			Logger:     logger,
+			Tracer:     deps.Tracer,
+			Propagator: deps.Propagator,
+			Component:  "http.admin",
+			Listener:   "admin",
+		}, adminMux),
 	}
+	proxyLog := logx.Component(logger, "proxy.dsp")
 	for _, l := range []domain.Listener{domain.DSPIngress, domain.MgmtIngress, domain.DSPEgress} {
-		handlers[string(l)] = proxy_dsp.Handler{Edge: edge, Listener: l, Latency: reg}
+		handlers[string(l)] = proxy_dsp.Handler{Edge: edge, Listener: l, Latency: reg, Logger: proxyLog, Tracer: deps.Tracer}
 	}
 	return &Module{cfg: cfg, syncer: syncer, gc: gc, status: status, edge: edge, store: store, handlers: handlers}, nil
 }

@@ -3,9 +3,11 @@
 package app
 
 import (
+	"log/slog"
 	"sort"
 
 	"github.com/ging/alexandria/internal/client/domain"
+	"github.com/ging/alexandria/internal/core/logx"
 	"github.com/ging/alexandria/internal/core/ni"
 	"github.com/ging/alexandria/internal/core/pkgv"
 	"github.com/ging/alexandria/internal/core/timex"
@@ -18,6 +20,7 @@ type GC struct {
 	Cell       *Cell
 	Events     EventSink
 	Clock      timex.Clock
+	Logger     *slog.Logger
 	Namespace  string
 	Interval   timex.Duration
 	last       timex.Instant
@@ -65,6 +68,11 @@ func (g *GC) Run() []string {
 	n := notice(EvGC, g.Namespace, now, "", "package collection")
 	n.Versions = deleted
 	g.Events.Emit(n)
+	if len(deleted) > 0 {
+		logx.Default(g.Logger).Info("garbage collected unused packages", slog.String("namespace", g.Namespace), slog.Int("deleted_count", len(deleted)), slog.Any("versions", deleted))
+	} else {
+		logx.Default(g.Logger).Debug("package garbage collection completed", slog.String("namespace", g.Namespace), slog.Int("deleted_count", 0))
+	}
 	return deleted
 }
 

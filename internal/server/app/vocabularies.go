@@ -4,12 +4,14 @@ package app
 
 import (
 	"errors"
+	"log/slog"
 	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/ging/alexandria/internal/core/codes"
 	"github.com/ging/alexandria/internal/core/did"
+	"github.com/ging/alexandria/internal/core/logx"
 	"github.com/ging/alexandria/internal/core/ni"
 	"github.com/ging/alexandria/internal/server/domain"
 )
@@ -59,6 +61,7 @@ func (v *Vocabularies) Create(p *domain.Principal, ns string, in VocabInput) (do
 	if err := v.d.emit(p, domain.EvVocabularyCreated, ns, v.reader.stable(ns, in.Name)); err != nil {
 		return domain.Vocabulary{}, err
 	}
+	v.d.log().Info("vocabulary created", slog.String("namespace", ns), slog.String("vocabulary", in.Name), slog.String("kind", in.Kind))
 	if body != nil {
 		if _, _, err := v.revise(p, ns, voc, body); err != nil {
 			return domain.Vocabulary{}, err
@@ -143,6 +146,7 @@ func (v *Vocabularies) fetch(voc domain.Vocabulary) ([]byte, error) {
 	}
 	body, ct, err := v.d.Fetcher.Fetch(voc.Upstream, v.d.VocabMaxSize+1)
 	if err != nil {
+		v.d.log().Warn("vocabulary upstream fetch failed", slog.String("vocabulary", voc.Name), slog.String("upstream", voc.Upstream), logx.Err(err))
 		return nil, codes.New(codes.VocabUpstreamFailed, "%s: %v", voc.Upstream, err)
 	}
 	if !domain.CompatibleMediaType(voc.MediaType, ct) {
@@ -175,7 +179,11 @@ func (v *Vocabularies) revise(p *domain.Principal, ns string, voc domain.Vocabul
 	if err := v.d.Store.AppendRevision(ns, voc.Name, r); err != nil {
 		return domain.Revision{}, false, err
 	}
-	return r, true, v.d.emit(p, domain.EvVocabularyRevised, ns, v.reader.revisionURL(ns, voc.Name, r.N))
+	if err := v.d.emit(p, domain.EvVocabularyRevised, ns, v.reader.revisionURL(ns, voc.Name, r.N)); err != nil {
+		return domain.Revision{}, false, err
+	}
+	v.d.log().Info("vocabulary revision stored", slog.String("namespace", ns), slog.String("vocabulary", voc.Name), slog.Int("revision", r.N), slog.Int64("size_bytes", r.Size))
+	return r, true, nil
 }
 
 // VocabReader reads vocabularies and their revisions without any network access.

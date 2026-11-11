@@ -19,7 +19,7 @@ const module = "github.com/ging/alexandria/"
 var root = filepath.Join("..", "..")
 
 // allowedExternal lists the only non-standard modules production code may import (DP-1).
-var allowedExternal = []string{"modernc.org/sqlite", "github.com/santhosh-tekuri/jsonschema/v6", "github.com/mr-tron/base58", "github.com/dunglas/httpsfv", "github.com/go-jose/go-jose/v4", "github.com/prometheus/client_golang", "gopkg.in/yaml.v3", "github.com/piprate/json-gold"}
+var allowedExternal = []string{"modernc.org/sqlite", "github.com/santhosh-tekuri/jsonschema/v6", "github.com/mr-tron/base58", "github.com/dunglas/httpsfv", "github.com/go-jose/go-jose/v4", "github.com/prometheus/client_golang", "gopkg.in/yaml.v3", "github.com/piprate/json-gold", "go.opentelemetry.io/otel", "go.opentelemetry.io/contrib/bridges/otelslog"}
 
 // pkgFile is one production Go file with its package directory and imports.
 type pkgFile struct {
@@ -32,7 +32,7 @@ type pkgFile struct {
 func productionFiles(t *testing.T) []pkgFile {
 	t.Helper()
 	var out []pkgFile
-	for _, top := range []string{"internal/core", "internal/dsl", "internal/server", "internal/client", "internal/clock", "cmd/alexandria-server", "cmd/alexandria-client", "cmd/alexandriac"} {
+	for _, top := range []string{"internal/core", "internal/dsl", "internal/server", "internal/client", "internal/clock", "internal/telemetry", "cmd/alexandria-server", "cmd/alexandria-client", "cmd/alexandriac"} {
 		_ = filepath.Walk(filepath.Join(root, top), func(p string, info os.FileInfo, err error) error {
 			if err != nil || info.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
 				return nil

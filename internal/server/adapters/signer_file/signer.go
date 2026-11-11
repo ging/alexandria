@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"os"
+	"path/filepath"
 
 	"github.com/ging/alexandria/internal/core/did"
 	"github.com/ging/alexandria/internal/core/timex"
@@ -50,6 +51,9 @@ func Load(path, vm string) (*Signer, error) {
 
 // generate creates and stores a fresh key with owner-only permissions.
 func generate(path, vm string) (*Signer, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return nil, err
+	}
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, err

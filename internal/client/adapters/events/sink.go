@@ -7,7 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -16,18 +16,21 @@ import (
 	"time"
 
 	"github.com/ging/alexandria/internal/client/app"
+	"github.com/ging/alexandria/internal/core/logx"
 )
 
 // FileSink appends one JSON document per line.
 type FileSink struct {
-	mu sync.Mutex
-	f  *os.File
+	mu     sync.Mutex
+	f      *os.File
+	Logger *slog.Logger
 }
 
 // HTTPSink posts each event as JSON.
 type HTTPSink struct {
-	URL  string
-	HTTP *http.Client
+	URL    string
+	HTTP   *http.Client
+	Logger *slog.Logger
 }
 
 // Tee forwards events to several sinks.
@@ -40,8 +43,14 @@ func (t Tee) Emit(e any) {
 	}
 }
 
-// Open builds the sink of a URI.
+// Open builds the sink of a URI with a default no-op logger.
 func Open(uri string) (app.EventSink, error) {
+	return OpenWithLogger(uri, nil)
+}
+
+// OpenWithLogger builds the sink of a URI with structured failure reporting.
+func OpenWithLogger(uri string, logger *slog.Logger) (app.EventSink, error) {
+	log := logx.Component(logger, "events")
 	u, err := url.Parse(uri)
 	if err != nil {
 		return nil, err
@@ -59,9 +68,9 @@ func Open(uri string) (app.EventSink, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &FileSink{f: f}, nil
+		return &FileSink{f: f, Logger: log}, nil
 	case "http", "https":
-		return HTTPSink{URL: uri, HTTP: &http.Client{Timeout: 5 * time.Second}}, nil
+		return HTTPSink{URL: uri, HTTP: &http.Client{Timeout: 5 * time.Second}, Logger: log}, nil
 	}
 	return nil, fmt.Errorf("events: unsupported sink %s", uri)
 }
@@ -70,28 +79,32 @@ func Open(uri string) (app.EventSink, error) {
 func (s *FileSink) Emit(e any) {
 	b, err := json.Marshal(e)
 	if err != nil {
+		logx.Default(s.Logger).Error("failed to marshal event", logx.Err(err))
 		return
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, _ = s.f.Write(append(b, '\n'))
+	if _, err := s.f.Write(append(b, '\n')); err != nil {
+		logx.Default(s.Logger).Error("failed to write event to file sink", logx.Err(err))
+	}
 }
 
 // Emit posts the event, logging failures.
 func (s HTTPSink) Emit(e any) {
 	b, err := json.Marshal(e)
 	if err != nil {
+		logx.Default(s.Logger).Error("failed to marshal event", logx.Err(err))
 		return
 	}
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, s.URL, bytes.NewReader(b))
 	if err != nil {
-		log.Printf("events: %v", err)
+		logx.Default(s.Logger).Warn("failed to build HTTP event request", slog.String("sink_url", s.URL), logx.Err(err))
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := s.HTTP.Do(req)
 	if err != nil {
-		log.Printf("events: %v", err)
+		logx.Default(s.Logger).Warn("failed to deliver HTTP event", slog.String("sink_url", s.URL), logx.Err(err))
 		return
 	}
 	_ = resp.Body.Close()

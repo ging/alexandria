@@ -4,10 +4,12 @@ package app
 
 import (
 	"encoding/json"
+	"log/slog"
 	"sync"
 
 	"github.com/ging/alexandria/internal/client/domain"
 	"github.com/ging/alexandria/internal/core/codes"
+	"github.com/ging/alexandria/internal/core/logx"
 	"github.com/ging/alexandria/internal/core/ni"
 	"github.com/ging/alexandria/internal/core/semver"
 	"github.com/ging/alexandria/internal/core/timex"
@@ -18,6 +20,7 @@ type Agreements struct {
 	Repo      AgreementRepo
 	Events    EventSink
 	Clock     timex.Clock
+	Logger    *slog.Logger
 	Namespace string
 	mu        sync.Mutex
 }
@@ -50,10 +53,13 @@ func (a *Agreements) Capture(body []byte, role, source, version string, snap *do
 	err := a.Repo.Put(e)
 	a.mu.Unlock()
 	if err != nil {
+		logx.Default(a.Logger).Error("failed to persist captured agreement", slog.String("agreement_id", id), logx.Err(err))
 		return
 	}
+	logx.Default(a.Logger).Info("agreement captured", slog.String("agreement_id", id), slog.String("role", role), slog.String("source", source), slog.String("version", version))
 	if e.DeclaredProfile != nil {
 		if p := snap.Packages[rec.Manifest]; p == nil || !p.Manifest.HasProfile(*e.DeclaredProfile) {
+			logx.Default(a.Logger).Warn("captured agreement profile mismatch", slog.String("agreement_id", id), slog.String("version", version), slog.String("declared_profile", *e.DeclaredProfile), logx.Code(codes.AgreementProfileMismatch))
 			n := notice(EvAgreement, a.Namespace, tL, codes.AgreementProfileMismatch, *e.DeclaredProfile)
 			n.Agreement, n.Version = id, version
 			a.Events.Emit(n)
@@ -91,6 +97,7 @@ func (a *Agreements) OnRevocations(versions []semver.Version, snap *domain.Snaps
 		for _, e := range all {
 			if e.Version == v.String() {
 				rec, _ := snap.KnownRecord(e.Version)
+				logx.Default(a.Logger).Warn("agreement affected by scheduled revocation", slog.String("agreement_id", e.AgreementID), slog.String("version", e.Version), slog.String("revoked_from", rec.RevokedFrom.String()), logx.Code(codes.AgreementRevocationScheduled))
 				n := notice(EvAgreement, a.Namespace, a.Clock.Now(), codes.AgreementRevocationScheduled, "revoked_from "+rec.RevokedFrom.String())
 				n.Agreement, n.Version = e.AgreementID, e.Version
 				a.Events.Emit(n)

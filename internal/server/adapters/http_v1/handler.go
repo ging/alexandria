@@ -5,14 +5,17 @@ package http_v1
 import (
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/ging/alexandria/internal/core/codes"
+	"github.com/ging/alexandria/internal/core/logx"
 	"github.com/ging/alexandria/internal/server/adapters/httpx"
 	"github.com/ging/alexandria/internal/server/app"
 	"github.com/ging/alexandria/internal/server/domain"
+	"github.com/ging/alexandria/internal/telemetry"
 )
 
 // LDJSON is the media type of every 2xx body of /v1.
@@ -30,6 +33,7 @@ type Handler struct {
 	Context string
 	Base    string
 	MaxBody int64
+	Logger  *slog.Logger
 }
 
 // handlerFunc is a /v1 handler receiving the optional principal.
@@ -70,7 +74,9 @@ func (h Handler) Register(mux *http.ServeMux) {
 }
 
 // problems returns the problem writer of /v1.
-func (h Handler) problems() httpx.Problems { return httpx.Problems{Context: h.Context} }
+func (h Handler) problems() httpx.Problems {
+	return httpx.Problems{Context: h.Context, Logger: h.Logger}
+}
 
 // authenticated validates a present bearer token (401 invalid_token on failure) and passes the principal, nil when absent.
 func (h Handler) authenticated(next handlerFunc) http.Handler {
@@ -83,6 +89,7 @@ func (h Handler) authenticated(next handlerFunc) http.Handler {
 		raw, ok := strings.CutPrefix(auth, "Bearer ")
 		p, err := h.Tokens.Verify(strings.TrimSpace(raw))
 		if !ok || err != nil {
+			logx.Default(h.Logger).WarnContext(r.Context(), "bearer authentication failed", slog.String("url.path", telemetry.Clean(r.URL.Path)), logx.Err(err))
 			w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
 			h.problems().Error(w, codes.New(codes.APIUnauthenticated, "invalid bearer token"))
 			return

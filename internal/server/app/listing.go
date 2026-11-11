@@ -3,11 +3,13 @@
 package app
 
 import (
+	"log/slog"
 	"sync"
 	"sync/atomic"
 
 	"github.com/ging/alexandria/internal/core/codes"
 	"github.com/ging/alexandria/internal/core/lifecycle"
+	"github.com/ging/alexandria/internal/core/logx"
 	"github.com/ging/alexandria/internal/core/semver"
 	"github.com/ging/alexandria/internal/core/timex"
 	"github.com/ging/alexandria/internal/core/vc"
@@ -28,6 +30,9 @@ func (k *KeyGate) CheckSigningKey() bool {
 	was, first := k.published.Swap(ok), !k.checked.Swap(true)
 	if !ok && (was || first) {
 		_ = k.d.emit(nil, domain.EvSignerKeyUnpublished, "", k.d.Signer.VerificationMethod())
+		k.d.log().Warn("signing key not published in hub DID document", slog.String("hub_did", string(k.d.DID)), slog.String("verification_method", k.d.Signer.VerificationMethod()), logx.Err(err))
+	} else if ok && !was {
+		k.d.log().Info("signing key verified in hub DID document", slog.String("hub_did", string(k.d.DID)), slog.String("verification_method", k.d.Signer.VerificationMethod()))
 	}
 	return ok
 }
@@ -82,7 +87,11 @@ func (l *Listing) issue(ns string, t timex.Instant) (StoredListing, error) {
 	if err := l.d.Store.PutListing(ns, s); err != nil {
 		return StoredListing{}, err
 	}
-	return s, l.d.emit(nil, domain.EvListingIssued, ns, subject.ID)
+	if err := l.d.emit(nil, domain.EvListingIssued, ns, subject.ID); err != nil {
+		return StoredListing{}, err
+	}
+	l.d.log().Info("version listing issued", slog.String("namespace", ns), slog.Uint64("sequence", seq), slog.Int("versions", len(recs)), slog.String("valid_until", until.String()))
+	return s, nil
 }
 
 // IssueIfStale emits a listing when none exists or the last one is at least ttl/2 old (REQ-HUB-008).

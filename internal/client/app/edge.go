@@ -4,10 +4,12 @@ package app
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/ging/alexandria/internal/client/domain"
 	"github.com/ging/alexandria/internal/core/lifecycle"
+	"github.com/ging/alexandria/internal/core/logx"
 	"github.com/ging/alexandria/internal/core/problem"
 	"github.com/ging/alexandria/internal/core/semver"
 	"github.com/ging/alexandria/internal/core/timex"
@@ -102,6 +104,7 @@ type Edge struct {
 	Audit    *Audit
 	Events   EventSink
 	Metrics  Metrics
+	Logger   *slog.Logger
 }
 
 // Handle processes one message end to end; the forwarded body and headers are never modified.
@@ -111,6 +114,16 @@ func (e *Edge) Handle(req *Request) *Response {
 		e.emit(req, d, g, state, tL)
 	}
 	if d.Action == domain.Reject {
+		ruleID := ""
+		if d.Rule != nil {
+			ruleID = d.Rule.ID
+		}
+		logx.Default(e.Logger).Warn("dsp message rejected",
+			slog.String("listener", string(req.Listener)),
+			slog.String("rule", ruleID),
+			slog.String("state", string(state)),
+			logx.Code(d.Code),
+		)
 		return e.reject(req, d)
 	}
 	resp := e.forward(req)
@@ -160,6 +173,7 @@ func (e *Edge) emit(req *Request, d domain.Decision, g domain.GateResult, state 
 func (e *Edge) forward(req *Request) *Response {
 	resp, err := e.Upstream.Forward(req)
 	if err != nil {
+		logx.Default(e.Logger).Error("upstream forwarding failed", slog.String("listener", string(req.Listener)), logx.Err(err))
 		p := problem.Problem{Type: "about:blank", Title: "bad gateway", Status: http.StatusBadGateway, Detail: err.Error(), Severity: "error"}
 		return &Response{Status: http.StatusBadGateway, Header: http.Header{"Content-Type": {problem.ContentType}}, Body: p.JSON()}
 	}

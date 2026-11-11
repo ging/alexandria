@@ -7,15 +7,20 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"path"
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/ging/alexandria/internal/client/app"
 	"github.com/ging/alexandria/internal/client/domain"
 	"github.com/ging/alexandria/internal/clock"
+	"github.com/ging/alexandria/internal/core/logx"
+	"github.com/ging/alexandria/internal/telemetry"
 )
 
 // LatencyObserver receives the wall-clock latency of each request.
@@ -26,13 +31,19 @@ type Handler struct {
 	Edge     *app.Edge
 	Listener domain.Listener
 	Latency  LatencyObserver
+	Logger   *slog.Logger
+	Tracer   trace.Tracer
 }
 
 // ServeHTTP proxies one request.
 func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	sw := clock.Start()
+	ctx, span := telemetry.ExtractServerSpan(r.Context(), r.Header, r.Method+" "+r.URL.Path, h.Tracer)
+	defer span.End()
+
 	body, err := io.ReadAll(io.LimitReader(r.Body, 32<<20))
 	if err != nil {
+		logx.Default(h.Logger).WarnContext(ctx, "failed to read dsp request body", slog.String("listener", string(h.Listener)), logx.Err(err))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -52,9 +63,24 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(resp.Status)
 	_, _ = w.Write(resp.Body)
+	elapsed := sw.Seconds()
 	if h.Latency != nil {
-		h.Latency.ObserveLatency(sw.Seconds())
+		h.Latency.ObserveLatency(elapsed)
 	}
+	lvl := slog.LevelInfo
+	if resp.Status >= http.StatusInternalServerError {
+		lvl = slog.LevelError
+	} else if resp.Status >= http.StatusBadRequest {
+		lvl = slog.LevelWarn
+	}
+	logx.Default(h.Logger).LogAttrs(ctx, lvl, "dsp request processed",
+		slog.String("listener", string(h.Listener)),
+		slog.String("http.request.method", telemetry.Clean(r.Method)),
+		slog.String("url.path", telemetry.Clean(r.URL.Path)),
+		slog.Int("http.response.status_code", resp.Status),
+		slog.Int("http.response.body.size", len(resp.Body)),
+		slog.Float64("duration_ms", elapsed*1000),
+	)
 }
 
 // Upstream forwards requests byte for byte to the connector or the egress destination.

@@ -12,6 +12,8 @@ common_config:
     is_local: true
     is_prod: false
     has_tls_proxy: false
+    tls:
+      ca: "file:../var/tls/hub.crt"
 
 did_config:
   type: "key"

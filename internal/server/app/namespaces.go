@@ -4,6 +4,7 @@ package app
 
 import (
 	"errors"
+	"log/slog"
 
 	"github.com/ging/alexandria/internal/core/codes"
 	"github.com/ging/alexandria/internal/server/domain"
@@ -44,7 +45,11 @@ func (n *Namespaces) Create(p *domain.Principal, in NamespaceInput) (domain.Name
 		}
 		return domain.Namespace{}, err
 	}
-	return ns, n.d.emit(p, domain.EvNamespaceCreated, "", ns.ID)
+	if err := n.d.emit(p, domain.EvNamespaceCreated, "", ns.ID); err != nil {
+		return domain.Namespace{}, err
+	}
+	n.d.log().Info("namespace created", slog.String("namespace", ns.Slug), slog.String("namespace_iri", ns.ID))
+	return ns, nil
 }
 
 // List returns every namespace (public).
@@ -65,7 +70,11 @@ func (n *Namespaces) AssignSteward(p *domain.Principal, ns string, in StewardInp
 		}
 		return domain.Steward{}, err
 	}
-	return s, n.d.emit(p, domain.EvStewardAssigned, "", n.d.nsIRI(ns)+"/stewards/"+s.ID)
+	if err := n.d.emit(p, domain.EvStewardAssigned, "", n.d.nsIRI(ns)+"/stewards/"+s.ID); err != nil {
+		return domain.Steward{}, err
+	}
+	n.d.log().Info("steward assigned", slog.String("namespace", ns), slog.String("steward_id", s.ID), slog.String("issuer", s.Iss), slog.String("subject", s.Sub))
+	return s, nil
 }
 
 // RemoveSteward withdraws a steward; its past actions remain.
@@ -76,7 +85,11 @@ func (n *Namespaces) RemoveSteward(p *domain.Principal, ns, id string) error {
 	if err := n.d.Store.RemoveSteward(ns, id); err != nil {
 		return notFound(err, "steward "+id)
 	}
-	return n.d.emit(p, domain.EvStewardRemoved, "", n.d.nsIRI(ns)+"/stewards/"+id)
+	if err := n.d.emit(p, domain.EvStewardRemoved, "", n.d.nsIRI(ns)+"/stewards/"+id); err != nil {
+		return err
+	}
+	n.d.log().Info("steward removed", slog.String("namespace", ns), slog.String("steward_id", id))
+	return nil
 }
 
 // ListStewards returns the stewards of a namespace (steward of ns or admin).

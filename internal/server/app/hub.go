@@ -7,11 +7,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"sync"
 
 	"github.com/ging/alexandria/internal/core/codes"
 	"github.com/ging/alexandria/internal/core/did"
 	"github.com/ging/alexandria/internal/core/lifecycle"
+	"github.com/ging/alexandria/internal/core/logx"
 	"github.com/ging/alexandria/internal/core/semver"
 	"github.com/ging/alexandria/internal/core/timex"
 	"github.com/ging/alexandria/internal/core/vc"
@@ -27,6 +29,7 @@ type Deps struct {
 	Fetcher                UpstreamFetcher
 	Compiler               ProfileCompiler
 	Clock                  timex.Clock
+	Logger                 *slog.Logger
 	Base                   string
 	DID                    did.DID
 	Context                string
@@ -76,6 +79,9 @@ func New(d Deps) *Hub {
 // nsIRI returns the IRI of a namespace slug.
 func (d Deps) nsIRI(slug string) string { return d.Base + "/v1/namespaces/" + slug }
 
+// log returns the configured logger or a no-op fallback.
+func (d Deps) log() *slog.Logger { return logx.Default(d.Logger) }
+
 // namespace returns an existing namespace or API_NOT_FOUND.
 func (d Deps) namespace(slug string) (domain.Namespace, error) {
 	n, err := d.Store.GetNamespace(slug)
@@ -101,6 +107,7 @@ func (d Deps) authorize(op domain.Op, p *domain.Principal, ns string) error {
 		}
 	}
 	if domain.Decide(op, p, steward) == domain.Forbidden {
+		d.log().Warn("authorization denied", slog.String("principal", p.String()), slog.String("namespace", ns), logx.Code(codes.APIForbiddenRole))
 		return codes.New(codes.APIForbiddenRole, "the principal has no permission for this operation")
 	}
 	return nil
@@ -113,6 +120,9 @@ func (d Deps) emit(p *domain.Principal, typ, ns, subject string) error {
 		who = p.String()
 	}
 	_, err := d.Store.Append(domain.Event{TS: d.Clock.Now(), Principal: who, Type: typ, Namespace: ns, Subject: subject})
+	if err != nil {
+		d.log().Error("failed to append audit event", slog.String("event_type", typ), slog.String("namespace", ns), logx.Err(err))
+	}
 	return err
 }
 

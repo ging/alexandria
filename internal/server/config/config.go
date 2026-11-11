@@ -17,6 +17,7 @@ import (
 	"github.com/ging/alexandria/internal/core/lifecycle"
 	"github.com/ging/alexandria/internal/core/schemas"
 	"github.com/ging/alexandria/internal/core/timex"
+	"github.com/ging/alexandria/internal/telemetry"
 )
 
 //go:embed server.schema.json
@@ -70,6 +71,14 @@ type Server struct {
 		Cert string `json:"cert"`
 		Key  string `json:"key"`
 	} `json:"tls"`
+	Observability struct {
+		LogLevel     string `json:"log_level,omitempty"`
+		LogFormat    string `json:"log_format,omitempty"`
+		OTLPEndpoint string `json:"otlp_endpoint,omitempty"`
+		OTLPInsecure bool   `json:"otlp_insecure,omitempty"`
+		ServiceName  string `json:"service_name,omitempty"`
+		Environment  string `json:"environment,omitempty"`
+	} `json:"observability"`
 	ClockSkew string          `json:"clock_skew"`
 	ClockFile string          `json:"clock_file"`
 	Compiler  string          `json:"compiler"`
@@ -134,11 +143,14 @@ type NodeConfig struct {
 		AllowInsecureLocalhost *bool  `json:"allow_insecure_localhost,omitempty"`
 	} `json:"did_config"`
 	Observability struct {
-		LogLevel  string `json:"log_level,omitempty"`
-		LogFormat string `json:"log_format,omitempty"`
-		Metrics   *bool  `json:"metrics,omitempty"`
-		Pprof     *bool  `json:"pprof,omitempty"`
-		Port      string `json:"port,omitempty"`
+		LogLevel     string `json:"log_level,omitempty"`
+		LogFormat    string `json:"log_format,omitempty"`
+		OTLPEndpoint string `json:"otlp_endpoint,omitempty"`
+		OTLPInsecure *bool  `json:"otlp_insecure,omitempty"`
+		ServiceName  string `json:"service_name,omitempty"`
+		Metrics      *bool  `json:"metrics,omitempty"`
+		Pprof        *bool  `json:"pprof,omitempty"`
+		Port         string `json:"port,omitempty"`
 	} `json:"observability"`
 	VHub struct {
 		RDFContext string          `json:"rdf_context,omitempty"`
@@ -202,6 +214,12 @@ func Parse(raw []byte) (Server, error) {
 		return Server{}, fmt.Errorf("server.json lifecycle: %w", errs[0])
 	}
 	c.applyDefaults()
+	if _, err := telemetry.ParseLevel(c.Observability.LogLevel); err != nil {
+		return Server{}, fmt.Errorf("server.json observability: %w", err)
+	}
+	if err := telemetry.ValidateFormat(c.Observability.LogFormat); err != nil {
+		return Server{}, fmt.Errorf("server.json observability: %w", err)
+	}
 	for _, d := range []struct {
 		s   string
 		dst *timex.Duration
@@ -358,6 +376,28 @@ func convertNodeConfig(b []byte) ([]byte, error) {
 	if len(nc.VHub.Lifecycle) > 0 {
 		out["lifecycle"] = nc.VHub.Lifecycle
 	}
+	obs := map[string]any{}
+	if nc.Observability.LogLevel != "" {
+		obs["log_level"] = nc.Observability.LogLevel
+	}
+	if nc.Observability.LogFormat != "" {
+		obs["log_format"] = nc.Observability.LogFormat
+	}
+	if nc.Observability.OTLPEndpoint != "" {
+		obs["otlp_endpoint"] = nc.Observability.OTLPEndpoint
+	}
+	if nc.Observability.OTLPInsecure != nil {
+		obs["otlp_insecure"] = *nc.Observability.OTLPInsecure
+	}
+	if nc.Observability.ServiceName != "" {
+		obs["service_name"] = nc.Observability.ServiceName
+	}
+	if nc.Common.Connection.IsProd {
+		obs["environment"] = "production"
+	}
+	if len(obs) > 0 {
+		out["observability"] = obs
+	}
 	return json.Marshal(out)
 }
 
@@ -375,6 +415,8 @@ func (c *Server) applyDefaults() {
 	set(&c.Vocab.ProxyTimeout, "PT30S")
 	set(&c.ClockSkew, "PT5S")
 	set(&c.Compiler, "poc")
+	set(&c.Observability.LogLevel, "info")
+	set(&c.Observability.LogFormat, "auto")
 	if len(c.Auth.Algorithms) == 0 {
 		c.Auth.Algorithms = []string{"RS256", "ES256", "EdDSA"}
 	}

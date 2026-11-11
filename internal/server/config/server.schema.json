@@ -205,6 +205,43 @@
           "pattern": "^file:"
         }
       }
+    },
+    "observability": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "log_level": {
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "warning",
+            "error",
+            "none",
+            "off",
+            "disabled"
+          ]
+        },
+        "log_format": {
+          "enum": [
+            "auto",
+            "json",
+            "text"
+          ]
+        },
+        "otlp_endpoint": {
+          "type": "string"
+        },
+        "otlp_insecure": {
+          "type": "boolean"
+        },
+        "service_name": {
+          "type": "string"
+        },
+        "environment": {
+          "type": "string"
+        }
+      }
     }
   }
 }
