@@ -33,6 +33,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /_received", c.list)
 	mux.HandleFunc("GET /_agreement", agreement)
+	mux.HandleFunc("GET /dcat-ap.jsonld", context)
 	mux.HandleFunc("/", c.ack)
 	log.Printf("fake-connector listening on %s", *addr)
 	srv := &http.Server{Addr: *addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
@@ -69,4 +70,10 @@ func agreement(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(msg)
+}
+
+// context serves a small JSON-LD context standing in for the DCAT-AP upstream of a proxied vocabulary (F6.1).
+func context(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/ld+json")
+	_, _ = w.Write([]byte(`{"@context":{"dcat":"http://www.w3.org/ns/dcat#","dct":"http://purl.org/dc/terms/"}}`))
 }
