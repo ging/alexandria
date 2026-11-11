@@ -1,7 +1,8 @@
-# Self-contained helper library and rich HTML widget renderer for the Alexandria Jupyter notebooks.
+# Self-contained helper library and rich HTML widget renderer for the Alexandria v0.3.0 Jupyter notebooks.
 # Uses only the Python 3 standard library and emits rich HTML cards in Jupyter/VS Code/JetBrains plus text in CLI.
 from __future__ import annotations
 
+import base64
 import datetime as dt
 import html
 import json
@@ -9,6 +10,7 @@ import os
 import re
 import shutil
 import socket
+import ssl
 import subprocess
 import tempfile
 import time
@@ -17,7 +19,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-# Hook populated by run.py / build_notebooks.py when capturing display_data outputs into .ipynb files.
+# Hook populated by run.py when capturing display_data outputs into .ipynb files.
 _HTML_CAPTURE_LIST: list[tuple[str, str]] | None = None
 
 
@@ -204,7 +206,7 @@ def _highlight_json(text: str) -> str:
         if tok.startswith('"') and tok.endswith('":'):
             return f'<span class="ag-k">{tok[:-1]}</span>:'
         if tok.startswith('"'):
-            if "ni:///sha-256;" in tok or "did:web:" in tok:
+            if any(marker in tok for marker in ("ni:///sha-256;", "did:key:", "did:web:", "eddsa-jcs-2022")):
                 return f'<span class="ag-ni">{tok}</span>'
             return f'<span class="ag-s">{tok}</span>'
         if tok in ("true", "false", "null"):
@@ -229,7 +231,6 @@ def _highlight_yaml(text: str, with_line_numbers: bool = True) -> str:
         if stripped.startswith("#"):
             out_lines.append(f'{ln_prefix}<span class="ag-c">{html.escape(raw_line)}</span>')
             continue
-        # Separate inline comment if present.
         code_part = raw_line
         comment_part = ""
         if " #" in raw_line:
@@ -240,7 +241,7 @@ def _highlight_yaml(text: str, with_line_numbers: bool = True) -> str:
         if m:
             indent, key, colon, val = m.groups()
             val_esc = html.escape(val)
-            if val_esc.startswith(("http://", "https://", "eunomia.", "odrl:", "xsd:")):
+            if val_esc.startswith(("http://", "https://", "eunomia.", "odrl:", "xsd:", "did:")):
                 val_html = f'<span class="ag-ni">{val_esc}</span>'
             elif val_esc in ("true", "false", "null", "OdrlProfile", "SpaceProfile", "mandatory", "recommended"):
                 val_html = f'<span class="ag-b">{val_esc}</span>'
@@ -257,11 +258,30 @@ def _highlight_yaml(text: str, with_line_numbers: bool = True) -> str:
 
 
 def _split_url(url: str) -> tuple[str, str]:
-    """Splits http://host:port/path into ('http://host:port', '/path')."""
+    """Splits http(s)://host:port/path into ('https://host:port', '/path')."""
     m = re.match(r"^(https?://[^/]+)(/.*)?$", url)
     if not m:
         return "", url
     return m.group(1), m.group(2) or "/"
+
+
+def _describe_token(token: str) -> str:
+    """Summarizes an OAuth 2.0 at+jwt bearer token by subject and roles when possible."""
+    parts = token.split(".")
+    if len(parts) == 3:
+        try:
+            pad = "=" * (-len(parts[1]) % 4)
+            claims = json.loads(base64.urlsafe_b64decode(parts[1] + pad).decode("utf-8"))
+            sub = claims.get("sub", "jwt")
+            roles = claims.get("roles") or []
+            if roles:
+                return f"at+jwt sub={sub} ({','.join(str(r) for r in roles)})"
+            return f"at+jwt sub={sub}"
+        except Exception:
+            pass
+    if len(token) > 28:
+        return token[:24] + "…"
+    return token
 
 
 # ==============================================================================
@@ -351,25 +371,25 @@ def show_artifacts(title: str, base_dir: Path, files: list[str] | None = None) -
 
 
 def show_events_table(events: list[dict[str, Any]], title: str = "Client Event Log (events.jsonl)") -> None:
-    """Renders client audit, verdict, and agreement events as a visual HTML table."""
+    """Renders client audit, verdict, state, and agreement events as a visual HTML table."""
     rows_html: list[str] = []
     plain_lines = [f"=== {title} ({len(events)} events) ==="]
     for ev in events:
         etype = ev.get("type", "")
         ts = ev.get("ts", "")
         mode = ev.get("mode") or ev.get("severity") or "-"
-        route_or_ver = ev.get("route") or ev.get("version") or ev.get("from", "")
+        route_or_ver = ev.get("rule") or ev.get("route") or ev.get("version") or ev.get("from", "")
         if ev.get("to"):
             route_or_ver = f"{ev.get('from')} → {ev.get('to')}"
-        cls_or_ag = ev.get("classification") or ev.get("agreement") or "-"
+        cls_or_ag = ev.get("classification") or ev.get("agreement_id") or ev.get("agreement") or "-"
         action = ev.get("action") or ev.get("detail") or "-"
         codes_list = ev.get("codes") or ([ev["code"]] if ev.get("code") else [])
         codes_str = ", ".join(codes_list) if codes_list else "OK"
 
         badge_cls = "ag-st-2xx"
-        if "violation" in str(cls_or_ag).lower() or "reject" in str(action).lower() or "REVOKED" in codes_str:
+        if "violation" in str(cls_or_ag).lower() or "reject" in str(action).lower() or "REVOKED" in codes_str or "FAIL_CLOSED" in codes_str:
             badge_cls = "ag-st-4xx"
-        elif "warning" in str(cls_or_ag).lower() or "SCHEDULED" in codes_str or "Degraded" in str(route_or_ver):
+        elif "warning" in str(cls_or_ag).lower() or "SCHEDULED" in codes_str or "Degraded" in str(route_or_ver) or "WILL_WARN" in codes_str:
             badge_cls = "ag-m-PUT"
 
         plain_lines.append(f" • [{etype}] {ts} | {mode} | {route_or_ver} | {cls_or_ag} | {codes_str}")
@@ -395,7 +415,7 @@ def show_events_table(events: list[dict[str, Any]], title: str = "Client Event L
   </div>
   <table class="ag-tbl">
     <thead>
-      <tr><th>Type</th><th>Instant (UTC)</th><th>Mode / Sev</th><th>Route / Version</th><th>Classification / Agreement</th><th>Codes</th></tr>
+      <tr><th>Type</th><th>Instant (UTC)</th><th>Mode / Sev</th><th>Rule / State</th><th>Classification / Agreement</th><th>Codes</th></tr>
     </thead>
     <tbody>{''.join(rows_html)}</tbody>
   </table>
@@ -408,9 +428,9 @@ def show_state_machine(current_state: str, subtitle: str = "") -> None:
     """Renders the 5-state operational diagram of alexandria-client highlighting the active state."""
     states = [
         ("Onboarding", "No initial package loaded"),
-        ("Active", "1 version in force (t < expires_at)"),
+        ("Active", "1 version in force (t < valid_until)"),
         ("Transition", ">1 version in V_t (grace window)"),
-        ("Degraded", "expires_at elapsed (< max_staleness)"),
+        ("Degraded", "valid_until elapsed (< max_staleness)"),
         ("FailClosed", "max_staleness exceeded (rejects enforce)"),
     ]
     steps_html: list[str] = []
@@ -449,26 +469,26 @@ def show_state_machine(current_state: str, subtitle: str = "") -> None:
     emit_widget(widget, plain)
 
 
-def show_f6_matrix(rows: list[dict[str, str]], title: str = "Scenario F6 Verdict Matrix") -> None:
+def show_f6_matrix(rows: list[dict[str, Any]], title: str = "Scenario F6 Verdict Matrix (F6.1–F6.4)") -> None:
     """Renders a visual summary table of Scenario F6 HTTP evaluations across timestamps."""
     tr_html: list[str] = []
     plain_lines = [f"=== {title} ==="]
     for r in rows:
-        instant = r.get("instant", "")
-        phase = r.get("phase", "")
-        msg = r.get("message", "")
+        instant = str(r.get("at") or r.get("instant") or "")
+        step = str(r.get("step") or r.get("message") or "")
+        code = str(r.get("code") or r.get("phase") or "-")
         status = str(r.get("status", ""))
-        verdict = r.get("verdict", "-")
+        verdict = str(r.get("verdict") or "-")
         st_cls = "ag-st-2xx" if status.startswith("2") else "ag-st-4xx"
         if "warning" in verdict:
             st_cls = "ag-m-PUT"
-        plain_lines.append(f"[{instant}] ({phase}) {msg:18s} -> HTTP {status} | {verdict}")
+        plain_lines.append(f"[{instant}] {step:34s} -> HTTP {status:3s} | {code:28s} | {verdict}")
         tr_html.append(
             f"""<tr>
   <td style="color:#7dd3fc;">{html.escape(instant)}</td>
-  <td><span class="ag-chip">{html.escape(phase)}</span></td>
-  <td style="color:#f8fafc;font-weight:600;">{html.escape(msg)}</td>
+  <td style="color:#f8fafc;font-weight:600;">{html.escape(step)}</td>
   <td><span class="ag-badge {st_cls}">HTTP {html.escape(status)}</span></td>
+  <td><span class="ag-chip">{html.escape(code)}</span></td>
   <td style="color:#cbd5e1;">{html.escape(verdict)}</td>
 </tr>"""
         )
@@ -480,11 +500,11 @@ def show_f6_matrix(rows: list[dict[str, str]], title: str = "Scenario F6 Verdict
       <span class="ag-badge ag-m-POST">Scenario F6</span>
       <strong style="color:#f8fafc;">{html.escape(title)}</strong>
     </div>
-    <span class="ag-chip">{len(rows)} checks</span>
+    <span class="ag-chip">{len(rows)} rows</span>
   </div>
   <table class="ag-tbl">
     <thead>
-      <tr><th>Instant (clock_file)</th><th>Lifecycle Phase</th><th>Message / Action</th><th>HTTP</th><th>VHub-Verdict Header / Code</th></tr>
+      <tr><th>Instant (clock_file)</th><th>Step (F6.1–F6.4)</th><th>HTTP</th><th>Code / Class</th><th>VHub-Verdict Header</th></tr>
     </thead>
     <tbody>{''.join(tr_html)}</tbody>
   </table>
@@ -494,7 +514,7 @@ def show_f6_matrix(rows: list[dict[str, str]], title: str = "Scenario F6 Verdict
 
 
 # ==============================================================================
-# Core Binary Builder, HTTP Client & AlexandriaLab Orchestrator
+# Core Binary Builder, HTTP Client & AlexandriaLab Orchestrator (v0.3.0)
 # ==============================================================================
 
 
@@ -507,7 +527,7 @@ def repo_root() -> Path:
 
 
 def ensure_binaries() -> Path:
-    """Compiles alexandriac, alexandria-server, alexandria-client, and fake-connector into bin/ if needed."""
+    """Compiles alexandriac, alexandria-server, alexandria-client, fake-idp, and fake-connector into bin/ if needed."""
     root = repo_root()
     bin_dir = root / "bin"
     bin_dir.mkdir(exist_ok=True)
@@ -515,6 +535,7 @@ def ensure_binaries() -> Path:
         "alexandriac": "./cmd/alexandriac",
         "alexandria-server": "./cmd/alexandria-server",
         "alexandria-client": "./cmd/alexandria-client",
+        "fake-idp": "./deploy/fake-idp",
         "fake-connector": "./deploy/fake-connector",
     }
     for name, pkg in targets.items():
@@ -539,10 +560,11 @@ def http_request(
     body: Any = None,
     token: str | None = None,
     proxy: str | None = None,
+    ca_file: Path | str | None = None,
     follow_redirects: bool = True,
     verbose: bool = True,
 ) -> tuple[int, dict[str, str], Any]:
-    """Performs an HTTP request, prints CLI summary, and emits an interactive HTML Inspector card."""
+    """Performs an HTTP/HTTPS request, prints CLI summary, and emits an interactive HTML Inspector card."""
     req_headers: dict[str, str] = {}
     if headers:
         req_headers.update(headers)
@@ -565,6 +587,13 @@ def http_request(
             req_body_preview = body.decode("utf-8", errors="replace")
 
     handlers: list[urllib.request.BaseHandler] = []
+    if ca_file and Path(ca_file).exists():
+        ssl_ctx = ssl.create_default_context(cafile=str(ca_file))
+        handlers.append(urllib.request.HTTPSHandler(context=ssl_ctx))
+    elif url.startswith("https://"):
+        ssl_ctx = ssl._create_unverified_context()
+        handlers.append(urllib.request.HTTPSHandler(context=ssl_ctx))
+
     if proxy:
         handlers.append(urllib.request.ProxyHandler({"http": proxy, "https": proxy}))
     if not follow_redirects:
@@ -635,13 +664,14 @@ def _emit_http_inspector(
     """Formats both plain CLI output and the rich HTML HTTP Inspector widget."""
     proxy_note = f" (via proxy {proxy})" if proxy else ""
     plain_lines = [f"▶ {method} {url}{proxy_note}"]
+    tok_label = _describe_token(token) if token else ""
     if token:
-        plain_lines.append(f"  Authorization: Bearer {token}")
-    for hk in ("If-Match", "Content-Type"):
-        if hk in req_headers and hk != "Content-Type":
+        plain_lines.append(f"  Authorization: Bearer <{tok_label}>")
+    for hk in ("If-Match",):
+        if hk in req_headers:
             plain_lines.append(f"  {hk}: {req_headers[hk]}")
     plain_lines.append(f"◀ HTTP {status} ({elapsed_ms:.1f} ms)")
-    for hk in ("etag", "location", "cache-control", "vhub-verdict", "www-authenticate", "content-type", "date"):
+    for hk in ("etag", "location", "link", "cache-control", "vhub-verdict", "www-authenticate", "content-type", "date"):
         if hk in resp_headers:
             plain_lines.append(f"  {hk}: {resp_headers[hk]}")
     if parsed != "":
@@ -658,14 +688,13 @@ def _emit_http_inspector(
     plain_lines.append("-" * 72)
     plain_str = "\n".join(plain_lines)
 
-    # Build HTML card.
     host_part, path_part = _split_url(url)
     st_class = "ag-st-2xx" if 200 <= status < 300 else ("ag-st-3xx" if 300 <= status < 400 else "ag-st-4xx")
     m_class = f"ag-m-{method}" if method in ("GET", "POST", "PUT", "DELETE") else "ag-m-GET"
 
     chips: list[str] = []
     if token:
-        chips.append(f'<span class="ag-chip">🔑 {html.escape(token)}</span>')
+        chips.append(f'<span class="ag-chip">🔑 {html.escape(tok_label)}</span>')
     if proxy:
         chips.append('<span class="ag-chip">🛡️ via dsp-egress</span>')
     if "If-Match" in req_headers:
@@ -686,7 +715,7 @@ def _emit_http_inspector(
             f'<div class="ag-banner {v_cls}"><span><strong>VHub-Verdict:</strong> {html.escape(verdict_hdr)}</span>{sunset_note}</div>'
         )
 
-    if isinstance(parsed, dict) and parsed.get("code"):
+    if isinstance(parsed, dict) and parsed.get("code") and status >= 400:
         code_val = str(parsed["code"])
         detail_val = str(parsed.get("detail") or (parsed.get("reason") or [""])[0] or "")
         banners.append(
@@ -698,8 +727,12 @@ def _emit_http_inspector(
             f'<div class="ag-banner ag-banner-ok"><span>↪️ Redirect 303 See Other</span>'
             f'<span>Location: <strong>{html.escape(resp_headers["location"])}</strong></span></div>'
         )
+    elif "link" in resp_headers:
+        banners.append(
+            f'<div class="ag-banner ag-banner-ok"><span>🔗 Provenance Link</span>'
+            f'<span>{html.escape(resp_headers["link"])}</span></div>'
+        )
 
-    # Response body HTML.
     body_html = ""
     if parsed != "":
         if is_json:
@@ -713,13 +746,12 @@ def _emit_http_inspector(
                 s_txt = s_txt[:1200] + "\n... (truncated)"
             body_html = f'<pre class="ag-pre">{html.escape(s_txt)}</pre>'
 
-    # Headers collapsible section.
     hdr_rows = "".join(
         f"<tr><td class='ag-k'>{html.escape(k)}</td><td>{html.escape(v)}</td></tr>"
         for k, v in sorted(resp_headers.items())
     )
     headers_section = f"""<details class="ag-details">
-  <summary><span>📋 Response HTTP Headers ({len(resp_headers)})</span><span>ETag / Cache-Control / Date</span></summary>
+  <summary><span>📋 Response HTTP Headers ({len(resp_headers)})</span><span>ETag / Cache-Control / Link / VHub-Verdict</span></summary>
   <table class="ag-tbl"><tbody>{hdr_rows}</tbody></table>
 </details>"""
 
@@ -756,77 +788,63 @@ def _emit_http_inspector(
 
 
 class AlexandriaLab:
-    """Manages an isolated set of alexandria-server, alexandria-client, and fake-connector processes with a shared clock file."""
+    """Manages an isolated Specification v0.3.0 lab: fake-idp, fake-connector, alexandria-server (TLS + did:key), and alexandria-client."""
 
     def __init__(
         self,
         *,
-        space: str = "https://example.com/spaces/demo",
-        compiler: str = "dsl",
-        initial_clock: str = "2026-09-01T10:00:00Z",
-        routes: list[dict[str, Any]] | None = None,
-        degraded_policy_intake: str = "continue",
+        namespace: str = "demo",
+        compiler: str = "poc",
+        initial_clock: str = "2026-09-01T09:00:00Z",
+        lifecycle: dict[str, Any] | None = None,
+        rules_seed: Path | str | None = None,
+        default_action: str = "forward",
         unknown_agreement: str = "reject",
+        clock_skew: str = "PT30S",
     ) -> None:
         self.root = repo_root()
         self.bin_dir = ensure_binaries()
         self.work_dir = Path(tempfile.mkdtemp(prefix="alexandria-notebook-"))
-        self.space = space
+        self.namespace = namespace
         self.compiler = compiler
+        self.lifecycle = lifecycle
+        self.rules_seed = Path(rules_seed) if rules_seed else (self.root / "deploy" / "rules.seed.json")
+        self.default_action = default_action
+        self.unknown_agreement = unknown_agreement
+        self.clock_skew = clock_skew
+
         self.clock_file = self.work_dir / "clock"
         self._current_clock: str | None = None
         self.set_clock(initial_clock, silent=True)
 
-        self.hub_port = free_port()
+        self.idp_port = free_port()
         self.conn_port = free_port()
+        self.hub_port = free_port()
         self.dsp_ingress_port = free_port()
         self.mgmt_ingress_port = free_port()
         self.dsp_egress_port = free_port()
         self.admin_port = free_port()
 
-        self.hub_url = f"http://127.0.0.1:{self.hub_port}"
+        self.idp_url = f"http://127.0.0.1:{self.idp_port}"
         self.conn_url = f"http://127.0.0.1:{self.conn_port}"
+        self.hub_url = f"https://127.0.0.1:{self.hub_port}"
         self.dsp_ingress_url = f"http://127.0.0.1:{self.dsp_ingress_port}"
         self.mgmt_ingress_url = f"http://127.0.0.1:{self.mgmt_ingress_port}"
         self.dsp_egress_url = f"http://127.0.0.1:{self.dsp_egress_port}"
         self.admin_url = f"http://127.0.0.1:{self.admin_port}"
-        self.hub_did = f"did:web:127.0.0.1%3A{self.hub_port}"
 
-        self.events_file = self.work_dir / "events.jsonl"
-        self.routes = routes if routes is not None else self._default_routes()
-        self.degraded_policy_intake = degraded_policy_intake
-        self.unknown_agreement = unknown_agreement
+        self.idp_key_file = self.work_dir / "idp.key"
+        self.ca_file = self.work_dir / "server" / "hub.crt"
+        self.server_log_file = self.work_dir / "server" / "server.log"
+        self.events_file = self.work_dir / "client" / "events.jsonl"
+        self.hub_did: str = ""
+
         self.procs: list[subprocess.Popen[bytes]] = []
-
-    def _default_routes(self) -> list[dict[str, Any]]:
-        return [
-            {
-                "listener": "dsp-ingress",
-                "match": {"method": "POST", "path": "/negotiations/request"},
-                "message": "ContractRequestMessage",
-                "gates": ["dsp_message", "policy_intake"],
-                "mode": "enforce",
-                "body": {"select": "$.offer"},
-            },
-            {
-                "listener": "dsp-ingress",
-                "match": {"method": "POST", "path": "/transfers/request"},
-                "message": "TransferRequestMessage",
-                "gates": ["dsp_message", "agreement_admission"],
-                "mode": "enforce",
-            },
-            {
-                "listener": "dsp-egress",
-                "match": {"method": "POST", "path": "/negotiations/:pid/agreement"},
-                "message": "ContractAgreementMessage",
-                "gates": ["dsp_message", "policy_intake"],
-                "mode": "enforce",
-                "body": {"select": "$.agreement"},
-            },
-        ]
+        self._server_proc: subprocess.Popen[bytes] | None = None
+        self._log_handles: list[Any] = []
 
     def set_clock(self, rfc3339_instant: str, *, silent: bool = False) -> None:
-        """Advances or sets the shared file clock used by alexandria-server and alexandria-client."""
+        """Advances or sets the shared file clock used by fake-idp, alexandria-server, and alexandria-client."""
         prev = self._current_clock
         self._current_clock = rfc3339_instant
         tmp = self.clock_file.with_suffix(".tmp")
@@ -834,12 +852,16 @@ class AlexandriaLab:
         os.replace(tmp, self.clock_file)
         if not silent:
             plain = f"🕒 Clock updated → {rfc3339_instant}"
-            prev_html = f'<span style="color:#64748b;text-decoration:line-through;margin-right:6px;">{html.escape(prev)}</span> → ' if prev else ""
+            prev_html = (
+                f'<span style="color:#64748b;text-decoration:line-through;margin-right:6px;">{html.escape(prev)}</span> → '
+                if prev
+                else ""
+            )
             widget = f"""{_WIDGET_CSS}
 <div class="ag-w" style="border-color:#0284c7;">
   <div class="ag-hdr" style="background:rgba(2,132,199,0.15);border-bottom:none;">
     <div class="ag-row">
-      <span class="ag-badge ag-m-GET">🕒 Injected Clock (DP-9)</span>
+      <span class="ag-badge ag-m-GET">🕒 Injected Clock (DP-8)</span>
       <span style="font-family:monospace;font-size:12.5px;color:#f8fafc;">{prev_html}<strong style="color:#38bdf8;">{html.escape(rfc3339_instant)}</strong></span>
     </div>
     <span class="ag-chip">clock_file synchronized</span>
@@ -847,50 +869,99 @@ class AlexandriaLab:
 </div>"""
             emit_widget(widget, plain)
 
-    def start_connector(self) -> None:
-        """Starts the fake-connector process."""
+    def start_idp(self) -> None:
+        """Starts deploy/fake-idp serving OIDC Discovery and ES256 JWKS."""
         p = subprocess.Popen(
-            [str(self.bin_dir / "fake-connector"), "-listen", f"127.0.0.1:{self.conn_port}"],
+            [
+                str(self.bin_dir / "fake-idp"),
+                "serve",
+                "--addr",
+                f"127.0.0.1:{self.idp_port}",
+                "--issuer",
+                self.idp_url,
+                "--key",
+                str(self.idp_key_file),
+            ],
+            cwd=str(self.work_dir),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
         self.procs.append(p)
-        self._wait_url(f"{self.conn_url}/healthz")
+        self._wait_url(f"{self.idp_url}/.well-known/openid-configuration")
+
+    def token(
+        self,
+        sub: str,
+        *,
+        admin: bool = False,
+        aud: str = "alexandria-vhub",
+        ttl: str = "2400h",
+        clock_override: str | None = None,
+    ) -> str:
+        """Mints an RFC 9068 at+jwt token signed by fake-idp at the current file-clock instant."""
+        clk_path = self.clock_file
+        if clock_override is not None:
+            clk_path = self.work_dir / "token-clock.tmp"
+            clk_path.write_text(clock_override + "\n", encoding="utf-8")
+        args = [
+            str(self.bin_dir / "fake-idp"),
+            "token",
+            "--issuer",
+            self.idp_url,
+            "--key",
+            str(self.idp_key_file),
+            "--sub",
+            sub,
+            "--aud",
+            aud,
+            "--ttl",
+            ttl,
+            "--clock-file",
+            str(clk_path),
+        ]
+        if admin:
+            args.append("--admin")
+        out = subprocess.check_output(args, cwd=str(self.work_dir), text=True)
+        return out.strip()
+
+    def start_connector(self) -> None:
+        """Starts deploy/fake-connector simulating an unmodified upstream DSP connector."""
+        p = subprocess.Popen(
+            [str(self.bin_dir / "fake-connector"), "-listen", f"127.0.0.1:{self.conn_port}"],
+            cwd=str(self.work_dir),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        self.procs.append(p)
+        self._wait_url(f"{self.conn_url}/_received")
 
     def start_server(self) -> None:
-        """Starts the alexandria-server process."""
+        """Writes server.json and starts alexandria-server over HTTPS (auto-provisioning lab TLS and Ed25519 did:key)."""
         srv_dir = self.work_dir / "server"
         srv_dir.mkdir(parents=True, exist_ok=True)
-        tokens_path = srv_dir / "tokens.json"
-        tokens_path.write_text(
-            json.dumps(
-                {
-                    "editor-token": {"principal": "steward", "roles": ["editor"]},
-                    "reviewer-token": {"principal": "reviewer", "roles": ["reviewer"]},
-                    "releaser-token": {"principal": "releaser", "roles": ["releaser"]},
-                    "member-token": {"principal": "alexandria-client", "roles": ["member"]},
-                },
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
+        cfg: dict[str, Any] = {
+            "listen": f"127.0.0.1:{self.hub_port}",
+            "base": self.hub_url,
+            "signing": {"key": "file:hub.key"},
+            "rdf": {"context": "self-hosted"},
+            "auth": {
+                "issuers": [{"iss": self.idp_url, "discovery_url": f"{self.idp_url}/.well-known/openid-configuration"}],
+                "audience": "alexandria-vhub",
+            },
+            "vocab": {"allow_insecure_localhost": True},
+            "did_resolver": {"allow_insecure_localhost": True},
+            "storage": {"database": "file:hub/hub.db", "blobs": "file:hub/blobs"},
+            "tls": {"cert": "file:hub.crt", "key": "file:hub-tls.key"},
+            "compiler": self.compiler,
+            "clock_skew": self.clock_skew,
+        }
+        if self.lifecycle is not None:
+            cfg["lifecycle"] = self.lifecycle
         srv_cfg_path = srv_dir / "server.json"
-        srv_cfg_path.write_text(
-            json.dumps(
-                {
-                    "listen": f"127.0.0.1:{self.hub_port}",
-                    "public_base_url": self.hub_url,
-                    "did": self.hub_did,
-                    "sqlite_path": str(srv_dir / "hub.db"),
-                    "blob_dir": str(srv_dir / "blobs"),
-                    "signing_key_path": str(srv_dir / "hub.key"),
-                    "tokens_path": str(tokens_path),
-                    "compiler": self.compiler,
-                },
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
+        srv_cfg_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+
+        log_fh = self.server_log_file.open("w+", encoding="utf-8")
+        self._log_handles.append(log_fh)
         p = subprocess.Popen(
             [
                 str(self.bin_dir / "alexandria-server"),
@@ -899,11 +970,25 @@ class AlexandriaLab:
                 "-clock-file",
                 str(self.clock_file),
             ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            cwd=str(srv_dir),
+            stdout=log_fh,
+            stderr=log_fh,
         )
         self.procs.append(p)
-        self._wait_url(f"{self.hub_url}/.well-known/did.json")
+        self._server_proc = p
+        self._wait_url(f"{self.hub_url}/v1/namespaces")
+
+        # Extract auto-derived did:key from server startup banner.
+        deadline = time.time() + 3.0
+        while time.time() < deadline and not self.hub_did:
+            log_fh.flush()
+            txt = self.server_log_file.read_text(encoding="utf-8", errors="replace")
+            m = re.search(r"\bas\s+(did:\S+)", txt)
+            if m:
+                self.hub_did = m.group(1)
+                break
+            time.sleep(0.05)
+
         plain = f"✔ alexandria-server listening at {self.hub_url} (DID: {self.hub_did})"
         widget = f"""{_WIDGET_CSS}
 <div class="ag-w" style="border-color:#10b981;">
@@ -920,16 +1005,35 @@ class AlexandriaLab:
 </div>"""
         emit_widget(widget, plain)
 
+    def stop_server(self) -> None:
+        """Stops only alexandria-server to simulate Hub unavailability while keeping alexandria-client running."""
+        if self._server_proc is not None and self._server_proc.poll() is None:
+            self._server_proc.terminate()
+            try:
+                self._server_proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                self._server_proc.kill()
+
+    def start_hub_stack(self) -> None:
+        """Starts fake-idp, fake-connector, and alexandria-server."""
+        self.start_idp()
+        self.start_connector()
+        self.start_server()
+
     def start_client(self) -> None:
-        """Writes client-config.json and starts the alexandria-client sidecar process."""
-        cred_path = self.work_dir / "credentials.json"
-        cred_path.write_text(json.dumps({"token": "member-token"}), encoding="utf-8")
+        """Writes client.json and starts the alexandria-client sidecar process trusting hub.crt and hub_did."""
+        client_dir = self.work_dir / "client"
+        client_dir.mkdir(parents=True, exist_ok=True)
         cfg = {
-            "space": self.space,
             "trust": {
-                "hub": f"https://127.0.0.1:{self.hub_port}",
+                "hub": self.hub_url,
+                "namespace": self.namespace,
                 "hub_did": self.hub_did,
-                "credentials": f"file:{cred_path}",
+                "context": f"{self.hub_url}/pub/_vhub/v1/context.jsonld",
+            },
+            "upstreams": {
+                "dsp": f"{self.conn_url}/dsp",
+                "management": f"{self.conn_url}/mgmt",
             },
             "listeners": {
                 "dsp-ingress": {"bind": f"127.0.0.1:{self.dsp_ingress_port}"},
@@ -937,13 +1041,12 @@ class AlexandriaLab:
                 "dsp-egress": {"bind": f"127.0.0.1:{self.dsp_egress_port}"},
                 "admin": {"bind": f"127.0.0.1:{self.admin_port}"},
             },
-            "upstreams": {"dsp": self.conn_url, "management": self.conn_url},
-            "routes": self.routes,
-            "default_action": "forward",
+            "rules": {"seed": f"file:{self.rules_seed}"},
+            "default_action": self.default_action,
             "unknown_agreement": self.unknown_agreement,
             "events": {"sink": f"file:{self.events_file}"},
         }
-        cfg_path = self.work_dir / "client-config.json"
+        cfg_path = self.work_dir / "client.json"
         cfg_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
         p = subprocess.Popen(
             [
@@ -951,11 +1054,13 @@ class AlexandriaLab:
                 "-config",
                 str(cfg_path),
                 "-state-dir",
-                str(self.work_dir / "client-state"),
+                str(client_dir),
                 "-clock-file",
                 str(self.clock_file),
-                "-did.allow_insecure_localhost",
+                "-hub-ca",
+                str(self.ca_file),
             ],
+            cwd=str(self.work_dir),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -978,14 +1083,13 @@ class AlexandriaLab:
 </div>"""
         emit_widget(widget, plain)
 
-    def start_all(self) -> None:
-        """Starts fake-connector, alexandria-server, and alexandria-client."""
-        self.start_connector()
-        self.start_server()
-        self.start_client()
+    def request(self, method: str, url: str, **kwargs: Any) -> tuple[int, dict[str, str], Any]:
+        """Performs an HTTP/HTTPS request trusting this lab's self-signed hub.crt automatically."""
+        kwargs.setdefault("ca_file", self.ca_file)
+        return http_request(method, url, **kwargs)
 
-    def wait_synced(self, expected_issued_at: str | None = None, timeout: float = 8.0) -> dict[str, Any]:
-        """Polls GET /status on the client admin listener until a listing is accepted."""
+    def wait_synced(self, expected_valid_from: str | None = None, timeout: float = 10.0) -> dict[str, Any]:
+        """Polls GET /status on the client admin listener until a VersionListing is verified and accepted."""
         deadline = time.time() + timeout
         last_status: dict[str, Any] = {}
         while time.time() < deadline:
@@ -994,10 +1098,12 @@ class AlexandriaLab:
                 last_status = data
                 listing = data.get("last_accepted_listing")
                 if listing:
-                    if expected_issued_at is None or listing.get("issued_at") == expected_issued_at:
+                    if expected_valid_from is None or listing.get("valid_from") == expected_valid_from:
                         return data
-            time.sleep(0.15)
-        raise TimeoutError(f"alexandria-client did not sync listing={expected_issued_at!r}; last /status={last_status}")
+            time.sleep(0.12)
+        raise TimeoutError(
+            f"alexandria-client did not sync listing valid_from={expected_valid_from!r}; last /status={last_status}"
+        )
 
     def read_events(self) -> list[dict[str, Any]]:
         """Reads all JSONL events emitted by alexandria-client so far."""
@@ -1006,20 +1112,20 @@ class AlexandriaLab:
         lines = self.events_file.read_text(encoding="utf-8").strip().splitlines()
         return [json.loads(line) for line in lines if line.strip()]
 
-    def _wait_url(self, url: str, timeout: float = 8.0) -> None:
+    def _wait_url(self, url: str, timeout: float = 10.0) -> None:
         deadline = time.time() + timeout
         while time.time() < deadline:
             try:
-                code, _, _ = http_request("GET", url, verbose=False)
+                code, _, _ = http_request("GET", url, ca_file=self.ca_file, verbose=False)
                 if code in (200, 401, 404, 503):
                     return
             except Exception:
                 pass
-            time.sleep(0.05)
+            time.sleep(0.06)
         raise TimeoutError(f"Service at {url} did not become ready within {timeout}s")
 
     def close(self) -> None:
-        """Stops all started processes and removes the temporary directory."""
+        """Stops all started processes, closes log handles, and removes the temporary directory."""
         for p in reversed(self.procs):
             if p.poll() is None:
                 p.terminate()
@@ -1028,6 +1134,12 @@ class AlexandriaLab:
                 except subprocess.TimeoutExpired:
                     p.kill()
         self.procs.clear()
+        for fh in self._log_handles:
+            try:
+                fh.close()
+            except Exception:
+                pass
+        self._log_handles.clear()
         shutil.rmtree(self.work_dir, ignore_errors=True)
 
 
