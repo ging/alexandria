@@ -1,12 +1,13 @@
-// Package testkit provides in-memory implementations of the alexandria-server repositories with per-step fault injection.
+// Package testkit provides an in-memory implementation of every alexandria-server persistence port with fault injection.
 // Lets app tests inject failures at each REQ-HUB-004 step and run without SQLite (F8 §8.7).
 package testkit
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 
-	"github.com/ging/alexandria/internal/core/lifecycle"
 	"github.com/ging/alexandria/internal/core/ni"
 	"github.com/ging/alexandria/internal/core/semver"
 	"github.com/ging/alexandria/internal/server/app"
@@ -15,65 +16,199 @@ import (
 
 // Faults injects errors into the doubles; a nil field means no failure.
 type Faults struct {
-	Register      error
 	BlobPut       error
 	AppendRelease error
 	ListingPut    error
 }
 
-// MemDB is a shared in-memory store behind all server repository doubles.
+// MemDB is the in-memory store behind app.Store and app.BlobStore.
 type MemDB struct {
 	mu          sync.Mutex
+	namespaces  map[string]domain.Namespace
+	stewards    map[string][]domain.Steward
+	vocabs      map[string]domain.Vocabulary
 	drafts      map[string]domain.Draft
 	candidates  map[string]domain.Candidate
-	decisions   map[string]domain.Candidate
 	releases    []domain.Release
 	revocations map[string]domain.Revocation
-	listings    []app.StoredListing
+	listings    map[string][]app.StoredListing
 	events      []domain.Event
 	blobs       map[string][]byte
 	seq         int
 	Faults      Faults
 }
 
+var _ app.Store = (*MemDB)(nil)
+
 // NewMemDB returns an empty store.
 func NewMemDB() *MemDB {
 	return &MemDB{
-		drafts: map[string]domain.Draft{}, candidates: map[string]domain.Candidate{}, decisions: map[string]domain.Candidate{},
-		revocations: map[string]domain.Revocation{}, blobs: map[string][]byte{},
+		namespaces: map[string]domain.Namespace{}, stewards: map[string][]domain.Steward{}, vocabs: map[string]domain.Vocabulary{},
+		drafts: map[string]domain.Draft{}, candidates: map[string]domain.Candidate{}, revocations: map[string]domain.Revocation{},
+		listings: map[string][]app.StoredListing{}, blobs: map[string][]byte{},
 	}
 }
 
-// MemDrafts adapts MemDB to DraftRepo.
-type MemDrafts struct{ *MemDB }
+// key joins a namespace and an id.
+func key(ns, id string) string { return ns + "/" + id }
 
-// Create stores a draft at revision 1.
-func (m MemDrafts) Create(doc []byte) (domain.Draft, error) {
+// CreateNamespace stores a namespace once.
+func (m *MemDB) CreateNamespace(n domain.Namespace) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.namespaces[n.Slug]; ok {
+		return app.ErrExists
+	}
+	m.namespaces[n.Slug] = n
+	return nil
+}
+
+// GetNamespace returns a namespace.
+func (m *MemDB) GetNamespace(slug string) (domain.Namespace, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	n, ok := m.namespaces[slug]
+	if !ok {
+		return domain.Namespace{}, app.ErrNotFound
+	}
+	return n, nil
+}
+
+// ListNamespaces returns every namespace by slug.
+func (m *MemDB) ListNamespaces() ([]domain.Namespace, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := []domain.Namespace{}
+	for _, n := range m.namespaces {
+		out = append(out, n)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Slug < out[j].Slug })
+	return out, nil
+}
+
+// AddSteward stores a steward; (iss, sub) is unique within a namespace.
+func (m *MemDB) AddSteward(ns string, s domain.Steward) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, x := range m.stewards[ns] {
+		if x.Iss == s.Iss && x.Sub == s.Sub {
+			return app.ErrExists
+		}
+	}
+	m.stewards[ns] = append(m.stewards[ns], s)
+	return nil
+}
+
+// RemoveSteward withdraws a steward.
+func (m *MemDB) RemoveSteward(ns, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for i, x := range m.stewards[ns] {
+		if x.ID == id {
+			m.stewards[ns] = append(m.stewards[ns][:i:i], m.stewards[ns][i+1:]...)
+			return nil
+		}
+	}
+	return app.ErrNotFound
+}
+
+// IsSteward reports membership of (iss, sub) in ns.
+func (m *MemDB) IsSteward(ns, iss, sub string) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, x := range m.stewards[ns] {
+		if x.Iss == iss && x.Sub == sub {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// ListStewards returns the stewards of ns.
+func (m *MemDB) ListStewards(ns string) ([]domain.Steward, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]domain.Steward{}, m.stewards[ns]...), nil
+}
+
+// CreateVocabulary stores a vocabulary once per namespace.
+func (m *MemDB) CreateVocabulary(ns string, v domain.Vocabulary) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.vocabs[key(ns, v.Name)]; ok {
+		return app.ErrExists
+	}
+	v.Revisions = []domain.Revision{}
+	m.vocabs[key(ns, v.Name)] = v
+	return nil
+}
+
+// GetVocabulary returns a vocabulary with its revisions.
+func (m *MemDB) GetVocabulary(ns, name string) (domain.Vocabulary, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	v, ok := m.vocabs[key(ns, name)]
+	if !ok {
+		return domain.Vocabulary{}, app.ErrNotFound
+	}
+	v.Revisions = append([]domain.Revision{}, v.Revisions...)
+	return v, nil
+}
+
+// AppendRevision appends a revision.
+func (m *MemDB) AppendRevision(ns, name string, r domain.Revision) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	v, ok := m.vocabs[key(ns, name)]
+	if !ok {
+		return app.ErrNotFound
+	}
+	v.Revisions = append(v.Revisions, r)
+	m.vocabs[key(ns, name)] = v
+	return nil
+}
+
+// ListVocabularies returns the vocabularies of ns by name.
+func (m *MemDB) ListVocabularies(ns string) ([]domain.Vocabulary, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := []domain.Vocabulary{}
+	for k, v := range m.vocabs {
+		if strings.HasPrefix(k, ns+"/") {
+			out = append(out, v)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
+// CreateDraft stores a draft at revision 1.
+func (m *MemDB) CreateDraft(ns string, doc []byte) (domain.Draft, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.seq++
-	d := domain.Draft{ID: fmt.Sprintf("d%d", m.seq), Rev: 1, Doc: append([]byte(nil), doc...)}
+	d := domain.Draft{ID: fmt.Sprintf("d%d", m.seq), Namespace: ns, Rev: 1, Doc: append([]byte(nil), doc...)}
 	d.ETag = fmt.Sprintf(`"%s-%d"`, d.ID, d.Rev)
-	m.drafts[d.ID] = d
+	m.drafts[key(ns, d.ID)] = d
 	return d, nil
 }
 
-// Get returns a draft.
-func (m MemDrafts) Get(id string) (domain.Draft, error) {
+// GetDraft returns a draft of ns.
+func (m *MemDB) GetDraft(ns, id string) (domain.Draft, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	d, ok := m.drafts[id]
+	d, ok := m.drafts[key(ns, id)]
 	if !ok {
 		return domain.Draft{}, app.ErrNotFound
 	}
 	return d, nil
 }
 
-// Replace bumps the revision when ifMatch is current.
-func (m MemDrafts) Replace(id, ifMatch string, doc []byte) (domain.Draft, error) {
+// ReplaceDraft replaces a draft when ifMatch is its ETag.
+func (m *MemDB) ReplaceDraft(ns, id, ifMatch string, doc []byte) (domain.Draft, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	d, ok := m.drafts[id]
+	d, ok := m.drafts[key(ns, id)]
 	if !ok {
 		return domain.Draft{}, app.ErrNotFound
 	}
@@ -83,107 +218,92 @@ func (m MemDrafts) Replace(id, ifMatch string, doc []byte) (domain.Draft, error)
 	d.Rev++
 	d.Doc = append([]byte(nil), doc...)
 	d.ETag = fmt.Sprintf(`"%s-%d"`, d.ID, d.Rev)
-	m.drafts[id] = d
+	m.drafts[key(ns, id)] = d
 	return d, nil
 }
 
-// MemCandidates adapts MemDB to CandidateRepo.
-type MemCandidates struct{ *MemDB }
-
-// Insert stores a frozen candidate.
-func (m MemCandidates) Insert(c domain.Candidate) error {
+// InsertCandidate stores a candidate.
+func (m *MemDB) InsertCandidate(c domain.Candidate) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.candidates[c.ID] = c
+	m.candidates[key(c.Namespace, c.ID)] = c
 	return nil
 }
 
-// Get returns a candidate with its latest decision applied.
-func (m MemCandidates) Get(id string) (domain.Candidate, error) {
+// GetCandidate returns a candidate of ns.
+func (m *MemDB) GetCandidate(ns, id string) (domain.Candidate, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	c, ok := m.candidates[id]
+	c, ok := m.candidates[key(ns, id)]
 	if !ok {
 		return domain.Candidate{}, app.ErrNotFound
-	}
-	if d, ok := m.decisions[id]; ok {
-		c.State, c.Comment = d.State, d.Comment
 	}
 	return c, nil
 }
 
-// Reject appends a rejection decision.
-func (m MemCandidates) Reject(id, comment string) error {
+// RejectCandidate moves an open candidate to rejected.
+func (m *MemDB) RejectCandidate(ns, id, comment string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.decisions[id]; ok {
+	c, ok := m.candidates[key(ns, id)]
+	if !ok || c.State != domain.Open {
 		return app.ErrInvalidState
 	}
-	m.decisions[id] = domain.Candidate{State: domain.Rejected, Comment: comment}
+	c.State, c.Comment = domain.Rejected, comment
+	m.candidates[key(ns, id)] = c
 	return nil
 }
 
-// MemReleases adapts MemDB to ReleaseStore.
-type MemReleases struct{ *MemDB }
-
-// AppendRelease appends a release and approves its candidate atomically.
-func (m MemReleases) AppendRelease(r domain.Release, from string) error {
+// AppendRelease stores a release and approves its candidate atomically.
+func (m *MemDB) AppendRelease(r domain.Release, from string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.Faults.AppendRelease != nil {
 		return m.Faults.AppendRelease
 	}
-	for _, x := range m.releases {
-		if semver.Compare(x.Record.Version, r.Record.Version) == 0 {
-			return app.ErrInvalidState
-		}
-	}
-	m.releases = append(m.releases, r)
-	m.decisions[from] = domain.Candidate{State: domain.Approved}
-	return nil
-}
-
-// AppendRevocation appends a revocation once per version.
-func (m MemReleases) AppendRevocation(rv domain.Revocation) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if _, ok := m.revocations[rv.Version.String()]; ok {
+	c, ok := m.candidates[key(r.Namespace, from)]
+	if !ok || c.State != domain.Open {
 		return app.ErrInvalidState
 	}
-	m.revocations[rv.Version.String()] = rv
+	c.State = domain.Approved
+	m.candidates[key(r.Namespace, from)] = c
+	m.releases = append(m.releases, r)
 	return nil
 }
 
-// Records projects releases and revocations into records.
-func (m MemReleases) Records() ([]lifecycle.Record, error) {
+// AppendRevocation stores a revocation once per version.
+func (m *MemDB) AppendRevocation(rv domain.Revocation) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	var out []lifecycle.Record
-	for _, r := range m.releases {
-		rec := r.Record
-		if rv, ok := m.revocations[rec.Version.String()]; ok {
-			rf := rv.RevokedFrom
-			rec.RevokedFrom = &rf
-		}
-		out = append(out, rec)
+	k := key(rv.Namespace, rv.Version.String())
+	if _, ok := m.revocations[k]; ok {
+		return app.ErrInvalidState
 	}
-	return lifecycle.SortAsc(out), nil
+	m.revocations[k] = rv
+	return nil
 }
 
-// Release returns the release of v.
-func (m MemReleases) Release(v semver.Version) (domain.Release, error) {
+// Releases returns the releases of ns with revocations applied.
+func (m *MemDB) Releases(ns string) ([]domain.Release, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	out := []domain.Release{}
 	for _, r := range m.releases {
-		if semver.Compare(r.Record.Version, v) == 0 {
-			return r, nil
+		if r.Namespace != ns {
+			continue
 		}
+		if rv, ok := m.revocations[key(ns, r.Record.Version.String())]; ok {
+			rf := rv.RevokedFrom
+			r.Record.RevokedFrom, r.SignedRec = &rf, rv.SignedRec
+		}
+		out = append(out, r)
 	}
-	return domain.Release{}, app.ErrNotFound
+	sort.Slice(out, func(i, j int) bool { return semver.Less(out[i].Record.Version, out[j].Record.Version) })
+	return out, nil
 }
 
 // ByManifest returns the release whose manifest has digest d.
-func (m MemReleases) ByManifest(d ni.Digest) (domain.Release, error) {
+func (m *MemDB) ByManifest(d ni.Digest) (domain.Release, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, r := range m.releases {
@@ -194,67 +314,66 @@ func (m MemReleases) ByManifest(d ni.Digest) (domain.Release, error) {
 	return domain.Release{}, app.ErrNotFound
 }
 
-// Releases returns every release.
-func (m MemReleases) Releases() ([]domain.Release, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return append([]domain.Release(nil), m.releases...), nil
-}
-
-// HasBlob reports whether a release references the blob.
-func (m MemReleases) HasBlob(hex string) (bool, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	for _, r := range m.releases {
-		for _, e := range r.Entries {
-			if e.Digest.Hex() == hex {
-				return true, nil
-			}
-		}
-	}
-	return false, nil
-}
-
-// MemListings adapts MemDB to ListingStore.
-type MemListings struct{ *MemDB }
-
-// Put stores a listing with a unique sequence.
-func (m MemListings) Put(l app.StoredListing) error {
+// PutListing stores a listing; its sequence must be the next one of ns.
+func (m *MemDB) PutListing(ns string, l app.StoredListing) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.Faults.ListingPut != nil {
 		return m.Faults.ListingPut
 	}
-	for _, x := range m.listings {
+	for _, x := range m.listings[ns] {
 		if x.Sequence == l.Sequence {
 			return app.ErrSequenceTaken
 		}
 	}
-	m.listings = append(m.listings, l)
+	m.listings[ns] = append(m.listings[ns], l)
 	return nil
 }
 
-// Latest returns the last stored listing.
-func (m MemListings) Latest() (app.StoredListing, bool, error) {
+// LatestListing returns the last listing of ns.
+func (m *MemDB) LatestListing(ns string) (app.StoredListing, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if len(m.listings) == 0 {
+	ls := m.listings[ns]
+	if len(ls) == 0 {
 		return app.StoredListing{}, false, nil
 	}
-	return m.listings[len(m.listings)-1], true, nil
+	return ls[len(ls)-1], true, nil
 }
 
-// All returns every issued listing in order.
-func (m MemListings) All() []app.StoredListing {
+// Listings returns every listing issued for ns, oldest first.
+func (m *MemDB) Listings(ns string) []app.StoredListing {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return append([]app.StoredListing(nil), m.listings...)
+	return append([]app.StoredListing{}, m.listings[ns]...)
+}
+
+// Append stores an event with the next id.
+func (m *MemDB) Append(e domain.Event) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	e.ID = int64(len(m.events) + 1)
+	m.events = append(m.events, e)
+	return e.ID, nil
+}
+
+// After returns up to limit events of scope ns with an id greater than after.
+func (m *MemDB) After(ns string, after int64, limit int) ([]domain.Event, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := []domain.Event{}
+	for _, e := range m.events {
+		if e.ID > after && e.Namespace == ns && len(out) < limit {
+			out = append(out, e)
+		}
+	}
+	return out, nil
 }
 
 // MemBlobs adapts MemDB to BlobStore.
 type MemBlobs struct{ *MemDB }
 
-// Put stores a blob by hash.
+// Put stores bytes under their hex digest.
 func (m MemBlobs) Put(hex string, b []byte) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -265,7 +384,7 @@ func (m MemBlobs) Put(hex string, b []byte) error {
 	return nil
 }
 
-// Get returns a blob by hash.
+// Get returns the bytes of a digest.
 func (m MemBlobs) Get(hex string) ([]byte, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -274,43 +393,4 @@ func (m MemBlobs) Get(hex string) ([]byte, error) {
 		return nil, app.ErrNotFound
 	}
 	return b, nil
-}
-
-// MemEvents adapts MemDB to EventLog.
-type MemEvents struct{ *MemDB }
-
-// Append assigns the next id.
-func (m MemEvents) Append(e domain.Event) (int64, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	e.ID = int64(len(m.events) + 1)
-	m.events = append(m.events, e)
-	return e.ID, nil
-}
-
-// After returns events with id greater than after.
-func (m MemEvents) After(after int64, limit int) ([]domain.Event, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	var out []domain.Event
-	for _, e := range m.events {
-		if e.ID > after && len(out) < limit {
-			out = append(out, e)
-		}
-	}
-	return out, nil
-}
-
-// FailingLog wraps a transparency log and fails when Faults.Register is set.
-type FailingLog struct {
-	Inner app.TransparencyLog
-	DB    *MemDB
-}
-
-// Register delegates unless a failure is injected.
-func (f FailingLog) Register(d ni.Digest) ([]byte, error) {
-	if f.DB.Faults.Register != nil {
-		return nil, f.DB.Faults.Register
-	}
-	return f.Inner.Register(d)
 }
