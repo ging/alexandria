@@ -1,45 +1,75 @@
-// Package app implements the listing use case: issues signed listings on date changes and at most every ttl/2, signs version records, serves the DID document.
-// Records and listings come from the same projection, so a record never diverges from its listing entry (REQ-HUB-008..010, REQ-HUB-015, REQ-HUB-021).
+// Package app implements the Listing use case and the signing-key gate: per-namespace signed listings and stored version records.
+// The hub signs only after resolving its own DID and finding the active key in assertionMethod (REQ-HUB-008..010, REQ-HUB-015, REQ-HUB-021, REQ-HUB-031).
 package app
 
 import (
-	"bytes"
-	"encoding/json"
+	"log/slog"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ging/alexandria/internal/core/codes"
-	"github.com/ging/alexandria/internal/core/did"
 	"github.com/ging/alexandria/internal/core/lifecycle"
+	"github.com/ging/alexandria/internal/core/logx"
 	"github.com/ging/alexandria/internal/core/semver"
-	"github.com/ging/alexandria/internal/core/sign"
 	"github.com/ging/alexandria/internal/core/timex"
+	"github.com/ging/alexandria/internal/core/vc"
 	"github.com/ging/alexandria/internal/server/domain"
 )
 
-// Listing implements /v1/versions*, the scheduler pass and /.well-known/did.json.
-type Listing struct {
-	d  Deps
-	mu *sync.Mutex
+// KeyGate refuses to sign until CheckSigningKey has seen the active key in the hub DID document.
+type KeyGate struct {
+	d         Deps
+	published atomic.Bool
+	checked   atomic.Bool
 }
 
-// Issue emits a new listing at t, if any version exists.
-func (l *Listing) Issue(t timex.Instant) (StoredListing, error) {
+// CheckSigningKey resolves the hub DID and records whether the active key is an assertion method.
+func (k *KeyGate) CheckSigningKey() bool {
+	doc, err := k.d.Resolver.Resolve(k.d.DID)
+	ok := err == nil && doc.HasKid(k.d.Signer.VerificationMethod())
+	was, first := k.published.Swap(ok), !k.checked.Swap(true)
+	if !ok && (was || first) {
+		_ = k.d.emit(nil, domain.EvSignerKeyUnpublished, "", k.d.Signer.VerificationMethod())
+		k.d.log().Warn("signing key not published in hub DID document", slog.String("hub_did", string(k.d.DID)), slog.String("verification_method", k.d.Signer.VerificationMethod()), logx.Err(err))
+	} else if ok && !was {
+		k.d.log().Info("signing key verified in hub DID document", slog.String("hub_did", string(k.d.DID)), slog.String("verification_method", k.d.Signer.VerificationMethod()))
+	}
+	return ok
+}
+
+// Sign signs an unsecured credential, or fails with SIGNER_KEY_NOT_PUBLISHED.
+func (k *KeyGate) Sign(unsecured []byte, created timex.Instant) ([]byte, error) {
+	if !k.published.Load() {
+		return nil, codes.New(codes.SignerKeyNotPublished, "%s is not an assertionMethod of %s", k.d.Signer.VerificationMethod(), k.d.DID)
+	}
+	return k.d.Signer.Sign(unsecured, created)
+}
+
+// Listing implements .../versions*, and the scheduler pass.
+type Listing struct {
+	d    Deps
+	keys *KeyGate
+	mu   *sync.Mutex
+}
+
+// Issue emits a new listing of ns at t, if the namespace has any version.
+func (l *Listing) Issue(ns string, t timex.Instant) (StoredListing, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return l.issue(t)
+	return l.issue(ns, t)
 }
 
 // issue builds, signs and stores the next listing; the caller holds the lock.
-func (l *Listing) issue(t timex.Instant) (StoredListing, error) {
-	recs, err := l.d.Releases.Records()
+func (l *Listing) issue(ns string, t timex.Instant) (StoredListing, error) {
+	recs, _, err := l.d.records(ns)
 	if err != nil || len(recs) == 0 {
 		return StoredListing{}, err
 	}
-	params, space, err := headParams(l.d)
+	params, err := l.d.headParams(ns)
 	if err != nil {
 		return StoredListing{}, err
 	}
-	last, ok, err := l.d.Listings.Latest()
+	last, ok, err := l.d.Store.LatestListing(ns)
 	if err != nil {
 		return StoredListing{}, err
 	}
@@ -47,114 +77,89 @@ func (l *Listing) issue(t timex.Instant) (StoredListing, error) {
 	if ok {
 		seq = last.Sequence + 1
 	}
-	lst := lifecycle.Build(space, recs, t, params.Freshness.TTL, seq)
-	raw, err := l.envelope(lst)
+	subject := lifecycle.Build(l.d.nsIRI(ns), recs, t, seq)
+	until := t.Add(params.Freshness.TTL)
+	raw, err := l.keys.Sign(l.d.unsigned(vc.TypeVersionListing, t, &until, subject), t)
 	if err != nil {
 		return StoredListing{}, err
 	}
-	s := StoredListing{Sequence: seq, Raw: raw, Listing: lst}
-	if err := l.d.Listings.Put(s); err != nil {
+	s := StoredListing{Sequence: seq, Raw: raw, IssuedAt: t, ValidUntil: until, Subject: subject}
+	if err := l.d.Store.PutListing(ns, s); err != nil {
 		return StoredListing{}, err
 	}
-	return s, emit(l.d, domain.EvListingIssued, "vhub", lst.IssuedAt.String())
+	if err := l.d.emit(nil, domain.EvListingIssued, ns, subject.ID); err != nil {
+		return StoredListing{}, err
+	}
+	l.d.log().Info("version listing issued", slog.String("namespace", ns), slog.Uint64("sequence", seq), slog.Int("versions", len(recs)), slog.String("valid_until", until.String()))
+	return s, nil
 }
 
-// IssueIfStale emits a listing when none exists or the last one is at least ttl/2 old.
-func (l *Listing) IssueIfStale(t timex.Instant) error {
+// IssueIfStale emits a listing when none exists or the last one is at least ttl/2 old (REQ-HUB-008).
+func (l *Listing) IssueIfStale(ns string, t timex.Instant) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	last, ok, err := l.d.Listings.Latest()
+	last, ok, err := l.d.Store.LatestListing(ns)
 	if err != nil {
 		return err
 	}
-	if ok {
-		ttl := last.Listing.ExpiresAt.Sub(last.Listing.IssuedAt)
-		if t < last.Listing.IssuedAt.Add(ttl/2) {
-			return nil
-		}
+	if ok && t < last.IssuedAt.Add(last.ValidUntil.Sub(last.IssuedAt)/2) {
+		return nil
 	}
-	_, err = l.issue(t)
+	_, err = l.issue(ns, t)
 	return err
 }
 
-// Latest returns the current listing, issuing a fresh one first if the last is stale.
-func (l *Listing) Latest(p domain.Principal) ([]byte, error) {
-	if err := authorize(p, domain.VersionsList); err != nil {
+// Tick reissues stale listings of every namespace; the scheduler calls it.
+func (l *Listing) Tick(t timex.Instant) error {
+	nss, err := l.d.Store.ListNamespaces()
+	if err != nil {
+		return err
+	}
+	for _, n := range nss {
+		if err := l.IssueIfStale(n.Slug, t); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Latest returns the current listing of ns (public), issuing a fresh one first if the last is stale.
+func (l *Listing) Latest(ns string) ([]byte, error) {
+	if _, err := l.d.namespace(ns); err != nil {
 		return nil, err
 	}
-	if err := l.IssueIfStale(l.d.Clock.Now()); err != nil {
-		return nil, err
+	if err := l.IssueIfStale(ns, l.d.Clock.Now()); err != nil {
+		if _, coded := codes.As(err); !coded {
+			return nil, err
+		}
 	}
-	last, ok, err := l.d.Listings.Latest()
+	last, ok, err := l.d.Store.LatestListing(ns)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
-		return nil, codes.New(codes.APINotFound, "no version has been published yet")
+		return nil, codes.New(codes.APINotFound, "namespace %s has no published version", ns)
 	}
 	return last.Raw, nil
 }
 
-// Record returns the signed record of a published version.
-func (l *Listing) Record(p domain.Principal, version string) ([]byte, error) {
-	if err := authorize(p, domain.VersionsGet); err != nil {
+// Record returns the stored signed record of a published version (public).
+func (l *Listing) Record(ns, version string) ([]byte, error) {
+	if _, err := l.d.namespace(ns); err != nil {
 		return nil, err
 	}
 	v, err := semver.Parse(version)
 	if err != nil {
 		return nil, codes.New(codes.APINotFound, "version %s not found", version)
 	}
-	return l.signRecord(v)
-}
-
-// signRecord signs the current projection of version v.
-func (l *Listing) signRecord(v semver.Version) ([]byte, error) {
-	recs, err := l.d.Releases.Records()
+	_, rels, err := l.d.records(ns)
 	if err != nil {
 		return nil, err
 	}
-	rec, ok := lifecycle.Find(recs, v)
-	if !ok {
-		return nil, codes.New(codes.APINotFound, "version %s not found", v)
+	for _, r := range rels {
+		if semver.Compare(r.Record.Version, v) == 0 {
+			return r.SignedRec, nil
+		}
 	}
-	return l.signDoc(rec, l.d.Clock.Now())
-}
-
-// signDoc builds and signs a version record document issued at t.
-func (l *Listing) signDoc(rec lifecycle.Record, t timex.Instant) ([]byte, error) {
-	_, space, err := headParams(l.d)
-	if err != nil {
-		return nil, err
-	}
-	return l.envelope(lifecycle.VersionDoc{Type: lifecycle.RecordType, Space: space, IssuedAt: t, Record: rec})
-}
-
-// envelope serializes {signed, signature} with signed in JCS form, signing JCS(signed).
-func (l *Listing) envelope(signed any) ([]byte, error) {
-	return Envelope(l.d.Signer, signed)
-}
-
-// Envelope signs a document with the hub key and serializes it deterministically.
-func Envelope(s Signer, signed any) ([]byte, error) {
-	msg, err := sign.SigningInput(signed)
-	if err != nil {
-		return nil, err
-	}
-	sig, err := s.Sign(msg)
-	if err != nil {
-		return nil, err
-	}
-	sb, _ := json.Marshal(sig)
-	var buf bytes.Buffer
-	buf.WriteString(`{"signed":`)
-	buf.Write(msg)
-	buf.WriteString(`,"signature":`)
-	buf.Write(sb)
-	buf.WriteString(`}`)
-	return buf.Bytes(), nil
-}
-
-// DIDDocument returns the hub DID document built from the published keys.
-func (l *Listing) DIDDocument() did.Document {
-	return did.NewDocument(l.d.DID, l.d.Signer.PublishedKeys())
+	return nil, codes.New(codes.APINotFound, "version %s not found", version)
 }

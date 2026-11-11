@@ -1,0 +1,10 @@
+$kind: http-request
+method: GET
+url: '{{hubUrl}}/pub/packages/{{manifestSegment}}/manifest.json'
+order: 4000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('200 signed PackageManifest VC 2.0', () => {\n  pm.response.to.have.status(200);\n  const\
+    \ m = pm.response.json();\n  pm.expect(m.type).to.include('PackageManifest');\n  pm.expect(m.proof.cryptosuite).to.eql('eddsa-jcs-2022');\n\
+    });"

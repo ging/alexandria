@@ -5,6 +5,7 @@
     "profiles-dsl",
     "server",
     "client",
+    "console",
     "error-catalog"
   ]
 }

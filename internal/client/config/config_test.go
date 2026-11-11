@@ -1,80 +1,113 @@
-// Tests of the client configuration: one negative document per invariant CFG-1..CFG-5 and the A.3 example.
-// Realise T-CLI-001 and T-DOC-003 (§4.3, Appendix A.3).
+// Tests CFG-1 on the Annex C example and a negative document, YAML/JSON loading for both Appendix A.3 and config.yaml layouts, and the §4.3.1 defaults (T-CLI-001, T-DOC-003).
+// Fixtures: spec/examples/config.json, deploy/client.json, deploy/client.yaml, config/client.yaml and inline documents.
 package config
 
 import (
 	"os"
 	"path/filepath"
-	"regexp"
-	"strings"
+	"reflect"
 	"testing"
 
 	"github.com/ging/alexandria/internal/core/codes"
 )
 
-// base returns a valid configuration whose credentials file exists, with one placeholder for extra routes.
-func base(t *testing.T, routes, extra string) []byte {
+// example reads the Annex C configuration.
+func example(t *testing.T) []byte {
 	t.Helper()
-	cred := filepath.Join(t.TempDir(), "credentials.json")
-	_ = os.WriteFile(cred, []byte(`{"token":"member-token"}`), 0o600)
-	return []byte(`{"space":"https://example.com/spaces/demo","trust":{"hub_did":"did:web:hub.example.com","hub":"https://hub.example.com","credentials":"file://` + cred + `"},
-"upstreams":{"dsp":"http://connector:8282/protocol"` + extra + `},"listeners":{"admin":{"bind":"127.0.0.1:9900"}},"routes":[` + routes + `],"events":{"sink":"file:///tmp/e.jsonl"}}`)
-}
-
-// credRe matches the credentials member of a configuration.
-var credRe = regexp.MustCompile(`"credentials":"[^"]*"`)
-
-// route renders one route of the given listener, path, message and gates.
-func route(listener, path, msg, gates string) string {
-	return `{"listener":"` + listener + `","match":{"method":"POST","path":"` + path + `"},"message":"` + msg + `","gates":[` + gates + `]}`
-}
-
-func TestT_CLI_001_ValidConfigLoads(t *testing.T) {
-	c, err := Parse(base(t, route("dsp-ingress", "/negotiations/request", "ContractRequestMessage", `"dsp_message"`), ""))
-	if err != nil || c.Token != "member-token" || c.DefaultAction != "forward" || c.Audit.Window != 100 {
-		t.Fatalf("got %+v %v", c, err)
-	}
-}
-
-func TestT_CLI_001_CFG1Schema(t *testing.T) {
-	doc := strings.Replace(string(base(t, "", "")), `{"space"`, `{"unknown":1,"space"`, 1)
-	if _, err := Parse([]byte(doc)); err == nil || err.Code != codes.ConfigSchema {
-		t.Fatalf("got %v", err)
-	}
-}
-
-func TestT_CLI_001_CFG2Overlap(t *testing.T) {
-	rs := route("dsp-ingress", "/negotiations/:a/request", "ContractRequestMessage", `"dsp_message"`) + "," + route("dsp-ingress", "/negotiations/:b/request", "ContractRequestMessage", `"dsp_message"`)
-	if _, err := Parse(base(t, rs, "")); err == nil || err.Code != codes.ConfigRouteOverlap {
-		t.Fatalf("got %v", err)
-	}
-}
-
-func TestT_CLI_001_CFG3GateMessage(t *testing.T) {
-	if _, err := Parse(base(t, route("dsp-ingress", "/negotiations/request", "ContractRequestMessage", `"agreement_admission"`), "")); err == nil || err.Code != codes.ConfigGateMessageMismatch {
-		t.Fatalf("got %v", err)
-	}
-}
-
-func TestT_CLI_001_CFG4Credentials(t *testing.T) {
-	cfg := credRe.ReplaceAll(base(t, "", ""), []byte(`"credentials":"file:///no/existe"`))
-	if _, err := Parse(cfg); err == nil || err.Code != codes.ConfigCredentialsUnreadable {
-		t.Fatalf("got %v", err)
-	}
-}
-
-func TestT_CLI_001_CFG5Upstream(t *testing.T) {
-	if _, err := Parse(base(t, route("mgmt-ingress", "/v3/policydefinitions", "management", `"policy_intake"`), "")); err == nil || err.Code != codes.ConfigUpstreamMissing {
-		t.Fatalf("got %v", err)
-	}
-}
-
-func TestT_DOC_003_ExampleConfigValidates(t *testing.T) {
-	b, err := os.ReadFile(filepath.Join("..", "..", "..", "conformance", "examples", "config.json"))
+	b, err := os.ReadFile("../../../spec/examples/config.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, cerr := Parse(b); cerr == nil || cerr.Code != codes.ConfigCredentialsUnreadable {
-		t.Fatalf("the example must pass CFG-1..3 and only fail CFG-4 on this machine: %v", cerr)
+	return b
+}
+
+func TestT_DOC_003_ExampleLoadsWithDefaults(t *testing.T) {
+	c, err := Parse(example(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Trust.Context != DefaultContext || c.NamespaceIRI() != "https://hub.example.com/v1/namespaces/demo" || c.Audit.Window != 100 || c.GCInterval != 86400 {
+		t.Fatalf("got %+v", c)
+	}
+}
+
+func TestT_CLI_001_UnknownRootFieldIsConfigSchema(t *testing.T) {
+	_, err := Parse([]byte(`{"trust":{"hub":"https://h","namespace":"demo","hub_did":"did:web:h"},"upstreams":{"dsp":"http://c"},"listeners":{"admin":{"bind":"a:1"}},"events":{"sink":"file:///e"},"routes":[]}`))
+	if err == nil || err.Code != codes.ConfigSchema {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestYAMLConfig(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "client.yaml")
+	_ = os.WriteFile(p, []byte("trust: {hub: 'https://h', namespace: demo, hub_did: 'did:web:h'}\nupstreams: {dsp: 'http://c'}\nlisteners: {admin: {bind: 'a:1'}}\nevents: {sink: 'file:///e'}\n"), 0o600)
+	if _, err := Load(p); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNodeLayoutMatchesDeployJSON(t *testing.T) {
+	baseCfg, err := Load("../../../deploy/client.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"../../../deploy/client.yaml", "../../../config/client.yaml"} {
+		c, err := Load(path)
+		if err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		if c.HubCA == "" {
+			t.Fatalf("%s: expected HubCA to be resolved", path)
+		}
+		c.HubCA = ""
+		if !reflect.DeepEqual(c, baseCfg) {
+			t.Fatalf("%s mismatch:\ngot  %+v\nwant %+v", path, c, baseCfg)
+		}
+	}
+	if _, cerr := Parse([]byte(`{"common_config":{"unknown":true}}`)); cerr == nil || cerr.Code != codes.ConfigSchema {
+		t.Fatalf("expected CONFIG_SCHEMA on unknown field in common_config, got %v", cerr)
+	}
+}
+
+// TestObservabilityNodeLayoutParsed verifies observability fields in the config.yaml section layout.
+func TestObservabilityNodeLayoutParsed(t *testing.T) {
+	raw := []byte(`{
+		"common_config": {
+			"hosts": {"http": {"protocol": "http", "url": "127.0.0.1", "port": "9080"}},
+			"connection": {"is_prod": true}
+		},
+		"did_config": {"hub_did": "did:key:z6MkpTHR8VNsBxYAAWHut2Geadd9jSwuBV8xRoAnwWsdvktH"},
+		"observability": {
+			"log_level": "warn",
+			"log_format": "json",
+			"otlp_endpoint": "http://127.0.0.1:4318",
+			"otlp_insecure": true,
+			"service_name": "client-prod",
+			"port": "9090",
+			"events_sink": "file:var/events.jsonl"
+		},
+		"client_config": {
+			"trust": {"hub": "https://hub.example.com", "namespace": "demo"},
+			"upstreams": {"dsp": "http://127.0.0.1:8282/dsp"}
+		}
+	}`)
+	c, cerr := Parse(raw)
+	if cerr != nil {
+		t.Fatal(cerr)
+	}
+	if c.Log.Level != "warn" || c.Log.Format != "json" || c.Log.OTLPEndpoint != "http://127.0.0.1:4318" || !c.Log.OTLPInsecure || c.Log.ServiceName != "client-prod" || c.Log.Environment != "production" {
+		t.Fatalf("got %+v", c.Log)
+	}
+}
+
+// TestInvalidObservabilitySettingsRejected verifies CONFIG_SCHEMA rejection on invalid log levels or formats.
+func TestInvalidObservabilitySettingsRejected(t *testing.T) {
+	badLevel := []byte("common_config: {}\ndid_config: {hub_did: 'did:key:z6Mk'}\nobservability: {log_level: bogus, port: '9090', events_sink: 'file:///e'}\nclient_config: {trust: {hub: 'https://h', namespace: demo}, upstreams: {dsp: 'http://c'}}\n")
+	if _, cerr := Parse(badLevel); cerr == nil || cerr.Code != codes.ConfigSchema {
+		t.Fatalf("expected CONFIG_SCHEMA on invalid log_level, got %v", cerr)
+	}
+	badFormat := []byte("common_config: {}\ndid_config: {hub_did: 'did:key:z6Mk'}\nobservability: {log_format: xml, port: '9090', events_sink: 'file:///e'}\nclient_config: {trust: {hub: 'https://h', namespace: demo}, upstreams: {dsp: 'http://c'}}\n")
+	if _, cerr := Parse(badFormat); cerr == nil || cerr.Code != codes.ConfigSchema {
+		t.Fatalf("expected CONFIG_SCHEMA on invalid log_format, got %v", cerr)
 	}
 }

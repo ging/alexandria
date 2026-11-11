@@ -1,18 +1,23 @@
-// Package app implements the revocation use case: applies REV-1..REV-4, appends a new signed record and issues a fresh listing.
-// The only date that may ever be added to an emitted record is revoked_from (REQ-HUB-007, REQ-HUB-014).
+// Package app implements the Revocation use case: REV-1..REV-4, a re-signed record with revoked_from and a new listing.
+// Revocation is the only date change after publication and happens once per version (REQ-HUB-007, REQ-HUB-014).
 package app
 
 import (
+	"log/slog"
+
 	"github.com/ging/alexandria/internal/core/codes"
 	"github.com/ging/alexandria/internal/core/lifecycle"
+	"github.com/ging/alexandria/internal/core/logx"
 	"github.com/ging/alexandria/internal/core/semver"
 	"github.com/ging/alexandria/internal/core/timex"
+	"github.com/ging/alexandria/internal/core/vc"
 	"github.com/ging/alexandria/internal/server/domain"
 )
 
-// Revocation implements /v1/versions/{version}:revoke.
+// Revocation implements .../versions/{version}:revoke.
 type Revocation struct {
 	d       Deps
+	keys    *KeyGate
 	listing *Listing
 }
 
@@ -22,46 +27,49 @@ type RevokeOptions struct {
 	RevokedFrom   *timex.Instant `json:"revoked_from,omitempty"`
 }
 
-// Revoke revokes a published version and returns its updated signed record.
-func (r *Revocation) Revoke(p domain.Principal, version string, o RevokeOptions) ([]byte, error) {
-	if err := authorize(p, domain.VersionsRevoke); err != nil {
+// Revoke adds revoked_from to a published version and returns its re-signed record.
+func (r *Revocation) Revoke(p *domain.Principal, ns, version string, o RevokeOptions) ([]byte, error) {
+	if err := r.d.authorize(domain.OpNamespace, p, ns); err != nil {
 		return nil, err
 	}
 	v, err := semver.Parse(version)
 	if err != nil {
 		return nil, codes.New(codes.APINotFound, "version %s not found", version)
 	}
-	rel, err := r.d.Releases.Release(v)
-	if err != nil {
-		return nil, notFound(err, "version "+version)
-	}
-	recs, err := r.d.Releases.Records()
+	recs, rels, err := r.d.records(ns)
 	if err != nil {
 		return nil, err
 	}
+	rec, ok := lifecycle.Find(recs, v)
+	if !ok {
+		return nil, codes.New(codes.APINotFound, "version %s not found", version)
+	}
 	now := r.d.Clock.Now()
-	rf, cerr := lifecycle.CheckRevocation(lifecycle.Revocation{
-		Version: v, R: now, RevokedFrom: o.RevokedFrom, Justification: o.Justification, PW: rel.Params.PropagationWindow,
-	}, recs)
+	params := r.d.Defaults
+	for _, rel := range rels {
+		if semver.Compare(rel.Record.Version, v) == 0 {
+			params = rel.Params
+		}
+	}
+	rf, cerr := lifecycle.CheckRevocation(lifecycle.Revocation{Version: v, R: now, RevokedFrom: o.RevokedFrom, Justification: o.Justification, PW: params.PropagationWindow}, recs)
 	if cerr != nil {
 		return nil, cerr
 	}
-	rec, _ := lifecycle.Find(recs, v)
 	rec.RevokedFrom = &rf
-	env, err := r.listing.signDoc(rec, now)
+	signed, err := r.keys.Sign(r.d.unsigned(vc.TypeVersionRecord, now, nil, rec), now)
 	if err != nil {
 		return nil, err
 	}
-	if err := r.d.Releases.AppendRevocation(domain.Revocation{
-		Version: v, RevokedFrom: rf, Justification: o.Justification, At: now, Principal: p.Name, Envelope: env,
-	}); err != nil {
+	rv := domain.Revocation{Namespace: ns, Version: v, RevokedFrom: rf, Justification: o.Justification, At: now, Principal: p.String(), SignedRec: signed}
+	if err := r.d.Store.AppendRevocation(rv); err != nil {
 		return nil, err
 	}
-	if err := emit(r.d, domain.EvVersionRevoked, p.Name, version); err != nil {
+	if err := r.d.emit(p, domain.EvVersionRevoked, ns, rec.ID); err != nil {
 		return nil, err
 	}
-	if _, err := r.listing.Issue(now); err != nil {
-		return nil, err
+	r.d.log().Warn("version revoked", slog.String("namespace", ns), slog.String("version", v.String()), slog.String("revoked_from", rf.String()), slog.String("principal", p.String()))
+	if _, lerr := r.listing.Issue(ns, now); lerr != nil {
+		r.d.log().Warn("revocation listing issuance deferred to scheduler", slog.String("namespace", ns), logx.Err(lerr))
 	}
-	return r.listing.signRecord(v)
+	return signed, nil
 }

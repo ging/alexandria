@@ -93,12 +93,12 @@ func Classify(in ClassifyInput, eval func(v lifecycle.Record) EvalResult) Classi
 	if c, ok := PreCheck(in.State, in.Degraded); ok {
 		return c
 	}
+	if in.Unparseable {
+		return violation(codes.MessageUnparseable)
+	}
 	vt := in.Snap.InForce(in.TL)
 	if len(vt) == 0 {
 		return violation(codes.NoVersionInForce)
-	}
-	if in.Unparseable {
-		return violation(codes.MessageUnparseable)
 	}
 	head := vt[0]
 	r := eval(head)

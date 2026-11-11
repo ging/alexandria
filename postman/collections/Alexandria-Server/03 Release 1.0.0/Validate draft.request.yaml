@@ -1,0 +1,9 @@
+$kind: http-request
+method: POST
+url: '{{hubUrl}}/v1/namespaces/{{namespace}}/drafts/{{draftId}}:validate'
+order: 4000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('200 valid N1-N5 report', () => {\n  pm.response.to.have.status(200);\n  pm.expect(pm.response.json().valid).to.eql(true);\n\
+    });"

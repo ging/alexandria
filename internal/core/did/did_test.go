@@ -46,3 +46,29 @@ func TestWebURL(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveKeyIsLocal(t *testing.T) {
+	d, vm := KeyDID(key("").Key)
+	doc, err := ResolveKey(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := doc.AssertionKey(vm); !ok {
+		t.Fatalf("did:key method %s not in assertionMethod", vm)
+	}
+}
+
+func TestMultikeyRoundTrip(t *testing.T) {
+	k := key("").Key
+	got, err := DecodeMultikey(EncodeMultikey(k))
+	if err != nil || !got.Equal(k) {
+		t.Fatalf("round trip failed: %v", err)
+	}
+}
+
+func TestParseMakesRelativeIdsAbsolute(t *testing.T) {
+	doc, err := Parse([]byte(`{"id":"did:web:h","verificationMethod":[{"id":"#k","type":"Multikey","controller":"did:web:h","publicKeyMultibase":"` + EncodeMultikey(key("").Key) + `"}],"assertionMethod":["#k"]}`))
+	if err != nil || !doc.HasKid("did:web:h#k") {
+		t.Fatalf("relative id not resolved: %v", err)
+	}
+}

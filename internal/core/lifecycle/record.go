@@ -1,5 +1,5 @@
 // Package lifecycle defines the version record with its class and its four dates, as carried by listings and version records.
-// Shared by hub and client so both read the same dates (§3.4, REQ-SYS-004).
+// Shared by hub and client so both read the same dates (§3.8, REQ-SYS-004).
 package lifecycle
 
 import (
@@ -13,19 +13,20 @@ import (
 // Class is the change class computed by N4.
 type Class string
 
-// Change classes of §3.3.
+// Change classes of §3.3.2.
 const (
 	Initial    Class = "initial"
 	Compatible Class = "compatible"
 	Breaking   Class = "breaking"
 )
 
-// Record is the record object of §3.4; RevokedFrom is nil while the version is not revoked.
+// Record is the record object of §3.8; RevokedFrom is nil while the version is not revoked.
 type Record struct {
+	ID             string         `json:"id"`
+	Namespace      string         `json:"namespace"`
 	Version        semver.Version `json:"version"`
 	Manifest       ni.Digest      `json:"manifest"`
 	Class          Class          `json:"class"`
-	Emergency      bool           `json:"emergency"`
 	PublishedAt    timex.Instant  `json:"published_at"`
 	NewContentFrom timex.Instant  `json:"new_content_from"`
 	EnforcedFrom   timex.Instant  `json:"enforced_from"`

@@ -1,151 +1,170 @@
-// Package app implements Edge: the hot path. Routes a message, classifies each gate, combines actions, forwards or rejects, and captures agreements.
-// Built without HubAPI or DIDResolver, and it never rewrites a forwarded body (REQ-SYS-001..003, REQ-CLI-010..015, REQ-CLI-021, REQ-CLI-022).
+// Package app implements the hot path: Explainer decides without effects and Edge adds forwarding, events, capture and response validation.
+// Both run domain.Decide on one snapshot and one rule revision; neither holds a HubAPI or DIDResolver (REQ-SYS-002, REQ-SYS-003, REQ-CLI-010..015, REQ-CLI-021, REQ-CLI-032).
 package app
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/ging/alexandria/internal/client/domain"
-	"github.com/ging/alexandria/internal/core/codes"
 	"github.com/ging/alexandria/internal/core/lifecycle"
+	"github.com/ging/alexandria/internal/core/logx"
 	"github.com/ging/alexandria/internal/core/problem"
 	"github.com/ging/alexandria/internal/core/semver"
 	"github.com/ging/alexandria/internal/core/timex"
 )
 
-// Edge classifies and forwards traffic.
-type Edge struct {
-	Cell             *Cell
-	Clock            timex.Clock
-	Evaluator        Evaluator
-	Upstream         Upstream
-	Agreements       *Agreements
-	Audit            *Audit
-	Events           EventSink
-	Metrics          Metrics
-	Routes           []domain.Route
+// Settings are the configuration values the hot path reads.
+type Settings struct {
+	Namespace        string
 	DefaultAction    string
 	UnknownAgreement string
-	Space            string
 }
 
-// outcome is the evaluation of one gate.
-type outcome struct {
-	gate   domain.Gate
-	mode   domain.Mode
-	class  domain.Classification
-	action domain.Action
+// Explainer decides like the hot path; it is built without Upstream, AgreementRepo or EventSink (REQ-CLI-032).
+type Explainer struct {
+	Snap       *Cell
+	Rules      *RulesCell
+	Evaluator  Evaluator
+	Agreements AgreementReader
+	Clock      timex.Clock
+	Settings   Settings
 }
 
-// Handle processes one message end to end.
-func (e *Edge) Handle(req *Request) *Response {
-	route, ok := domain.Find(e.Routes, req.Listener, req.Method, req.Path)
-	if !ok {
-		if e.DefaultAction == "reject" {
-			return e.defaultReject(req)
-		}
-		return e.forward(req)
-	}
-	snap, tL := e.Cell.Load(), e.Clock.Now()
+// decision runs Decide with one snapshot, one rule revision and the current local instant.
+func (x *Explainer) decision(req *Request) (domain.Decision, domain.State, timex.Instant, *domain.Snapshot) {
+	snap, rs, tL := x.Snap.Load(), x.Rules.Load(), x.Clock.Now()
 	state := domain.StateAt(snap, tL)
-	outs := e.classify(route, req.Body, snap, state, tL)
-	var enforced []domain.Action
-	var items []domain.Item
-	for _, o := range outs {
-		if o.mode == domain.Enforce {
-			enforced = append(enforced, o.action)
-			if o.class.Result != domain.OK {
-				items = append(items, item(o))
+	env := domain.Env{
+		Snap: snap, Rules: rs, State: state, TL: tL, DefaultAction: x.Settings.DefaultAction, UnknownAgreement: x.Settings.UnknownAgreement,
+		Eval: func(g domain.Gate, v lifecycle.Record, m domain.Message) domain.EvalResult {
+			return x.Evaluator.Evaluate(m, g, snap.Package(v))
+		},
+		Agreement: func(id string) (*domain.Entry, bool) {
+			e, ok, err := x.Agreements.Get(id)
+			if err != nil || !ok || id == "" {
+				return nil, false
 			}
-		}
-		e.emitVerdict(req, route, state, tL, o)
+			return &e, true
+		},
 	}
-	final := domain.Combine(enforced)
-	if final == domain.Reject {
-		return e.reject(req, route, outs, items)
+	return domain.Decide(env, domain.Request{Listener: req.Listener, Method: req.Method, Path: req.Path, Body: req.Body}), state, tL, snap
+}
+
+// Explanation is the body of POST /rules:explain.
+type Explanation struct {
+	Rule     *string           `json:"rule"`
+	Revision int               `json:"rules_revision"`
+	State    string            `json:"state"`
+	Gates    []GateExplanation `json:"gates"`
+	Action   string            `json:"action"`
+	Verdict  string            `json:"vhub_verdict,omitempty"`
+	Code     string            `json:"code,omitempty"`
+}
+
+// GateExplanation is the classification of one gate in an explanation.
+type GateExplanation struct {
+	Gate           string           `json:"gate"`
+	Mode           string           `json:"mode"`
+	Evaluated      bool             `json:"evaluated"`
+	Classification string           `json:"classification,omitempty"`
+	Codes          []string         `json:"codes"`
+	Matched        *string          `json:"matched"`
+	Sunset         string           `json:"sunset,omitempty"`
+	Action         string           `json:"action"`
+	Findings       []domain.Finding `json:"findings"`
+}
+
+// Explain returns what the hot path would decide now, without any effect.
+func (x *Explainer) Explain(req *Request) Explanation {
+	d, state, _, _ := x.decision(req)
+	out := Explanation{Revision: d.Revision, State: string(state), Action: string(d.Action), Verdict: d.Header, Code: string(d.Code), Gates: []GateExplanation{}}
+	if d.Rule != nil {
+		out.Rule = &d.Rule.ID
+	}
+	for _, g := range d.Gates {
+		ge := GateExplanation{Gate: string(g.Gate), Mode: string(g.Mode), Evaluated: g.Evaluated, Codes: codeStrings(g.Class.Codes), Matched: g.Class.Matched, Action: string(g.Action), Findings: nonNil(g.Class.Findings)}
+		if g.Evaluated {
+			ge.Classification = string(g.Class.Result)
+		}
+		if g.Class.Sunset != nil {
+			ge.Sunset = g.Class.Sunset.String()
+		}
+		out.Gates = append(out.Gates, ge)
+	}
+	return out
+}
+
+// Edge is the hot path with its effects.
+type Edge struct {
+	Explainer
+	Upstream Upstream
+	Capture  *Agreements
+	Audit    *Audit
+	Events   EventSink
+	Metrics  Metrics
+	Logger   *slog.Logger
+}
+
+// Handle processes one message end to end; the forwarded body and headers are never modified.
+func (e *Edge) Handle(req *Request) *Response {
+	d, state, tL, snap := e.decision(req)
+	for _, g := range d.Gates {
+		e.emit(req, d, g, state, tL)
+	}
+	if d.Action == domain.Reject {
+		ruleID := ""
+		if d.Rule != nil {
+			ruleID = d.Rule.ID
+		}
+		logx.Default(e.Logger).Warn("dsp message rejected",
+			slog.String("listener", string(req.Listener)),
+			slog.String("rule", ruleID),
+			slog.String("state", string(state)),
+			logx.Code(d.Code),
+		)
+		return e.reject(req, d)
 	}
 	resp := e.forward(req)
-	if final == domain.ForwardNotice {
-		resp.Header.Set(domain.HeaderName, domain.Header(items))
+	if d.Action == domain.ForwardNotice {
+		resp.Header.Set(domain.HeaderName, d.Header)
 	}
-	if resp.Status >= 200 && resp.Status < 300 {
-		if route.Message == "ContractAgreementMessage" {
-			e.capture(req, outs, snap, tL)
+	if d.Rule != nil && resp.Status >= 200 && resp.Status < 300 {
+		if d.Rule.Message == "ContractAgreementMessage" {
+			e.capture(req, d, snap, tL)
 		}
-		if route.ValidateResponse != nil {
-			e.validateResponse(req, route, resp, snap, state, tL)
+		if d.Rule.ValidateResponse != nil {
+			e.validateResponse(req, d, resp, snap, state, tL)
 		}
 	}
 	return resp
 }
 
-// classify evaluates every gate of the route; observe gates are not evaluated.
-func (e *Edge) classify(route domain.Route, body []byte, snap *domain.Snapshot, state domain.State, tL timex.Instant) []outcome {
-	mode := route.EffectiveMode()
-	if mode == domain.Observe {
-		return nil
+// emit sends one vhub.verdict for an evaluated gate that is not ok or carries info codes, and counts it.
+func (e *Edge) emit(req *Request, d domain.Decision, g domain.GateResult, state domain.State, tL timex.Instant) {
+	if !g.Evaluated {
+		return
 	}
-	selected, ok := domain.SelectBody(body, route.Select())
-	var outs []outcome
-	for _, g := range route.Gates {
-		c := e.Gate(g, body, selected, !ok, snap, state, tL)
-		outs = append(outs, outcome{gate: g, mode: mode, class: c, action: domain.Act(mode, c.Result)})
-		version := ""
-		if c.Matched != nil {
-			version = *c.Matched
-		}
-		e.Metrics.Classified(string(g), version, string(c.Result))
+	version := ""
+	if g.Class.Matched != nil {
+		version = *g.Class.Matched
 	}
-	return outs
-}
-
-// Gate classifies one gate for a message at tL.
-func (e *Edge) Gate(g domain.Gate, body, selected []byte, unparseable bool, snap *domain.Snapshot, state domain.State, tL timex.Instant) domain.Classification {
-	degraded := "continue"
-	if snap != nil {
-		degraded = snap.Params.DegradedMode(string(g))
-	}
-	if g == domain.GateAdmission {
-		if c, ok := domain.PreCheck(state, degraded); ok {
-			return c
-		}
-		return e.Agreements.Admit(body, snap, tL, e.UnknownAgreement)
-	}
-	in := domain.ClassifyInput{Snap: snap, State: state, Degraded: degraded, TL: tL, Unparseable: unparseable}
-	return domain.Classify(in, func(v lifecycle.Record) domain.EvalResult {
-		return e.Evaluator.Evaluate(domain.Message{Root: body, Selected: selected}, g, snap.Package(v))
-	})
-}
-
-// item converts a gate outcome into a VHub-Verdict item.
-func item(o outcome) domain.Item {
-	it := domain.Item{Result: o.class.Result, Gate: o.gate, Code: o.class.Code(), Sunset: o.class.Sunset}
-	if o.class.Matched != nil {
-		it.Version = *o.class.Matched
-	}
-	return it
-}
-
-// emitVerdict emits the vhub.verdict event of a gate when the mode and classification require one.
-func (e *Edge) emitVerdict(req *Request, route domain.Route, state domain.State, tL timex.Instant, o outcome) {
-	if !domain.Emits(o.mode, o.class) {
+	e.Metrics.Classified(d.Rule.ID, string(g.Gate), version, string(g.Class.Result))
+	if !domain.Emits(g.Mode, g.Class) {
 		return
 	}
 	v := Verdict{
-		Type: EvVerdict, ID: uuid(), TS: tL.String(), Space: e.Space, Listener: string(req.Listener), Route: route.Name(),
-		Message: route.Message, Gate: string(o.gate), Mode: string(o.mode), State: string(state),
-		Classification: string(o.class.Result), Action: string(o.action), Evaluated: o.class.Evaluated, Matched: o.class.Matched,
-		Codes: codeStrings(o.class.Codes), Findings: o.class.Findings,
+		Type: EvVerdict, ID: uuid(), TS: tL.String(), Namespace: e.Settings.Namespace, Listener: string(req.Listener), Rule: d.Rule.ID,
+		RulesRevision: d.Revision, Message: d.Rule.Message, Gate: string(g.Gate), Mode: string(g.Mode), State: string(state),
+		Classification: string(g.Class.Result), Action: string(g.Action), Evaluated: g.Class.Evaluated, Matched: g.Class.Matched,
+		Codes: codeStrings(g.Class.Codes), Findings: nonNil(g.Class.Findings),
 	}
 	if v.Evaluated == nil {
 		v.Evaluated = []string{}
 	}
-	if v.Findings == nil {
-		v.Findings = []domain.Finding{}
-	}
-	if o.class.Sunset != nil {
-		v.Sunset = o.class.Sunset.String()
+	if g.Class.Sunset != nil {
+		v.Sunset = g.Class.Sunset.String()
 	}
 	e.Events.Emit(v)
 }
@@ -154,6 +173,7 @@ func (e *Edge) emitVerdict(req *Request, route domain.Route, state domain.State,
 func (e *Edge) forward(req *Request) *Response {
 	resp, err := e.Upstream.Forward(req)
 	if err != nil {
+		logx.Default(e.Logger).Error("upstream forwarding failed", slog.String("listener", string(req.Listener)), logx.Err(err))
 		p := problem.Problem{Type: "about:blank", Title: "bad gateway", Status: http.StatusBadGateway, Detail: err.Error(), Severity: "error"}
 		return &Response{Status: http.StatusBadGateway, Header: http.Header{"Content-Type": {problem.ContentType}}, Body: p.JSON()}
 	}
@@ -163,62 +183,58 @@ func (e *Edge) forward(req *Request) *Response {
 	return resp
 }
 
-// reject builds the §4.8 response for a rejected message.
-func (e *Edge) reject(req *Request, route domain.Route, outs []outcome, items []domain.Item) *Response {
-	var first domain.Classification
-	for _, o := range outs {
-		if o.action == domain.Reject {
-			first = o.class
-			break
-		}
-	}
+// reject builds the §4.8 response; with no rule (default_action) it is a problem document (agent decision).
+func (e *Edge) reject(req *Request, d domain.Decision) *Response {
 	hdr := http.Header{}
-	hdr.Set(domain.HeaderName, domain.Header(items))
-	if req.Listener == domain.MgmtIngress {
+	if d.Header != "" {
+		hdr.Set(domain.HeaderName, d.Header)
+	}
+	if d.Rule == nil || d.Rule.Message == "management" {
+		status := http.StatusUnprocessableEntity
+		if d.Rule == nil && req.Listener != domain.MgmtIngress {
+			status = http.StatusBadRequest
+		}
+		var findings []domain.Finding
+		for _, g := range d.Gates {
+			if g.Action == domain.Reject {
+				findings = append(findings, g.Class.Findings...)
+			}
+		}
 		p := map[string]any{
-			"type": problem.TypeURI(first.Code()), "title": string(first.Code()), "status": http.StatusUnprocessableEntity,
-			"code": string(first.Code()), "severity": "error", "findings": nonNil(first.Findings),
+			"type": problem.TypeURI(d.Code), "title": string(d.Code), "status": status, "code": string(d.Code),
+			"severity": "error", "findings": nonNil(findings),
 		}
 		hdr.Set("Content-Type", problem.ContentType)
-		return &Response{Status: http.StatusUnprocessableEntity, Header: hdr, Body: marshal(p)}
+		b, _ := json.Marshal(p)
+		return &Response{Status: status, Header: hdr, Body: b}
 	}
-	reasons := []string{}
-	for _, f := range first.Findings {
-		reasons = append(reasons, f.Message)
-	}
-	if len(reasons) == 0 {
-		reasons = append(reasons, string(first.Code()))
-	}
+	pp, cp := pid(d.Doc, "providerPid"), pid(d.Doc, "consumerPid")
 	hdr.Set("Content-Type", "application/json")
-	body := domain.DSPError(route.Message, first.Code(), reasons, domain.Field(req.Body, "providerPid", "dspace:providerPid"), domain.Field(req.Body, "consumerPid", "dspace:consumerPid"))
-	return &Response{Status: http.StatusBadRequest, Header: hdr, Body: body}
+	return &Response{Status: http.StatusBadRequest, Header: hdr, Body: domain.DSPError(d.Rule.Message, d.Code, d.Reasons, pp, cp)}
 }
 
-// defaultReject answers a message that matches no route under default_action reject (agent decision on its body).
-func (e *Edge) defaultReject(req *Request) *Response {
-	status := http.StatusBadRequest
-	if req.Listener == domain.MgmtIngress {
-		status = http.StatusUnprocessableEntity
+// pid returns a pid of the input message, or nil when absent (Q4).
+func pid(doc any, name string) *string {
+	if v, ok := domain.Field(doc, name, "dspace:"+name); ok {
+		return &v
 	}
-	p := problem.From(codes.New(codes.RouteDefaultReject, "%s %s matches no route", req.Method, req.Path), status)
-	return &Response{Status: status, Header: http.Header{"Content-Type": {problem.ContentType}}, Body: p.JSON()}
+	return nil
 }
 
 // capture registers an accepted ContractAgreementMessage with the version that passed (§4.9).
-func (e *Edge) capture(req *Request, outs []outcome, snap *domain.Snapshot, tL timex.Instant) {
+func (e *Edge) capture(req *Request, d domain.Decision, snap *domain.Snapshot, tL timex.Instant) {
 	if snap == nil {
 		return
 	}
 	source := string(req.Listener)
-	// The registered version must pass every evaluated gate; a shadow violation leaves the message unverified.
-	var version string
-	for _, o := range outs {
-		if o.class.Result == domain.Violation {
+	version := ""
+	for _, g := range d.Gates {
+		if !g.Evaluated || g.Class.Result == domain.Violation {
 			version = ""
 			break
 		}
-		if o.class.Matched != nil && (version == "" || semver.Less(semver.MustParse(*o.class.Matched), semver.MustParse(version))) {
-			version = *o.class.Matched
+		if g.Class.Matched != nil && (version == "" || semver.Less(semver.MustParse(*g.Class.Matched), semver.MustParse(version))) {
+			version = *g.Class.Matched
 		}
 	}
 	if version == "" {
@@ -232,34 +248,31 @@ func (e *Edge) capture(req *Request, outs []outcome, snap *domain.Snapshot, tL t
 	if req.Listener == domain.DSPEgress {
 		role = "provider"
 	}
-	e.Agreements.Capture(req.Body, role, source, version, snap, tL)
+	e.Capture.Capture(req.Body, role, source, version, snap, tL)
 }
 
-// validateResponse buffers a catalog response and classifies it in shadow without blocking (§4.10).
-func (e *Edge) validateResponse(req *Request, route domain.Route, resp *Response, snap *domain.Snapshot, state domain.State, tL timex.Instant) {
+// validateResponse buffers a catalog response and classifies it in shadow or observe without blocking (§4.11).
+func (e *Edge) validateResponse(req *Request, d domain.Decision, resp *Response, snap *domain.Snapshot, state domain.State, tL timex.Instant) {
 	e.Audit.Observe(resp.Body)
-	mode := route.ValidateResponse.Mode
-	if mode == "" {
-		mode = domain.Shadow
-	}
+	mode := d.Rule.ResponseMode()
 	if mode == domain.Observe {
 		return
 	}
-	sel, ok := domain.SelectBody(resp.Body, "$")
-	c := e.Gate(domain.GateCatalog, resp.Body, sel, !ok, snap, state, tL)
-	e.emitVerdict(req, route, state, tL, outcome{gate: domain.GateCatalog, mode: mode, class: c, action: domain.Forward})
+	doc, ok := domain.Decode(resp.Body)
+	c, pre := domain.PreCheck(state, "continue")
+	if !pre {
+		c = domain.Classify(domain.ClassifyInput{Snap: snap, State: state, TL: tL, Unparseable: !ok}, func(v lifecycle.Record) domain.EvalResult {
+			b, _ := json.Marshal(doc)
+			return e.Evaluator.Evaluate(domain.Message{Root: resp.Body, Selected: b}, domain.GateCatalog, snap.Package(v))
+		})
+	}
+	e.emit(req, d, domain.GateResult{Gate: domain.GateCatalog, Mode: mode, Evaluated: true, Class: c, Action: domain.Forward}, state, tL)
 }
 
-// nonNil returns an empty slice instead of nil for JSON.
+// nonNil returns an empty slice for nil findings.
 func nonNil(f []domain.Finding) []domain.Finding {
 	if f == nil {
 		return []domain.Finding{}
 	}
 	return f
-}
-
-// marshal encodes a value as JSON.
-func marshal(v any) []byte {
-	b, _ := json.Marshal(v)
-	return b
 }

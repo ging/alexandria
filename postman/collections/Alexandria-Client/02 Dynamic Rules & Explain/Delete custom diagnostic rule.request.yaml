@@ -1,0 +1,12 @@
+$kind: http-request
+method: DELETE
+url: '{{clientAdmin}}/rules/custom-diag-rule'
+order: 6000
+headers:
+- key: If-Match
+  value: '{{rulesEtag}}'
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('204 custom rule deleted', () => {\n  pm.response.to.have.status(204);\n  pm.collectionVariables.set('rulesEtag',\
+    \ pm.response.headers.get('ETag'));\n});"

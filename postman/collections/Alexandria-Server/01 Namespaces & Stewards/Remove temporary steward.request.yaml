@@ -1,0 +1,8 @@
+$kind: http-request
+method: DELETE
+url: '{{hubUrl}}/v1/namespaces/{{namespace}}/stewards/{{tempStewardId}}'
+order: 7000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: pm.test('204 No Content or 404 if already removed', () => pm.expect([204, 404]).to.include(pm.response.code));

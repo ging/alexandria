@@ -1,0 +1,4 @@
+$kind: request-group
+description: Paginated immutable governance event logs at namespace and hub-admin scopes (§3.9, REQ-HUB-020,
+  REQ-SYS-010).
+order: 8000

@@ -1,5 +1,5 @@
-// Package pkgv defines the published package model (manifest.json, space-lock.json, files) and its offline verification S8, S11–S13.
-// The hub produces packages with this model and the client verifies them without network (REQ-CLI-006, REQ-CLI-007, DP-6).
+// Package pkgv defines the package model (signed manifest credential plus files) and its offline verification S8, S11–S13.
+// The hub produces packages with this model and the client verifies them without network (§3.7, REQ-CLI-006, REQ-CLI-007).
 package pkgv
 
 import (
@@ -10,69 +10,94 @@ import (
 	"github.com/ging/alexandria/internal/core/codes"
 	"github.com/ging/alexandria/internal/core/lifecycle"
 	"github.com/ging/alexandria/internal/core/ni"
+	"github.com/ging/alexandria/internal/core/vc"
 )
 
-// File is one entry of manifest.files[]; URL is mandatory for application/ld+json (D-PVP-1).
+// Artifact roles of §3.7.
+const (
+	RoleJSONSchema = "json-schema"
+	RoleSHACL      = "shacl"
+	RoleContext    = "context"
+	RoleOther      = "other"
+)
+
+// SlotsPath is the package file that carries the slot obligations of the SpaceProfile (agent decision, see DECISIONS.md).
+const SlotsPath = "profile/slots.json"
+
+// File is one entry of files[]; URL is mandatory for application/ld+json (D-PVP-1), Source cites a vocabulary revision (D-VOC-1).
 type File struct {
 	Path      string    `json:"path"`
 	MediaType string    `json:"media_type"`
 	Digest    ni.Digest `json:"digest"`
 	Role      string    `json:"role"`
-	Slot      string    `json:"slot"`
-	AppliesTo []string  `json:"applies_to"`
+	Slot      string    `json:"slot,omitempty"`
+	AppliesTo []string  `json:"applies_to,omitempty"`
 	URL       string    `json:"url,omitempty"`
+	Source    string    `json:"source,omitempty"`
 }
 
-// Slot is one binding obligation of the package.
-type Slot struct {
-	Slot       string `json:"slot"`
-	Obligation string `json:"obligation"`
-}
-
-// Manifest is manifest.json (Part 5.2).
+// Manifest is the credentialSubject of a PackageManifest (§3.7).
 type Manifest struct {
-	Space   string `json:"space"`
-	Version string `json:"version"`
-	Files   []File `json:"files"`
-	Slots   []Slot `json:"slots"`
+	ID        string           `json:"id"`
+	Namespace string           `json:"namespace"`
+	Version   string           `json:"version"`
+	Lifecycle lifecycle.Params `json:"lifecycle"`
+	Profiles  []string         `json:"profiles,omitempty"`
+	Files     []File           `json:"files"`
 }
 
-// SpaceLock is space-lock.json; Lifecycle and Profiles are agent decisions needed by S7 and §4.9.
-type SpaceLock struct {
-	Space     string              `json:"space"`
-	Version   string              `json:"version"`
-	Manifest  ni.Digest           `json:"manifest"`
-	Lifecycle lifecycle.Params    `json:"lifecycle"`
-	Profiles  map[string][]string `json:"profiles,omitempty"`
+// Slot is one binding of the SpaceProfile: its obligation and the gates it applies to.
+type Slot struct {
+	Slot       string   `json:"slot"`
+	Obligation string   `json:"obligation"`
+	AppliesTo  []string `json:"applies_to"`
 }
 
 // Files is the raw material of a package as fetched or stored.
 type Files struct {
-	Manifest  []byte
-	Sig       []byte
-	Receipt   []byte
-	SpaceLock []byte
-	Content   map[string][]byte
+	Manifest []byte
+	Content  map[string][]byte
 }
 
 // Package is a verified package ready to be used by classification.
 type Package struct {
-	Digest    ni.Digest
-	Manifest  Manifest
-	SpaceLock SpaceLock
-	Raw       Files
+	Digest     ni.Digest
+	Credential vc.Credential[Manifest]
+	Manifest   Manifest
+	Slots      []Slot
+	Raw        Files
 }
 
-// Verify applies S8, S11, S12 and S13 for the listing entry (version, expected digest).
-func Verify(f Files, expected ni.Digest, version string) (*Package, *codes.Error) {
+// Parse decodes the manifest credential of a package without checking it.
+func Parse(raw []byte) (vc.Credential[Manifest], error) {
+	var c vc.Credential[Manifest]
+	if err := json.Unmarshal(raw, &c); err != nil {
+		return c, fmt.Errorf("pkgv: %w", err)
+	}
+	return c, nil
+}
+
+// Verify applies S8, S11, S12 and S13 for the listing entry (namespace, version, expected digest).
+func Verify(f Files, expected ni.Digest, namespace, version string) (*Package, *codes.Error) {
 	if ni.Sum(f.Manifest) != expected {
 		return nil, codes.New(codes.SyncManifestDigestMismatch, "manifest.json of %s does not match %s", version, expected)
 	}
-	var m Manifest
-	if err := json.Unmarshal(f.Manifest, &m); err != nil {
-		return nil, codes.New(codes.SyncIncoherent, "manifest.json of %s: %v", version, err)
+	c, err := Parse(f.Manifest)
+	if err != nil {
+		return nil, codes.New(codes.SyncMalformed, "manifest.json of %s: %v", version, err)
 	}
-	return check(f, m, expected, version)
+	if e := VerifyFiles(f, c.Subject); e != nil {
+		return nil, e
+	}
+	m := c.Subject
+	if m.Version != version || m.Namespace != namespace {
+		return nil, codes.New(codes.SyncIncoherent, "manifest %s of %s does not match listing entry %s of %s", m.Version, m.Namespace, version, namespace)
+	}
+	var slots []Slot
+	if b, ok := f.Content[SlotsPath]; ok {
+		_ = json.Unmarshal(b, &slots)
+	}
+	return &Package{Digest: expected, Credential: c, Manifest: m, Slots: slots, Raw: f}, nil
 }
 
 // VerifyFiles applies S11 and S12 to an already parsed manifest.
@@ -97,21 +122,6 @@ func VerifyFiles(f Files, m Manifest) *codes.Error {
 	return nil
 }
 
-// check runs S11–S13 once the manifest digest is known to be right.
-func check(f Files, m Manifest, digest ni.Digest, version string) (*Package, *codes.Error) {
-	if err := VerifyFiles(f, m); err != nil {
-		return nil, err
-	}
-	var sl SpaceLock
-	if err := json.Unmarshal(f.SpaceLock, &sl); err != nil {
-		return nil, codes.New(codes.SyncIncoherent, "space-lock.json of %s: %v", version, err)
-	}
-	if m.Version != version || sl.Manifest != digest || sl.Version != m.Version || sl.Space != m.Space {
-		return nil, codes.New(codes.SyncIncoherent, "manifest %s / space-lock %s do not match listing entry %s", m.Version, sl.Version, version)
-	}
-	return &Package{Digest: digest, Manifest: m, SpaceLock: sl, Raw: f}, nil
-}
-
 // Paths returns the file paths of the manifest in order.
 func (m Manifest) Paths() []string {
 	out := make([]string, 0, len(m.Files))
@@ -123,8 +133,8 @@ func (m Manifest) Paths() []string {
 }
 
 // Obligation returns the obligation of a slot, or an empty string if unbound.
-func (m Manifest) Obligation(slot string) string {
-	for _, s := range m.Slots {
+func (p *Package) Obligation(slot string) string {
+	for _, s := range p.Slots {
 		if s.Slot == slot {
 			return s.Obligation
 		}
@@ -141,6 +151,16 @@ func (m Manifest) URLs() map[string]bool {
 		}
 	}
 	return out
+}
+
+// HasProfile reports whether iri is one of the compiled OdrlProfiles (§4.9).
+func (m Manifest) HasProfile(iri string) bool {
+	for _, p := range m.Profiles {
+		if p == iri {
+			return true
+		}
+	}
+	return false
 }
 
 // String describes the package for logs.

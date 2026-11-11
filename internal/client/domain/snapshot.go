@@ -12,14 +12,14 @@ import (
 
 // Snapshot is the read-only view used to classify messages.
 type Snapshot struct {
-	Space     string
-	Sequence  uint64
-	IssuedAt  timex.Instant
-	ExpiresAt timex.Instant
-	Records   []lifecycle.Record
-	Known     map[string]lifecycle.Record
-	Packages  map[ni.Digest]*pkgv.Package
-	Params    lifecycle.Params
+	Namespace  string
+	Sequence   uint64
+	ValidFrom  timex.Instant
+	ValidUntil timex.Instant
+	Records    []lifecycle.Record
+	Known      map[string]lifecycle.Record
+	Packages   map[ni.Digest]*pkgv.Package
+	Params     lifecycle.Params
 }
 
 // InForce returns V_t at local instant tL with the lease margin (§4.6).
@@ -36,7 +36,7 @@ func (s *Snapshot) KnownRecord(v string) (lifecycle.Record, bool) {
 	return r, ok
 }
 
-// HeadParams selects the lifecycle of the greatest non-revoked listed version with a package.
+// HeadParams selects the manifest lifecycle of the greatest non-revoked listed version with a package.
 func HeadParams(records []lifecycle.Record, pkgs map[ni.Digest]*pkgv.Package) lifecycle.Params {
 	var best *lifecycle.Record
 	for i := range records {
@@ -51,10 +51,10 @@ func HeadParams(records []lifecycle.Record, pkgs map[ni.Digest]*pkgv.Package) li
 	if best == nil {
 		for _, r := range records {
 			if p := pkgs[r.Manifest]; p != nil {
-				return p.SpaceLock.Lifecycle
+				return p.Manifest.Lifecycle
 			}
 		}
 		return lifecycle.Defaults()
 	}
-	return pkgs[best.Manifest].SpaceLock.Lifecycle
+	return pkgs[best.Manifest].Manifest.Lifecycle
 }

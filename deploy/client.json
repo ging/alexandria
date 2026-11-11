@@ -1,0 +1,20 @@
+{
+  "trust": {
+    "hub": "https://127.0.0.1:8443",
+    "namespace": "demo",
+    "hub_did": "did:key:z6MkpTHR8VNsBxYAAWHut2Geadd9jSwuBV8xRoAnwWsdvktH",
+    "context": "https://127.0.0.1:8443/pub/_vhub/v1/context.jsonld"
+  },
+  "upstreams": {
+    "dsp": "http://127.0.0.1:8282/dsp"
+  },
+  "listeners": {
+    "dsp-ingress": {"bind": "127.0.0.1:9080"},
+    "dsp-egress": {"bind": "127.0.0.1:9081"},
+    "admin": {"bind": "127.0.0.1:9090"}
+  },
+  "rules": {"seed": "file:deploy/rules.seed.json"},
+  "default_action": "forward",
+  "unknown_agreement": "forward",
+  "events": {"sink": "file:var/client/events.jsonl"}
+}

@@ -1,0 +1,243 @@
+/* Design tokens and base styles of the Alexandria console: compact Postman-like typography and a VS Code inspired palette. */
+/* Colors are CSS variables switched by the .dark class and mapped to Tailwind utilities through @theme inline. */
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+  --bg: #ffffff;
+  --bg-side: #f8f8f8;
+  --bg-raised: #ffffff;
+  --bg-hover: #f0f0f0;
+  --bg-active: #e8e8e8;
+  --bg-input: #ffffff;
+  --border: #e5e5e5;
+  --border-strong: #cecece;
+  --fg: #2b2b2b;
+  --fg-muted: #616161;
+  --fg-subtle: #8a8a8a;
+  --accent: #005fb8;
+  --accent-hover: #0258a8;
+  --accent-fg: #ffffff;
+  --accent-soft: #e5f1fb;
+  --statusbar: #007acc;
+  --statusbar-fg: #ffffff;
+  --success: #2f7d32;
+  --success-soft: #e6f4e7;
+  --warning: #9a6700;
+  --warning-soft: #fdf3d3;
+  --danger: #c72e2e;
+  --danger-soft: #fde8e8;
+  --info: #0b6fc2;
+  --info-soft: #e5f1fb;
+  --purple: #7a3fc4;
+  --purple-soft: #f1e9fb;
+  --syn-key: #0451a5;
+  --syn-string: #a31515;
+  --syn-number: #098658;
+  --syn-keyword: #0000ff;
+  --syn-comment: #008000;
+  --syn-punct: #5f6368;
+  --shadow: 0 8px 28px rgb(0 0 0 / 0.14), 0 0 0 1px rgb(0 0 0 / 0.06);
+}
+
+.dark {
+  color-scheme: dark;
+  --bg: #1f1f1f;
+  --bg-side: #181818;
+  --bg-raised: #252526;
+  --bg-hover: #2a2d2e;
+  --bg-active: #37373d;
+  --bg-input: #2a2a2a;
+  --border: #2b2b2b;
+  --border-strong: #3c3c3c;
+  --fg: #cccccc;
+  --fg-muted: #9d9d9d;
+  --fg-subtle: #6e7681;
+  --accent: #0078d4;
+  --accent-hover: #1a86dc;
+  --accent-fg: #ffffff;
+  --accent-soft: #0a2f4d;
+  --statusbar: #007acc;
+  --statusbar-fg: #ffffff;
+  --success: #73c991;
+  --success-soft: #1b3524;
+  --warning: #e2c08d;
+  --warning-soft: #3d3220;
+  --danger: #f48771;
+  --danger-soft: #45201c;
+  --info: #75beff;
+  --info-soft: #12314d;
+  --purple: #c586c0;
+  --purple-soft: #37233a;
+  --syn-key: #9cdcfe;
+  --syn-string: #ce9178;
+  --syn-number: #b5cea8;
+  --syn-keyword: #569cd6;
+  --syn-comment: #6a9955;
+  --syn-punct: #808080;
+  --shadow: 0 8px 28px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.06);
+}
+
+@theme inline {
+  --font-sans: 'Inter Variable', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+
+  --text-2xs: 10px;
+  --text-2xs--line-height: 14px;
+  --text-xs: 11px;
+  --text-xs--line-height: 16px;
+  --text-sm: 12px;
+  --text-sm--line-height: 18px;
+  --text-base: 13px;
+  --text-base--line-height: 20px;
+  --text-lg: 14px;
+  --text-lg--line-height: 20px;
+  --text-xl: 16px;
+  --text-xl--line-height: 24px;
+  --text-2xl: 20px;
+  --text-2xl--line-height: 28px;
+
+  --color-bg: var(--bg);
+  --color-side: var(--bg-side);
+  --color-raised: var(--bg-raised);
+  --color-hover: var(--bg-hover);
+  --color-active: var(--bg-active);
+  --color-input: var(--bg-input);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-muted: var(--fg-muted);
+  --color-subtle: var(--fg-subtle);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-statusbar: var(--statusbar);
+  --color-statusbar-fg: var(--statusbar-fg);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-purple: var(--purple);
+  --color-purple-soft: var(--purple-soft);
+
+  --shadow-pop: var(--shadow);
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+
+  --animate-in: fade-in 120ms ease-out;
+  --animate-pop: pop-in 140ms cubic-bezier(0.16, 1, 0.3, 1);
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px) scale(0.985);
+    }
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    line-height: 18px;
+    font-feature-settings: 'cv11', 'ss01', 'calt';
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow: hidden;
+  }
+  code,
+  kbd,
+  pre,
+  .font-mono {
+    font-feature-settings: 'zero', 'calt' 0;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+  :focus-visible {
+    outline: 1px solid var(--accent);
+    outline-offset: 1px;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--fg-subtle) 45%, transparent) transparent;
+  }
+}
+
+@utility label-caps {
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+}
+
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* CodeMirror chrome follows the app tokens. */
+.cm-editor {
+  height: 100%;
+  font-size: 12px;
+  background: transparent !important;
+}
+.cm-editor.cm-focused {
+  outline: none !important;
+}
+.cm-scroller {
+  font-family: var(--font-mono) !important;
+  line-height: 18px !important;
+}
+.cm-gutters {
+  background: transparent !important;
+  border-right: 1px solid var(--border) !important;
+  color: var(--fg-subtle) !important;
+}
+.cm-activeLine,
+.cm-activeLineGutter {
+  background: color-mix(in srgb, var(--fg) 5%, transparent) !important;
+}
+.cm-selectionBackground,
+.cm-focused .cm-selectionBackground {
+  background: color-mix(in srgb, var(--accent) 30%, transparent) !important;
+}
+.cm-cursor {
+  border-left-color: var(--fg) !important;
+}
+.cm-tooltip {
+  background: var(--bg-raised) !important;
+  border: 1px solid var(--border-strong) !important;
+  color: var(--fg) !important;
+}

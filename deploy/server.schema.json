@@ -1,0 +1,247 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:alexandria:vhub:server-config:poc",
+  "title": "alexandria-server server.json (PoC, non-normative: Appendix B, DP-11)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "listen",
+    "base",
+    "signing",
+    "auth",
+    "storage"
+  ],
+  "properties": {
+    "listen": {
+      "type": "string",
+      "pattern": "^[^:]*:[0-9]{1,5}$"
+    },
+    "base": {
+      "type": "string",
+      "pattern": "^https?://[^/]+$"
+    },
+    "did": {
+      "type": "string",
+      "pattern": "^did:(web:[A-Za-z0-9._%:-]+|key:z[1-9A-HJ-NP-Za-km-z]+)$"
+    },
+    "signing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^file:"
+        },
+        "verification_method": {
+          "type": "string",
+          "pattern": "^did:(web|key):[^#]+#.+$"
+        }
+      }
+    },
+    "rdf": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "context": {
+          "enum": [
+            "referenced",
+            "self-hosted"
+          ]
+        }
+      }
+    },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "issuers",
+        "audience"
+      ],
+      "properties": {
+        "issuers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "iss",
+              "discovery_url"
+            ],
+            "properties": {
+              "iss": {
+                "type": "string",
+                "minLength": 1
+              },
+              "discovery_url": {
+                "type": "string",
+                "pattern": "^https?://"
+              }
+            }
+          }
+        },
+        "audience": {
+          "type": "string",
+          "minLength": 1
+        },
+        "algorithms": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "RS256",
+              "ES256",
+              "EdDSA"
+            ]
+          }
+        },
+        "admin_claim": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "claim",
+            "value"
+          ],
+          "properties": {
+            "claim": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          }
+        },
+        "jwks_cache": {
+          "type": "string",
+          "pattern": "^P"
+        }
+      }
+    },
+    "vocab": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "proxy_timeout": {
+          "type": "string",
+          "pattern": "^P"
+        },
+        "proxy_allow": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "allow_insecure_localhost": {
+          "type": "boolean"
+        }
+      }
+    },
+    "did_resolver": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allow_insecure_localhost": {
+          "type": "boolean"
+        }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "database",
+        "blobs"
+      ],
+      "properties": {
+        "database": {
+          "type": "string",
+          "pattern": "^file:"
+        },
+        "blobs": {
+          "type": "string",
+          "pattern": "^file:"
+        }
+      }
+    },
+    "clock_skew": {
+      "type": "string",
+      "pattern": "^P"
+    },
+    "clock_file": {
+      "type": "string"
+    },
+    "compiler": {
+      "enum": [
+        "poc",
+        "dsl"
+      ]
+    },
+    "vendor_dir": {
+      "type": "string"
+    },
+    "lifecycle": {
+      "type": "object"
+    },
+    "tls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cert",
+        "key"
+      ],
+      "properties": {
+        "cert": {
+          "type": "string",
+          "pattern": "^file:"
+        },
+        "key": {
+          "type": "string",
+          "pattern": "^file:"
+        }
+      }
+    },
+    "observability": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "log_level": {
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "warning",
+            "error",
+            "none",
+            "off",
+            "disabled"
+          ]
+        },
+        "log_format": {
+          "enum": [
+            "auto",
+            "json",
+            "text"
+          ]
+        },
+        "otlp_endpoint": {
+          "type": "string"
+        },
+        "otlp_insecure": {
+          "type": "boolean"
+        },
+        "service_name": {
+          "type": "string"
+        },
+        "environment": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

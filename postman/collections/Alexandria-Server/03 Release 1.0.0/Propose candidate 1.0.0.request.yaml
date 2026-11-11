@@ -1,0 +1,9 @@
+$kind: http-request
+method: POST
+url: '{{hubUrl}}/v1/namespaces/{{namespace}}/drafts/{{draftId}}:propose'
+order: 5000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('201 candidate proposed', () => {\n  pm.response.to.have.status(201);\n  pm.collectionVariables.set('candidateId',\
+    \ pm.response.json().id.split('/').pop());\n});"

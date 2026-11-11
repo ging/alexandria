@@ -1,97 +1,114 @@
-// Package app implements the publication use case behind /pub: head redirect, versioned files, package files and blobs by hash.
-// Only content referenced by a stored release is served, so an aborted release is never visible (REQ-SYS-005, REQ-HUB-011, REQ-HUB-016, DP-15).
+// Package app implements the Publication use case behind /pub: head redirect, versioned artefacts, manifests, blobs and vocabularies.
+// It is built without the upstream fetcher, so an anonymous request never causes outbound traffic (REQ-SYS-005, REQ-HUB-011, REQ-HUB-016, REQ-HUB-027).
 package app
 
 import (
+	"strconv"
+
 	"github.com/ging/alexandria/internal/core/codes"
 	"github.com/ging/alexandria/internal/core/lifecycle"
 	"github.com/ging/alexandria/internal/core/ni"
+	"github.com/ging/alexandria/internal/core/pkgv"
 	"github.com/ging/alexandria/internal/core/semver"
 	"github.com/ging/alexandria/internal/server/domain"
 )
 
-// Publication implements the read side of /pub.
-type Publication struct{ d Deps }
-
-// JSONType is the media type served for package documents.
-const JSONType = "application/json"
-
-// Head returns the greatest version in force now for a space slug (DP-15).
-func (pb *Publication) Head(slug string) (semver.Version, error) {
-	_, space, err := headParams(pb.d)
-	if err != nil {
-		return semver.Version{}, err
-	}
-	if space == "" || domain.SlugOf(space) != slug {
-		return semver.Version{}, codes.New(codes.APINotFound, "space %s not found", slug)
-	}
-	recs, err := pb.d.Releases.Records()
-	if err != nil {
-		return semver.Version{}, err
-	}
-	set := lifecycle.InForceSet(recs, pb.d.Clock.Now(), 0)
-	if len(set) == 0 {
-		return semver.Version{}, codes.New(codes.APINotFound, "no version of %s is in force", slug)
-	}
-	return set[0].Version, nil
+// Publication serves the public /pub content.
+type Publication struct {
+	d      Deps
+	reader *VocabReader
 }
 
-// VersionedFile returns a file of /pub/{slug}/{version}/{file} with its media type.
-func (pb *Publication) VersionedFile(slug, version, path string) ([]byte, string, error) {
+// Artifact is a file served with its media type.
+type Artifact struct {
+	Bytes     []byte
+	MediaType string
+}
+
+// Head returns the 303 target of /pub/{ns}: the first context file of the head, or its manifest (DP-12).
+func (p *Publication) Head(ns string) (string, error) {
+	recs, rels, err := p.d.records(ns)
+	if err != nil {
+		return "", err
+	}
+	vt := lifecycle.InForceSet(recs, p.d.Clock.Now(), 0)
+	if len(vt) == 0 {
+		return "", codes.New(codes.APINotFound, "namespace %s has no version in force", ns)
+	}
+	for _, r := range rels {
+		if semver.Compare(r.Record.Version, vt[0].Version) != 0 {
+			continue
+		}
+		for _, e := range r.Entries {
+			if e.Role == pkgv.RoleContext {
+				return "/pub/" + ns + "/" + r.Record.Version.String() + "/" + e.Path, nil
+			}
+		}
+		return "/pub/packages/" + r.Record.Manifest.Segment() + "/manifest.json", nil
+	}
+	return "", codes.New(codes.APINotFound, "head of %s not found", ns)
+}
+
+// VersionFile returns an artefact of a version by its package path.
+func (p *Publication) VersionFile(ns, version, path string) (Artifact, error) {
 	v, err := semver.Parse(version)
 	if err != nil {
-		return nil, "", codes.New(codes.APINotFound, "version %s not found", version)
+		return Artifact{}, codes.New(codes.APINotFound, "version %s not found", version)
 	}
-	rel, err := pb.d.Releases.Release(v)
-	if err != nil || domain.SlugOf(rel.Space) != slug {
-		return nil, "", codes.New(codes.APINotFound, "version %s of %s not found", version, slug)
+	_, rels, err := p.d.records(ns)
+	if err != nil {
+		return Artifact{}, err
 	}
-	switch path {
-	case "manifest.json":
-		return rel.Manifest, JSONType, nil
-	case "space-lock.json":
-		return rel.SpaceLock, JSONType, nil
-	}
-	for _, e := range rel.Entries {
-		if e.Path == path {
-			b, err := pb.d.Blobs.Get(e.Digest.Hex())
-			return b, e.MediaType, err
+	for _, r := range rels {
+		if semver.Compare(r.Record.Version, v) != 0 {
+			continue
+		}
+		for _, e := range r.Entries {
+			if e.Path == path {
+				b, err := p.d.Blobs.Get(e.Digest.Hex())
+				return Artifact{Bytes: b, MediaType: e.MediaType}, notFound(err, path)
+			}
 		}
 	}
-	return nil, "", codes.New(codes.APINotFound, "%s not in %s", path, version)
+	return Artifact{}, codes.New(codes.APINotFound, "%s/%s not found", version, path)
 }
 
-// PackageFile returns manifest.json, manifest.sig, manifest.receipt or space-lock.json of a package.
-func (pb *Publication) PackageFile(segment, name string) ([]byte, error) {
+// Manifest returns the signed manifest.json of a package by its digest segment.
+func (p *Publication) Manifest(segment string) ([]byte, error) {
 	d, err := ni.FromSegment(segment)
 	if err != nil {
 		return nil, codes.New(codes.APINotFound, "package %s not found", segment)
 	}
-	rel, err := pb.d.Releases.ByManifest(d)
+	r, err := p.d.Store.ByManifest(d)
 	if err != nil {
 		return nil, notFound(err, "package "+segment)
 	}
-	switch name {
-	case "manifest.json":
-		return rel.Manifest, nil
-	case "manifest.sig":
-		return rel.ManifestSig, nil
-	case "manifest.receipt":
-		return rel.Receipt, nil
-	case "space-lock.json":
-		return rel.SpaceLock, nil
-	}
-	return nil, codes.New(codes.APINotFound, "%s not in package", name)
+	return r.Manifest, nil
 }
 
-// Blob returns a file by its SHA-256 if a release references it.
-func (pb *Publication) Blob(hex string) ([]byte, error) {
-	ok, err := pb.d.Releases.HasBlob(hex)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
+// Blob returns a content-addressed file by its SHA-256 hex.
+func (p *Publication) Blob(hex string) ([]byte, error) {
+	b, err := p.d.Blobs.Get(hex)
+	if err != nil || ni.HexSum(b) != hex {
 		return nil, codes.New(codes.APINotFound, "blob %s not found", hex)
 	}
-	return pb.d.Blobs.Get(hex)
+	return b, nil
+}
+
+// VocabLatest returns the URL of the last revision of a vocabulary.
+func (p *Publication) VocabLatest(ns, name string) (string, error) {
+	voc, err := p.reader.Get(ns, name)
+	if err != nil {
+		return "", err
+	}
+	last, ok := voc.Latest()
+	if !ok {
+		return "", codes.New(codes.APINotFound, "vocabulary %s has no revision", name)
+	}
+	return "/pub/" + ns + "/vocab/" + name + "/r/" + strconv.Itoa(last.N), nil
+}
+
+// VocabRevision returns the bytes of a revision with its vocabulary.
+func (p *Publication) VocabRevision(ns, name string, n int) (domain.Vocabulary, []byte, error) {
+	return p.reader.Revision(ns, name, n)
 }

@@ -16,12 +16,12 @@ import (
 
 // Evaluator compiles package schemas once and validates bodies without network.
 type Evaluator struct {
-	Events  app.EventSink
-	Clock   timex.Clock
-	Space   string
-	cache   sync.Map
-	loaders sync.Map
-	warned  sync.Map
+	Events    app.EventSink
+	Clock     timex.Clock
+	Namespace string
+	cache     sync.Map
+	loaders   sync.Map
+	warned    sync.Map
 }
 
 var _ app.Evaluator = (*Evaluator)(nil)
@@ -43,11 +43,11 @@ func (e *Evaluator) compiled(p *pkgv.Package, f pkgv.File) (*schemas.Schema, err
 // Evaluate is evaluate(m, g, v) of §4.7 for the PoC roles.
 func (e *Evaluator) Evaluate(m domain.Message, g domain.Gate, p *pkgv.Package) domain.EvalResult {
 	if p == nil {
-		return domain.EvalResult{Findings: []domain.Finding{{Slot: "odrl", Source: "loader", Severity: "Violation", Message: "package not available"}}}
+		return domain.EvalResult{Findings: []domain.Finding{{Slot: "package", Source: "loader", Severity: "Violation", Message: "package not available"}}}
 	}
 	res := domain.EvalResult{Pass: true}
-	for _, s := range p.Manifest.Slots {
-		if s.Obligation != "mandatory" && s.Obligation != "recommended" {
+	for _, s := range p.Slots {
+		if (s.Obligation != "mandatory" && s.Obligation != "recommended") || !contains(s.AppliesTo, string(g)) {
 			continue
 		}
 		var found []domain.Finding
@@ -87,9 +87,11 @@ func (e *Evaluator) apply(m domain.Message, p *pkgv.Package, f pkgv.File, slot s
 		return out
 	case "shacl":
 		e.warnOnce(p, f)
-		return e.expansionFindings(m.Root, p, slot)
+		return append(e.expansionFindings(m.Root, p, slot), unsupported(slot, f))
+	case "context":
+		e.warnOnce(p, f)
+		return []domain.Finding{unsupported(slot, f)}
 	}
-	e.warnOnce(p, f)
 	return nil
 }
 
@@ -120,12 +122,17 @@ func (e *Evaluator) expansionFindings(root []byte, p *pkgv.Package, slot string)
 	return []domain.Finding{{Slot: slot, Source: "loader", Severity: "Violation", Message: "JSON-LD expansion failed: " + err.Error()}}
 }
 
+// unsupported is the Info finding of a role the PoC does not evaluate; it never changes the classification (DP-7).
+func unsupported(slot string, f pkgv.File) domain.Finding {
+	return domain.Finding{Slot: slot, Source: "loader", Severity: "Info", Message: string(PocEvalUnsupportedRole) + ": " + f.Role + " artefact " + f.Path + " is not evaluated", Code: PocEvalUnsupportedRole}
+}
+
 // warnOnce emits POC_EVAL_UNSUPPORTED_ROLE once per package file.
 func (e *Evaluator) warnOnce(p *pkgv.Package, f pkgv.File) {
 	if _, loaded := e.warned.LoadOrStore(string(p.Digest)+"|"+f.Path, true); loaded || e.Events == nil {
 		return
 	}
-	e.Events.Emit(app.NewNotice(app.EvSync, e.Space, e.Clock.Now(), PocEvalUnsupportedRole, f.Role+" artefact "+f.Path+" is not evaluated by the PoC"))
+	e.Events.Emit(app.NewNotice(app.EvSync, e.Namespace, e.Clock.Now(), PocEvalUnsupportedRole, f.Role+" artefact "+f.Path+" is not evaluated by the PoC"))
 }
 
 // contains reports whether xs holds x.

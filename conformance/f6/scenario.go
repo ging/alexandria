@@ -1,153 +1,123 @@
-// Package f6 is the F6 scenario driver over HTTP: publishes 1.0.0 and 2.0.0, moves the file clock and sends m1–m3, A1 and its transfers.
-// Shared by the e2e test (conformance/e2e_f6_test.go) and make demo, so both observe the same rows (Part 4 M8, M9).
+// Package f6 runs the F6 scenario against the real binaries through their APIs and records one row per observable outcome.
+// Expected returns the exact F6 tables (F6.1–F6.4); the e2e test compares both and the demo prints them (Part 4 M8, M9).
 package f6
 
 import (
 	"bufio"
 	"bytes"
 	"context"
-	"embed"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"time"
 )
 
-// Env locates the running processes of the scenario.
-type Env struct {
-	HubURL      string
-	ClientDSP   string
-	ClientEgres string
-	ClientAdmin string
-	Connector   string
-	ClockFile   string
-	EventsFile  string
-	Log         io.Writer
-}
-
-// Row is one observed (instant, message) outcome.
+// Row is one observable outcome of the scenario.
 type Row struct {
-	At             string
-	Message        string
-	Classification string
-	Action         string
-	Status         int
-	Verdict        string
-	Code           string
+	At      string `json:"at"`
+	Step    string `json:"step"`
+	Status  int    `json:"status"`
+	Verdict string `json:"verdict,omitempty"`
+	Code    string `json:"code,omitempty"`
 }
 
-// String renders a row for logs and the demo table.
+// String renders a row for logs and diffs.
 func (r Row) String() string {
-	v := r.Verdict
-	if v == "" {
-		v = "-"
-	}
-	return fmt.Sprintf("%-22s %-28s %-10s %-15s %d  %s %s", r.At, r.Message, r.Classification, r.Action, r.Status, v, r.Code)
+	return fmt.Sprintf("%-20s %-34s %3d %-28s %s", r.At, r.Step, r.Status, r.Code, r.Verdict)
 }
 
-// Header of m2 at 2026-10-10 in F6.
-const m2Warning = `warning;gate=policy_intake;code="VERDICT_NOT_IN_HEAD";version="1.0.0";sunset=@1793613600`
+// warning is the exact F6 header of m2 during the coexistence.
+const warning = `warning;gate=policy_intake;code="VERDICT_NOT_IN_HEAD";rule="contract-request";version="1.0.0";sunset=@1793613600`
 
-// Expected returns the F6 table as rows.
+// Expected returns the F6 rows in order.
 func Expected() []Row {
-	ok := func(at, m string) Row {
-		return Row{At: at, Message: m, Classification: "ok", Action: "forward", Status: 200}
-	}
-	warn := func(at, m string) Row {
-		return Row{At: at, Message: m, Classification: "warning", Action: "forward-notice", Status: 200, Verdict: m2Warning}
-	}
-	viol := func(at, m, code string) Row {
-		return Row{
-			At: at, Message: m, Classification: "violation", Action: "reject", Status: 400,
-			Verdict: `violation;gate=policy_intake;code="` + code + `"`, Code: code,
-		}
+	ok := func(at, s string) Row { return Row{At: at, Step: s, Status: 200} }
+	warn := func(at, s string) Row { return Row{At: at, Step: s, Status: 200, Verdict: warning} }
+	viol := func(at, s string) Row {
+		return Row{At: at, Step: s, Status: 400, Code: "VERDICT_VIOLATION", Verdict: `violation;gate=policy_intake;code="VERDICT_VIOLATION";rule="contract-request"`}
 	}
 	return []Row{
-		ok("2026-10-02T12:00:00Z", "m1 odrl:use"), ok("2026-10-02T12:00:00Z", "m2 ex:access"), viol("2026-10-02T12:00:00Z", "m3 odrl:read", "VERDICT_VIOLATION"),
-		ok("2026-10-03T09:59:55Z", "m1 odrl:use"), warn("2026-10-03T09:59:55Z", "m2 ex:access"), ok("2026-10-03T09:59:55Z", "m3 odrl:read"),
-		ok("2026-10-10T12:00:00Z", "m1 odrl:use"), warn("2026-10-10T12:00:00Z", "m2 ex:access"), ok("2026-10-10T12:00:00Z", "m3 odrl:read"),
-		warn("2026-10-10T12:00:00Z", "A1 agreement ex:access"),
-		ok("2026-11-02T10:00:05Z", "m1 odrl:use"), warn("2026-11-02T10:00:05Z", "m2 ex:access"), ok("2026-11-02T10:00:05Z", "m3 odrl:read"),
-		ok("2026-11-05T12:00:00Z", "m1 odrl:use"), viol("2026-11-05T12:00:00Z", "m2 ex:access", "VERDICT_VIOLATION"), ok("2026-11-05T12:00:00Z", "m3 odrl:read"),
-		ok("2026-11-05T12:00:00Z", "A1 transfer"),
-		{At: "2026-11-10T00:00:00Z", Message: "revoke 1.0.0", Classification: "event", Action: "AGREEMENT_REVOCATION_SCHEDULED", Status: 200},
-		ok("2026-11-12T00:00:05Z", "A1 transfer"),
-		{
-			At: "2026-11-12T00:00:10Z", Message: "A1 transfer", Classification: "violation", Action: "reject", Status: 400,
-			Verdict: `violation;gate=agreement_admission;code="AGREEMENT_VERSION_REVOKED"`, Code: "AGREEMENT_VERSION_REVOKED",
-		},
+		{At: "2026-09-01T09:00:00Z", Step: "F6.1 create namespace demo", Status: 201},
+		{At: "2026-09-01T09:00:00Z", Step: "F6.1 assign steward sergio", Status: 201},
+		{At: "2026-09-01T09:00:00Z", Step: "F6.1 proxy vocabulary revision", Status: 201, Code: "r/1"},
+		{At: "2026-09-01T10:00:00Z", Step: "F6.2 approve 1.0.0", Status: 201, Code: "initial"},
+		{At: "2026-10-01T10:00:00Z", Step: "F6.2 approve 2.0.0 grace P3D", Status: 422, Code: "DATES_GRACE_TOO_SHORT"},
+		{At: "2026-10-01T10:00:00Z", Step: "F6.2 approve 2.0.0", Status: 201, Code: "breaking 2026-10-03T10:00:00Z 2026-11-02T10:00:00Z"},
+		ok("2026-10-02T12:00:00Z", "F6.3 m1 odrl:use"), ok("2026-10-02T12:00:00Z", "F6.3 m2 ex:access"), viol("2026-10-02T12:00:00Z", "F6.3 m3 odrl:read"),
+		ok("2026-10-03T09:59:55Z", "F6.3 m1 odrl:use"), warn("2026-10-03T09:59:55Z", "F6.3 m2 ex:access"), ok("2026-10-03T09:59:55Z", "F6.3 m3 odrl:read"),
+		ok("2026-10-10T12:00:00Z", "F6.3 m1 odrl:use"), warn("2026-10-10T12:00:00Z", "F6.3 m2 ex:access"), ok("2026-10-10T12:00:00Z", "F6.3 m3 odrl:read"),
+		{At: "2026-10-10T12:00:00Z", Step: "F6.3 :explain m2", Status: 200, Code: "forward-notice", Verdict: warning},
+		{At: "2026-10-10T12:00:00Z", Step: "F6.4 A1 agreement ex:access", Status: 200, Code: "1.0.0", Verdict: strings.Replace(warning, "contract-request", "contract-agreement-in", 1)},
+		ok("2026-11-02T10:00:05Z", "F6.3 m1 odrl:use"), warn("2026-11-02T10:00:05Z", "F6.3 m2 ex:access"), ok("2026-11-02T10:00:05Z", "F6.3 m3 odrl:read"),
+		ok("2026-11-05T12:00:00Z", "F6.3 m1 odrl:use"), viol("2026-11-05T12:00:00Z", "F6.3 m2 ex:access"), ok("2026-11-05T12:00:00Z", "F6.3 m3 odrl:read"),
+		{At: "2026-11-05T12:00:00Z", Step: "F6.4 1.0.0 package retained", Status: 200, Code: "retained"},
+		ok("2026-11-05T12:00:00Z", "F6.4 A1 transfer"),
+		{At: "2026-11-10T00:00:00Z", Step: "F6.4 revoke 1.0.0", Status: 200, Code: "2026-11-12T00:00:00Z"},
+		{At: "2026-11-10T00:00:00Z", Step: "F6.4 client event", Status: 200, Code: "AGREEMENT_REVOCATION_SCHEDULED"},
+		ok("2026-11-12T00:00:05Z", "F6.4 A1 transfer"),
+		{At: "2026-11-12T00:00:10Z", Step: "F6.4 A1 transfer", Status: 400, Code: "AGREEMENT_VERSION_REVOKED", Verdict: `violation;gate=agreement_admission;code="AGREEMENT_VERSION_REVOKED";rule="transfer-request"`},
 	}
 }
 
-// Messages of F6.
-var (
-	actions = map[string]string{"m1 odrl:use": "odrl:use", "m2 ex:access": "ex:access", "m3 odrl:read": "odrl:read"}
-	order   = []string{"m1 odrl:use", "m2 ex:access", "m3 odrl:read"}
-)
+// Draft builds the Part 5.1 draft of an F6 version; 1.0.0 admits odrl:use and ex:access, 2.0.0 odrl:use and odrl:read.
+func Draft(hub, v string) []byte {
+	enum := `["odrl:use","ex:access"]`
+	if v == "2.0.0" {
+		enum = `["odrl:use","odrl:read"]`
+	}
+	return []byte(`{"version":"` + v + `","profiles":["` + hub + `/pub/demo/profiles/odrl/` + v + `"],
+"slots":[{"slot":"policy","obligation":"mandatory","applies_to":["policy_intake"]}],
+"files":[{"path":"schemas/policy.schema.json","media_type":"application/schema+json","role":"json-schema","slot":"policy","applies_to":["policy_intake"],
+"content":{"type":"object","properties":{"action":{"enum":` + enum + `}},"required":["action"]}}]}`)
+}
 
-// Profile is the policy profile every F6 offer and agreement declares (governance rule of the language, §5).
-const Profile = "https://example.com/odrl/profile/f6"
-
-// contractRequest builds a ContractRequestMessage whose profiled offer uses action.
+// Messages of F6: a contract request with an action, A1 and its transfer.
 func contractRequest(action string) []byte {
-	return []byte(`{"@context":["https://w3id.org/dspace/2025/1/context.jsonld","` + Profile + `/context.jsonld"],"@type":"ContractRequestMessage","consumerPid":"urn:uuid:c-1",` +
-		`"offer":{"@id":"urn:uuid:offer-1","@type":"Offer","profile":"` + Profile + `","target":"urn:uuid:ds-1","permission":[{"action":"` + action + `"}]},"callbackAddress":"http://consumer/cb"}`)
+	return []byte(`{"@type":"ContractRequestMessage","providerPid":"urn:uuid:p-1","consumerPid":"urn:uuid:c-1","action":"` + action + `"}`)
 }
 
-// agreement builds the ContractAgreementMessage of A1.
+// agreement is the ContractAgreementMessage of A1.
 func agreement() []byte {
-	return []byte(`{"@context":["https://w3id.org/dspace/2025/1/context.jsonld"],"@type":"ContractAgreementMessage","providerPid":"urn:uuid:p-1","consumerPid":"urn:uuid:c-1",` +
-		`"agreement":{"@id":"urn:uuid:A1","@type":"Agreement","profile":"` + Profile + `/1.0.0","target":"urn:uuid:ds-1","permission":[{"action":"ex:access"}]},"callbackAddress":"http://provider/cb"}`)
+	return []byte(`{"@type":"ContractAgreementMessage","providerPid":"urn:uuid:p-1","consumerPid":"urn:uuid:c-1","action":"ex:access","agreement":{"@id":"urn:uuid:A1"}}`)
 }
 
-// transfer builds the TransferRequestMessage of A1.
+// transfer is the TransferRequestMessage of A1.
 func transfer() []byte {
-	return []byte(`{"@context":["https://w3id.org/dspace/2025/1/context.jsonld"],"@type":"TransferRequestMessage","consumerPid":"urn:uuid:t-1","agreementId":"urn:uuid:A1","format":"HTTP_PULL","callbackAddress":"http://consumer/cb"}`)
+	return []byte(`{"@type":"TransferRequestMessage","consumerPid":"urn:uuid:t-1","agreementId":"urn:uuid:A1"}`)
 }
 
-// drafts holds the F6 releases written in the eunomia.profiles/v1 language.
-//
-//go:embed drafts/*.yaml
-var drafts embed.FS
+// httpClient trusts the lab certificate and never follows redirects.
+func httpClient(caFile string) *http.Client {
+	pool := x509.NewCertPool()
+	if pem, err := os.ReadFile(caFile); err == nil { // #nosec G304 -- lab CA written by Launch.
+		pool.AppendCertsFromPEM(pem)
+	}
+	return &http.Client{
+		Timeout:       10 * time.Second,
+		Transport:     &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+}
 
-// Draft returns the YAML bundle of an F6 release (v1.0.0 or v2.0.0).
-func Draft(v string) []byte {
-	b, err := drafts.ReadFile("drafts/v" + v + ".yaml")
+// call sends a request and returns status, headers and body.
+func (e Env) call(method, url, token, ifMatch string, body []byte) (int, http.Header, []byte, error) {
+	req, err := http.NewRequestWithContext(context.Background(), method, url, bytes.NewReader(body))
 	if err != nil {
-		panic(err)
+		return 0, nil, nil, err
 	}
-	return b
-}
-
-// logf writes progress when a log is set.
-func (e Env) logf(format string, a ...any) {
-	if e.Log != nil {
-		_, _ = fmt.Fprintf(e.Log, format+"\n", a...)
-	}
-}
-
-// setClock writes the file clock read by both binaries.
-func (e Env) setClock(t string) error {
-	tmp := e.ClockFile + ".tmp"
-	if err := os.WriteFile(tmp, []byte(t+"\n"), 0o600); err != nil {
-		return err
-	}
-	e.logf("· clock → %s", t)
-	return os.Rename(tmp, e.ClockFile)
-}
-
-// call performs an HTTP request and returns status, headers and body.
-func call(c *http.Client, method, u, token string, body []byte) (int, http.Header, []byte, error) {
-	req, _ := http.NewRequestWithContext(context.Background(), method, u, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
-	resp, err := c.Do(req)
+	if ifMatch != "" {
+		req.Header.Set("If-Match", ifMatch)
+	}
+	resp, err := e.HTTP().Do(req)
 	if err != nil {
 		return 0, nil, nil, err
 	}
@@ -156,193 +126,330 @@ func call(c *http.Client, method, u, token string, body []byte) (int, http.Heade
 	return resp.StatusCode, resp.Header, b, nil
 }
 
-// publish creates, proposes and approves a draft as editor and releaser.
-func (e Env) publish(doc []byte) error {
-	c := http.DefaultClient
-	st, _, b, err := call(c, "POST", e.HubURL+"/v1/drafts", "editor-token", doc)
-	if err != nil || st != 201 {
-		return fmt.Errorf("create draft: %d %s %w", st, b, err)
+// field extracts a string member at a dotted path of a JSON body.
+func field(b []byte, path string) string {
+	var v any
+	_ = json.Unmarshal(b, &v)
+	for _, k := range strings.Split(path, ".") {
+		m, ok := v.(map[string]any)
+		if !ok {
+			return ""
+		}
+		v = m[k]
 	}
-	var d struct{ ID string }
-	_ = json.Unmarshal(b, &d)
-	st, _, b, err = call(c, "POST", e.HubURL+"/v1/drafts/"+d.ID+":propose", "editor-token", nil)
-	if err != nil || st != 201 {
-		return fmt.Errorf("propose: %d %s %w", st, b, err)
+	s, _ := v.(string)
+	return s
+}
+
+// last returns the last path segment of an IRI.
+func last(iri string) string { return iri[strings.LastIndex(iri, "/")+1:] }
+
+// Runner drives the scenario and collects rows.
+type Runner struct {
+	E           Env
+	Log         io.Writer
+	Rows        []Row
+	ana, sergio string
+	now         string
+}
+
+// fail wraps an error with the step.
+func fail(step string, err error) error { return fmt.Errorf("%s: %w", step, err) }
+
+// at moves the file clock.
+func (r *Runner) at(ts string) error {
+	r.now = ts
+	if r.Log != nil {
+		_, _ = fmt.Fprintf(r.Log, "· clock → %s\n", ts)
 	}
-	var cand struct{ ID string }
-	_ = json.Unmarshal(b, &cand)
-	st, _, b, err = call(c, "POST", e.HubURL+"/v1/candidates/"+cand.ID+":approve", "releaser-token", []byte(`{}`))
-	if err != nil || st != 201 {
-		return fmt.Errorf("approve: %d %s %w", st, b, err)
+	return r.E.SetClock(ts)
+}
+
+// add records a row.
+func (r *Runner) add(step string, status int, code, verdict string) {
+	row := Row{At: r.now, Step: step, Status: status, Code: code, Verdict: verdict}
+	r.Rows = append(r.Rows, row)
+	if r.Log != nil {
+		_, _ = fmt.Fprintln(r.Log, row.String())
 	}
-	e.logf("· released %s", b)
+}
+
+// publish creates and proposes a draft.
+func (r *Runner) publish(v string) (string, error) {
+	st, hdr, b, err := r.E.call("POST", r.E.HubURL+"/v1/namespaces/demo/drafts", r.sergio, "", Draft(r.E.HubURL, v))
+	if err != nil || st != 201 {
+		return "", fmt.Errorf("draft %s: %d %s %w", v, st, b, err)
+	}
+	st, _, b, err = r.E.call("POST", r.E.HubURL+"/v1/namespaces/demo/drafts/"+last(hdr.Get("Location"))+":propose", r.sergio, "", nil)
+	if err != nil || st != 201 {
+		return "", fmt.Errorf("propose %s: %d %s %w", v, st, b, err)
+	}
+	return last(field(b, "id")), nil
+}
+
+// approve approves a candidate and records the row.
+func (r *Runner) approve(step, id, body string) error {
+	st, _, b, err := r.E.call("POST", r.E.HubURL+"/v1/namespaces/demo/candidates/"+id+":approve", r.sergio, "", []byte(body))
+	if err != nil {
+		return fail(step, err)
+	}
+	code := field(b, "code")
+	if st == 201 {
+		code = field(b, "credentialSubject.class")
+		if code == "breaking" {
+			code += " " + field(b, "credentialSubject.new_content_from") + " " + field(b, "credentialSubject.enforced_from")
+		}
+	}
+	r.add(step, st, code, "")
 	return nil
 }
 
-// waitSynced polls /status until the client accepted a listing issued at t.
-func (e Env) waitSynced(t string) error {
-	deadline := time.Now().Add(20 * time.Second)
-	for time.Now().Before(deadline) {
-		_, _, b, err := call(http.DefaultClient, "GET", e.ClientAdmin+"/status", "", nil)
-		var s struct {
-			LastAcceptedListing *struct {
-				IssuedAt string `json:"issued_at"`
-			} `json:"last_accepted_listing"`
-		}
-		if err == nil && json.Unmarshal(b, &s) == nil && s.LastAcceptedListing != nil && s.LastAcceptedListing.IssuedAt == t {
+// synced waits until the client accepted a listing issued at the current instant, or the last one when issuedAt is empty.
+func (r *Runner) synced(issuedAt string) error {
+	for i := 0; i < 150; i++ {
+		_, _, b, err := r.E.call("GET", r.E.Admin+"/status", "", "", nil)
+		if err == nil && field(b, "last_accepted_listing.valid_from") == issuedAt {
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	return fmt.Errorf("client did not accept a listing issued at %s", t)
+	return fmt.Errorf("client did not accept the listing of %s", issuedAt)
 }
 
-// row converts a client response into an observed row.
-func row(at, msg string, st int, hdr http.Header, body []byte) Row {
-	r := Row{At: at, Message: msg, Status: st, Verdict: hdr.Get("VHub-Verdict")}
-	var b struct{ Code string }
-	_ = json.Unmarshal(body, &b)
-	switch {
-	case st >= 400:
-		r.Classification, r.Action, r.Code = "violation", "reject", b.Code
-	case r.Verdict != "":
-		r.Classification, r.Action = "warning", "forward-notice"
-	default:
-		r.Classification, r.Action = "ok", "forward"
+// send posts a message on the ingress listener and records the row.
+func (r *Runner) send(step, path string, body []byte) error {
+	st, hdr, b, err := r.E.call("POST", r.E.Ingress+path, "", "", body)
+	if err != nil {
+		return fail(step, err)
 	}
-	return r
+	code := ""
+	if st >= 400 {
+		code = field(b, "code")
+	}
+	r.add(step, st, code, hdr.Get("VHub-Verdict"))
+	return nil
 }
 
-// step moves the clock, optionally waits for the sync of a listing issued at that instant, and sends messages.
-func (e Env) step(at string, sync bool, send func() ([]Row, error)) ([]Row, error) {
-	if err := e.setClock(at); err != nil {
-		return nil, err
-	}
-	if sync {
-		if err := e.waitSynced(at); err != nil {
-			return nil, err
+// messages sends m1–m3.
+func (r *Runner) messages() error {
+	for _, m := range []struct{ step, action string }{{"F6.3 m1 odrl:use", "odrl:use"}, {"F6.3 m2 ex:access", "ex:access"}, {"F6.3 m3 odrl:read", "odrl:read"}} {
+		if err := r.send(m.step, "/negotiations/urn:uuid:p-1/request", contractRequest(m.action)); err != nil {
+			return err
 		}
 	}
-	return send()
+	return nil
 }
 
-// sendM sends m1–m3 at at.
-func (e Env) sendM(at string) func() ([]Row, error) {
-	return func() ([]Row, error) {
-		var out []Row
-		for _, m := range order {
-			st, hdr, b, err := call(http.DefaultClient, "POST", e.ClientDSP+"/negotiations/request", "", contractRequest(actions[m]))
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, row(at, m, st, hdr, b))
-		}
-		return out, nil
+// setMode switches a client rule to enforce through the admin API.
+func (r *Runner) setMode(id string) error {
+	_, hdr, b, err := r.E.call("GET", r.E.Admin+"/rules/"+id, "", "", nil)
+	if err != nil {
+		return err
 	}
+	var rule map[string]any
+	_ = json.Unmarshal(b, &rule)
+	rule["mode"] = "enforce"
+	nb, _ := json.Marshal(rule)
+	st, _, out, err := r.E.call("PUT", r.E.Admin+"/rules/"+id, "", hdr.Get("ETag"), nb)
+	if err != nil || st != 200 {
+		return fmt.Errorf("rule %s: %d %s %w", id, st, out, err)
+	}
+	return nil
 }
 
-// sendTransfer sends the A1 transfer at at.
-func (e Env) sendTransfer(at string) func() ([]Row, error) {
-	return func() ([]Row, error) {
-		st, hdr, b, err := call(http.DefaultClient, "POST", e.ClientDSP+"/transfers/request", "", transfer())
-		if err != nil {
-			return nil, err
-		}
-		return []Row{row(at, "A1 transfer", st, hdr, b)}, nil
+// hasEvent reports whether the client events file contains code.
+func (r *Runner) hasEvent(code string) bool {
+	f, err := os.Open(r.E.EventsFile)
+	if err != nil {
+		return false
 	}
-}
-
-// sendAgreement sends A1 through the egress forward proxy towards the connector.
-func (e Env) sendAgreement(at string) func() ([]Row, error) {
-	return func() ([]Row, error) {
-		proxy, _ := url.Parse(e.ClientEgres)
-		c := &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(proxy)}}
-		st, hdr, b, err := call(c, "POST", e.Connector+"/negotiations/c-1/agreement", "", agreement())
-		if err != nil {
-			return nil, err
+	defer func() { _ = f.Close() }()
+	s := bufio.NewScanner(f)
+	s.Buffer(make([]byte, 1<<20), 1<<20)
+	for s.Scan() {
+		if strings.Contains(s.Text(), `"`+code+`"`) {
+			return true
 		}
-		return []Row{row(at, "A1 agreement ex:access", st, hdr, b)}, nil
-	}
-}
-
-// revoke revokes 1.0.0 and reports whether the client announced the revocation for A1.
-func (e Env) revoke(at string) func() ([]Row, error) {
-	return func() ([]Row, error) {
-		st, _, b, err := call(http.DefaultClient, "POST", e.HubURL+"/v1/versions/1.0.0:revoke", "releaser-token", []byte(`{"justification":"superseded by 2.0.0"}`))
-		if err != nil || st != 200 {
-			return nil, fmt.Errorf("revoke: %d %s %w", st, b, err)
-		}
-		if err := e.waitSynced(at); err != nil {
-			return nil, err
-		}
-		action := "missing"
-		if e.eventSeen("AGREEMENT_REVOCATION_SCHEDULED", "urn:uuid:A1") {
-			action = "AGREEMENT_REVOCATION_SCHEDULED"
-		}
-		return []Row{{At: at, Message: "revoke 1.0.0", Classification: "event", Action: action, Status: st}}, nil
-	}
-}
-
-// eventSeen reports whether the events file holds an event with code about the agreement.
-func (e Env) eventSeen(code, agreement string) bool {
-	for i := 0; i < 50; i++ {
-		f, err := os.Open(e.EventsFile)
-		if err == nil {
-			sc := bufio.NewScanner(f)
-			for sc.Scan() {
-				if strings.Contains(sc.Text(), `"code":"`+code+`"`) && strings.Contains(sc.Text(), agreement) {
-					_ = f.Close()
-					return true
-				}
-			}
-			_ = f.Close()
-		}
-		time.Sleep(100 * time.Millisecond)
 	}
 	return false
 }
 
-// Run executes the scenario and returns the observed rows.
-func Run(e Env) ([]Row, error) {
-	if err := e.setClock("2026-09-01T10:00:00Z"); err != nil {
-		return nil, err
+// Run executes F6.1–F6.4; startClient launches the client once the namespace exists.
+func (r *Runner) Run(startClient func() error) error {
+	var err error
+	if err = r.at("2026-09-01T09:00:00Z"); err != nil {
+		return err
 	}
-	if err := e.publish(Draft("1.0.0")); err != nil {
-		return nil, err
+	if r.ana, err = r.E.Token("ana", true); err != nil {
+		return fail("token", err)
 	}
-	if err := e.setClock("2026-10-01T10:00:00Z"); err != nil {
-		return nil, err
+	if r.sergio, err = r.E.Token("sergio", false); err != nil {
+		return fail("token", err)
 	}
-	if err := e.publish(Draft("2.0.0")); err != nil {
-		return nil, err
+	st, _, _, err := r.E.call("POST", r.E.HubURL+"/v1/namespaces", r.ana, "", []byte(`{"slug":"demo"}`))
+	if err != nil {
+		return fail("namespace", err)
 	}
-	steps := []struct {
-		at   string
-		sync bool
-		send func(string) func() ([]Row, error)
-	}{
-		{"2026-10-02T12:00:00Z", true, e.sendM},
-		{"2026-10-03T09:59:55Z", true, e.sendM},
-		{"2026-10-10T12:00:00Z", true, e.sendM},
-		{"2026-10-10T12:00:00Z", false, e.sendAgreement},
-		{"2026-11-02T06:00:00Z", true, func(string) func() ([]Row, error) { return func() ([]Row, error) { return nil, nil } }},
-		{"2026-11-02T10:00:05Z", false, e.sendM},
-		{"2026-11-05T12:00:00Z", true, e.sendM},
-		{"2026-11-05T12:00:00Z", false, e.sendTransfer},
-		{"2026-11-10T00:00:00Z", false, e.revoke},
-		{"2026-11-12T00:00:05Z", true, e.sendTransfer},
-		{"2026-11-12T00:00:10Z", false, e.sendTransfer},
+	r.add("F6.1 create namespace demo", st, "", "")
+	st, _, _, err = r.E.call("POST", r.E.HubURL+"/v1/namespaces/demo/stewards", r.ana, "", []byte(`{"iss":"`+r.E.IDPURL+`","sub":"sergio"}`))
+	if err != nil {
+		return fail("steward", err)
 	}
-	var rows []Row
-	for _, s := range steps {
-		got, err := e.step(s.at, s.sync, s.send(s.at))
-		if err != nil {
-			return rows, err
+	r.add("F6.1 assign steward sergio", st, "", "")
+	voc := `{"name":"dcat-ap-context","kind":"proxy","media_type":"application/ld+json","upstream":"` + r.E.ConnURL + `/dcat-ap.jsonld"}`
+	st, _, b, err := r.E.call("POST", r.E.HubURL+"/v1/namespaces/demo/vocabularies", r.sergio, "", []byte(voc))
+	if err != nil {
+		return fail("vocabulary", err)
+	}
+	var v struct {
+		Revisions []struct {
+			ID string `json:"id"`
+		} `json:"revisions"`
+	}
+	_ = json.Unmarshal(b, &v)
+	rev := ""
+	if len(v.Revisions) == 1 {
+		rev = "r/" + last(v.Revisions[0].ID)
+	}
+	r.add("F6.1 proxy vocabulary revision", st, rev, "")
+	if err = r.at("2026-09-01T10:00:00Z"); err != nil {
+		return err
+	}
+	id, err := r.publish("1.0.0")
+	if err != nil {
+		return err
+	}
+	if err := r.approve("F6.2 approve 1.0.0", id, ""); err != nil {
+		return err
+	}
+	if err := startClient(); err != nil {
+		return fail("client", err)
+	}
+	if err := r.synced("2026-09-01T10:00:00Z"); err != nil {
+		return err
+	}
+	for _, rule := range []string{"contract-agreement-in", "transfer-request"} {
+		if err := r.setMode(rule); err != nil {
+			return err
 		}
-		for _, r := range got {
-			e.logf("%s", r)
-		}
-		rows = append(rows, got...)
 	}
-	return rows, nil
+	if err = r.at("2026-10-01T10:00:00Z"); err != nil {
+		return err
+	}
+	if id, err = r.publish("2.0.0"); err != nil {
+		return err
+	}
+	if err := r.approve("F6.2 approve 2.0.0 grace P3D", id, `{"grace_window":"P3D"}`); err != nil {
+		return err
+	}
+	if err := r.approve("F6.2 approve 2.0.0", id, ""); err != nil {
+		return err
+	}
+	return r.rows()
+}
+
+// rows runs F6.3 and F6.4; before each barrier the client syncs, as F6 assumes (see OPEN_QUESTIONS).
+func (r *Runner) rows() error {
+	for _, step := range []struct{ sync, at string }{
+		{"2026-10-02T12:00:00Z", "2026-10-02T12:00:00Z"}, {"2026-10-03T06:00:00Z", "2026-10-03T09:59:55Z"}, {"2026-10-10T12:00:00Z", "2026-10-10T12:00:00Z"},
+	} {
+		if err := r.syncAt(step.sync); err != nil {
+			return err
+		}
+		if err := r.at(step.at); err != nil {
+			return err
+		}
+		if err := r.messages(); err != nil {
+			return err
+		}
+	}
+	explain := `{"listener":"dsp-ingress","method":"POST","path":"/negotiations/urn:uuid:p-1/request","body":` + string(contractRequest("ex:access")) + `}`
+	st, _, b, err := r.E.call("POST", r.E.Admin+"/rules:explain", "", "", []byte(explain))
+	if err != nil {
+		return fail("explain", err)
+	}
+	r.add("F6.3 :explain m2", st, field(b, "action"), field(b, "vhub_verdict"))
+	st, hdr, _, err := r.E.call("POST", r.E.Ingress+"/negotiations/urn:uuid:c-1/agreement", "", "", agreement())
+	if err != nil {
+		return fail("agreement", err)
+	}
+	_, _, ab, _ := r.E.call("GET", r.E.Admin+"/agreements/urn:uuid:A1", "", "", nil)
+	r.add("F6.4 A1 agreement ex:access", st, field(ab, "version"), hdr.Get("VHub-Verdict"))
+	if err := r.syncAt("2026-11-02T06:00:00Z"); err != nil {
+		return err
+	}
+	if err := r.at("2026-11-02T10:00:05Z"); err != nil {
+		return err
+	}
+	if err := r.messages(); err != nil {
+		return err
+	}
+	if err := r.syncAt("2026-11-05T12:00:00Z"); err != nil {
+		return err
+	}
+	if err := r.messages(); err != nil {
+		return err
+	}
+	role := ""
+	for i := 0; i < 50 && role != "retained"; i++ {
+		_, _, sb, _ := r.E.call("GET", r.E.Admin+"/status", "", "", nil)
+		var s struct {
+			Versions []struct {
+				Version   string `json:"version"`
+				LocalRole string `json:"local_role"`
+			} `json:"versions"`
+		}
+		_ = json.Unmarshal(sb, &s)
+		for _, v := range s.Versions {
+			if v.Version == "1.0.0" {
+				role = v.LocalRole
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	r.add("F6.4 1.0.0 package retained", 200, role, "")
+	if err := r.send("F6.4 A1 transfer", "/transfers/request", transfer()); err != nil {
+		return err
+	}
+	return r.revocation()
+}
+
+// revocation runs the F6.4 revocation and the transfers around revoked_from + L.
+func (r *Runner) revocation() error {
+	if err := r.at("2026-11-10T00:00:00Z"); err != nil {
+		return err
+	}
+	st, _, b, err := r.E.call("POST", r.E.HubURL+"/v1/namespaces/demo/versions/1.0.0:revoke", r.sergio, "", []byte(`{"justification":"ex:access is unsafe"}`))
+	if err != nil {
+		return fail("revoke", err)
+	}
+	r.add("F6.4 revoke 1.0.0", st, field(b, "credentialSubject.revoked_from"), "")
+	if err := r.synced("2026-11-10T00:00:00Z"); err != nil {
+		return err
+	}
+	ev := ""
+	for i := 0; i < 50 && ev == ""; i++ {
+		if r.hasEvent("AGREEMENT_REVOCATION_SCHEDULED") {
+			ev = "AGREEMENT_REVOCATION_SCHEDULED"
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	r.add("F6.4 client event", 200, ev, "")
+	for _, ts := range []string{"2026-11-12T00:00:05Z", "2026-11-12T00:00:10Z"} {
+		if err := r.at(ts); err != nil {
+			return err
+		}
+		if err := r.send("F6.4 A1 transfer", "/transfers/request", transfer()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// syncAt moves the clock and waits for the hub to issue and the client to accept a listing at that instant.
+func (r *Runner) syncAt(ts string) error {
+	if err := r.at(ts); err != nil {
+		return err
+	}
+	return r.synced(ts)
 }

@@ -1,0 +1,8 @@
+$kind: http-request
+method: GET
+url: '{{hubUrl}}/v1/namespaces/{{namespace}}/candidates/{{candidateId}}'
+order: 6000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: pm.test('200 open candidate', () => pm.response.to.have.status(200));

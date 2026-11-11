@@ -1,0 +1,10 @@
+$kind: http-request
+method: GET
+url: '{{clientAdmin}}/agreements/urn:uuid:A1'
+order: 5000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('200 captured agreement bound to version (or 404 if not yet captured)', () => {\n  pm.expect([200,\
+    \ 404]).to.include(pm.response.code);\n  if (pm.response.code === 200) {\n    pm.expect(pm.response.json().agreement_id).to.eql('urn:uuid:A1');\n\
+    \  }\n});"

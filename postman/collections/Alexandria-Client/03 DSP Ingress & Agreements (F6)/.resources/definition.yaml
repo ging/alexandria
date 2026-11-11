@@ -1,0 +1,4 @@
+$kind: request-group
+description: F6.3–F6.4 DSP traffic validation, VHub-Verdict RFC 9651 header inspection, agreement capture,
+  transfer admission, and negative DSP checks.
+order: 3000

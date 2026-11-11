@@ -1,0 +1,15 @@
+$kind: http-request
+method: POST
+url: '{{hubUrl}}/v1/namespaces/{{namespace}}/vocabularies'
+order: 3000
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: text
+  content: "{\n  \"name\": \"odrl-ext\",\n  \"kind\": \"hosted\",\n  \"media_type\": \"text/turtle\"\n\
+    }"
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: pm.test('201 Created or 409 VOCAB_EXISTS', () => pm.expect([201, 409]).to.include(pm.response.code));

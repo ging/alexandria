@@ -1,0 +1,53 @@
+name: alexandria-local
+values:
+- key: hubUrl
+  value: https://127.0.0.1:8443
+  enabled: true
+  type: default
+  description: alexandria-server base URL (config/server.yaml; disable SSL cert verification in Postman
+    for lab TLS)
+- key: idpUrl
+  value: http://127.0.0.1:9400
+  enabled: true
+  type: default
+  description: fake-idp OIDC issuer URL (./bin/fake-idp serve)
+- key: connectorUrl
+  value: http://127.0.0.1:8282
+  enabled: true
+  type: default
+  description: fake-connector upstream URL (./bin/fake-connector)
+- key: clientIngress
+  value: http://127.0.0.1:9080
+  enabled: true
+  type: default
+  description: alexandria-client dsp-ingress listener (config/client.yaml)
+- key: clientEgress
+  value: http://127.0.0.1:9081
+  enabled: true
+  type: default
+  description: alexandria-client dsp-egress listener (config/client.yaml)
+- key: clientAdmin
+  value: http://127.0.0.1:9090
+  enabled: true
+  type: default
+  description: alexandria-client admin listener (config/client.yaml)
+- key: namespace
+  value: demo
+  enabled: true
+  type: default
+  description: Target namespace slug (Scenario F6)
+- key: adminToken
+  value: ''
+  enabled: true
+  type: secret
+  description: 'Mint with: ./bin/fake-idp token --sub ana --admin --ttl 2400h [-clock-file var/clock]'
+- key: stewardToken
+  value: ''
+  enabled: true
+  type: secret
+  description: 'Mint with: ./bin/fake-idp token --sub sergio --ttl 2400h [-clock-file var/clock]'
+- key: unprivilegedToken
+  value: ''
+  enabled: true
+  type: secret
+  description: 'Mint with: ./bin/fake-idp token --sub eve --ttl 2400h [-clock-file var/clock]'

@@ -1,0 +1,9 @@
+$kind: http-request
+method: GET
+url: '{{hubUrl}}/pub/blobs/sha256/{{blobHex}}'
+order: 6000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('200 immutable raw blob matching ETag', () => {\n  pm.response.to.have.status(200);\n\
+    \  pm.expect(pm.response.headers.get('Cache-Control')).to.include('immutable');\n});"

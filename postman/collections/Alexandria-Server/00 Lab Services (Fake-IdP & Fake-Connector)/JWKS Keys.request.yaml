@@ -1,0 +1,9 @@
+$kind: http-request
+method: GET
+url: '{{idpUrl}}/jwks.json'
+order: 2000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('200 JWKS with ES256 key', () => {\n  pm.response.to.have.status(200);\n  pm.expect(pm.response.json().keys[0].alg).to.eql('ES256');\n\
+    });"

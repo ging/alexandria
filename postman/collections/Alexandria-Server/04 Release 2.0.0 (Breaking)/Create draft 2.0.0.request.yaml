@@ -1,0 +1,24 @@
+$kind: http-request
+method: POST
+url: '{{hubUrl}}/v1/namespaces/{{namespace}}/drafts'
+order: 1000
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: text
+  content: "{\n  \"version\": \"2.0.0\",\n  \"profiles\": [\n    \"{{hubUrl}}/pub/{{namespace}}/profiles/odrl/2.0.0\"\
+    \n  ],\n  \"slots\": [\n    {\n      \"slot\": \"policy\",\n      \"obligation\": \"mandatory\",\n\
+    \      \"applies_to\": [\n        \"policy_intake\"\n      ]\n    }\n  ],\n  \"files\": [\n    {\n\
+    \      \"path\": \"schemas/policy.schema.json\",\n      \"media_type\": \"application/schema+json\"\
+    ,\n      \"role\": \"json-schema\",\n      \"slot\": \"policy\",\n      \"applies_to\": [\n      \
+    \  \"policy_intake\"\n      ],\n      \"content\": {\n        \"type\": \"object\",\n        \"properties\"\
+    : {\n          \"action\": {\n            \"enum\": [\n              \"odrl:use\",\n             \
+    \ \"odrl:read\"\n            ]\n          }\n        },\n        \"required\": [\n          \"action\"\
+    \n        ]\n      }\n    }\n  ]\n}"
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('201 Created', () => {\n  pm.response.to.have.status(201);\n  pm.collectionVariables.set('draftId',\
+    \ pm.response.json().id.split('/').pop());\n  pm.collectionVariables.set('draftEtag', pm.response.headers.get('ETag'));\n\
+    });"

@@ -1,0 +1,25 @@
+$kind: http-request
+method: PUT
+url: '{{hubUrl}}/v1/namespaces/{{namespace}}/drafts/{{draftId}}'
+order: 3000
+headers:
+- key: Content-Type
+  value: application/json
+- key: If-Match
+  value: '{{draftEtag}}'
+body:
+  type: text
+  content: "{\n  \"version\": \"1.0.0\",\n  \"profiles\": [\n    \"{{hubUrl}}/pub/{{namespace}}/profiles/odrl/1.0.0\"\
+    \n  ],\n  \"slots\": [\n    {\n      \"slot\": \"policy\",\n      \"obligation\": \"mandatory\",\n\
+    \      \"applies_to\": [\n        \"policy_intake\"\n      ]\n    }\n  ],\n  \"files\": [\n    {\n\
+    \      \"path\": \"schemas/policy.schema.json\",\n      \"media_type\": \"application/schema+json\"\
+    ,\n      \"role\": \"json-schema\",\n      \"slot\": \"policy\",\n      \"applies_to\": [\n      \
+    \  \"policy_intake\"\n      ],\n      \"content\": {\n        \"type\": \"object\",\n        \"properties\"\
+    : {\n          \"action\": {\n            \"enum\": [\n              \"odrl:use\",\n             \
+    \ \"ex:access\"\n            ]\n          }\n        },\n        \"required\": [\n          \"action\"\
+    \n        ]\n      }\n    }\n  ]\n}"
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('200 and updated ETag', () => {\n  pm.response.to.have.status(200);\n  pm.collectionVariables.set('draftEtag',\
+    \ pm.response.headers.get('ETag'));\n});"

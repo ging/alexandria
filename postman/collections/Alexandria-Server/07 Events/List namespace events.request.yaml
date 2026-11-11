@@ -1,0 +1,8 @@
+$kind: http-request
+method: GET
+url: '{{hubUrl}}/v1/namespaces/{{namespace}}/events?after=0&limit=20'
+order: 1000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: pm.test('200 JSON-LD namespace event graph', () => pm.response.to.have.status(200));

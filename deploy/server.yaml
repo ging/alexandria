@@ -1,0 +1,46 @@
+# Local development configuration for alexandria-server (YAML equivalent of deploy/server.json).
+common_config:
+  hosts:
+    http:
+      protocol: "https"
+      url: "127.0.0.1"
+      port: "8443"
+      internal_port: "8443"
+    grpc: null
+    graphql: null
+  db:
+    db_type: "SQLite"
+    database: "file:../var/hub/hub.db"
+    blobs: "file:../var/hub/blobs"
+  connection:
+    is_local: true
+    is_prod: false
+    has_tls_proxy: false
+    tls:
+      cert: "file:../var/tls/hub.crt"
+      key: "file:../var/tls/hub.key"
+
+auth_config:
+  enabled: true
+  issuer: "http://127.0.0.1:9400"
+  audience: "alexandria-vhub"
+  roles_claim: "roles"
+  admin_role: "vhub-admin"
+
+did_config:
+  type: "key"
+  signing_key: "file:../var/hub/hub.key"
+
+observability:
+  log_level: "info"
+  log_format: "auto"
+  metrics: true
+  pprof: false
+  port: "2112"
+
+vhub_config:
+  rdf_context: "self-hosted"
+  compiler: "poc"
+  vocab:
+    max_size: 10485760
+    allow_insecure_localhost: true

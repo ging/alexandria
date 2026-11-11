@@ -1,5 +1,5 @@
 // Package lifecycle defines the lifecycle parameters of a SpaceProfile with the defaults of §2.10 and their LIFECYCLE_* invariants.
-// The hub validates drafts with them and the client reads them from space-lock.json (REQ-HUB-001).
+// The hub validates drafts with them and the client reads them from the package manifest (§3.7, S7, REQ-HUB-001).
 package lifecycle
 
 import (
@@ -19,25 +19,28 @@ type Freshness struct {
 // Params is SpaceProfile.lifecycle; Degraded maps a gate to continue or reject.
 type Params struct {
 	Freshness             Freshness         `json:"freshness"`
+	MinGraceWindow        timex.Duration    `json:"min_grace_window"`
 	GraceWindow           timex.Duration    `json:"grace_window"`
 	SyncInterval          timex.Duration    `json:"sync_interval"`
 	ClockSkew             timex.Duration    `json:"clock_skew"`
 	LeaseMargin           timex.Duration    `json:"lease_margin"`
 	PropagationWindow     timex.Duration    `json:"propagation_window"`
 	MaxConcurrentVersions int               `json:"max_concurrent_versions"`
-	Degraded              map[string]string `json:"degraded,omitempty"`
+	Degraded              map[string]string `json:"degraded"`
 }
 
 // Defaults returns the single source of default values (§2.10, check C4).
 func Defaults() Params {
 	return Params{
 		Freshness:             Freshness{TTL: 24 * timex.Hour, MaxStaleness: 7 * timex.Day},
+		MinGraceWindow:        7 * timex.Day,
 		GraceWindow:           30 * timex.Day,
 		SyncInterval:          6 * timex.Hour,
 		ClockSkew:             5 * timex.Second,
 		LeaseMargin:           10 * timex.Second,
 		PropagationWindow:     2 * timex.Day,
 		MaxConcurrentVersions: 4,
+		Degraded:              map[string]string{},
 	}
 }
 
@@ -49,6 +52,9 @@ func ParseOver(base Params, raw []byte) (Params, error) {
 	}
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return Params{}, fmt.Errorf("lifecycle: %w", err)
+	}
+	if p.Degraded == nil {
+		p.Degraded = map[string]string{}
 	}
 	return p, nil
 }
@@ -70,7 +76,8 @@ func (p Params) Validate() []*codes.Error {
 		}
 	}
 	add(p.Freshness.MaxStaleness > p.Freshness.TTL, codes.LifecycleStalenessLtTTL, "/lifecycle/freshness/max_staleness", "max_staleness must be greater than ttl")
-	add(p.GraceWindow > 0, codes.LifecycleGraceZero, "/lifecycle/grace_window", "grace_window must be greater than P0D")
+	add(p.MinGraceWindow >= p.PropagationWindow, codes.LifecycleMinGrace, "/lifecycle/min_grace_window", "min_grace_window must be at least propagation_window")
+	add(p.GraceWindow >= p.MinGraceWindow, codes.LifecycleGraceTooShort, "/lifecycle/grace_window", "grace_window must be at least min_grace_window")
 	add(p.SyncInterval <= p.Freshness.TTL/2, codes.LifecycleSyncInterval, "/lifecycle/sync_interval", "sync_interval must be at most ttl/2")
 	add(p.ClockSkew > 0, codes.LifecycleClockSkew, "/lifecycle/clock_skew", "clock_skew must be greater than PT0S")
 	add(p.LeaseMargin >= p.ClockSkew, codes.LifecycleLease, "/lifecycle/lease_margin", "lease_margin must be at least clock_skew")

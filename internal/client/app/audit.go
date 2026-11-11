@@ -1,8 +1,9 @@
-// Package app implements passive audit: keeps the last audit.window catalog responses and re-classifies them when a new version is verified.
-// Classifies at new_content_from(X) and enforced_from(X) with margin 0 and makes no active request (§4.10, Q5, REQ-CLI-023).
+// Package app implements the passive audit: a buffer of the last catalog responses re-classified against each newly verified version.
+// It predicts warnings and rejections at new_content_from and enforced_from without contacting the connector (§4.11, Q5, REQ-CLI-023).
 package app
 
 import (
+	"encoding/json"
 	"sync"
 
 	"github.com/ging/alexandria/internal/client/domain"
@@ -17,7 +18,7 @@ type Audit struct {
 	Evaluator Evaluator
 	Events    EventSink
 	Clock     timex.Clock
-	Space     string
+	Namespace string
 	mu        sync.Mutex
 	responses [][]byte
 	report    *AuditReport
@@ -48,7 +49,7 @@ func (a *Audit) Observe(body []byte) {
 	}
 }
 
-// OnNewVersion predicts how stored responses fare against the newly verified version x.
+// OnNewVersion classifies stored responses with catalog_entry at new_content_from(X) and enforced_from(X), in reference time.
 func (a *Audit) OnNewVersion(x lifecycle.Record, snap *domain.Snapshot) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -56,7 +57,8 @@ func (a *Audit) OnNewVersion(x lifecycle.Record, snap *domain.Snapshot) {
 	ref.Params.LeaseMargin = 0
 	rep := &AuditReport{GeneratedAt: a.Clock.Now(), Version: x.Version.String(), Entries: []AuditEntry{}}
 	for i, body := range a.responses {
-		sel, ok := domain.SelectBody(body, "$")
+		doc, ok := domain.Decode(body)
+		sel, _ := json.Marshal(doc)
 		for _, at := range []timex.Instant{x.NewContentFrom, x.EnforcedFrom} {
 			c := domain.Classify(domain.ClassifyInput{Snap: &ref, State: domain.Active, TL: at, Unparseable: !ok}, func(v lifecycle.Record) domain.EvalResult {
 				return a.Evaluator.Evaluate(domain.Message{Root: body, Selected: sel}, domain.GateCatalog, ref.Package(v))
@@ -71,7 +73,7 @@ func (a *Audit) OnNewVersion(x lifecycle.Record, snap *domain.Snapshot) {
 				continue
 			}
 			rep.Entries = append(rep.Entries, AuditEntry{Response: i, At: at, Classification: string(c.Result), Code: string(code)})
-			n := notice(EvAudit, a.Space, a.Clock.Now(), code, "response "+at.String())
+			n := notice(EvAudit, a.Namespace, a.Clock.Now(), code, "response at "+at.String())
 			n.Version = x.Version.String()
 			a.Events.Emit(n)
 		}

@@ -1,128 +1,92 @@
-// Package testkit provides an in-memory Ed25519 signer with key rotation, implementing the server Signer port for tests.
-// Rotation publishes a key before activating it, as REQ-HUB-015 requires.
+// Package testkit provides the hub key doubles: an Ed25519 signer with did:key or did:web identity and a switchable DID document.
+// Tests publish, retire and rotate keys to exercise REQ-HUB-015, FL9 and V0–V4 (DP-5, REQ-CLI-024, REQ-CLI-027).
 package testkit
 
 import (
 	"crypto/ed25519"
-	"crypto/rand"
 	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/ging/alexandria/internal/core/did"
-	"github.com/ging/alexandria/internal/core/sign"
+	"github.com/ging/alexandria/internal/core/timex"
+	"github.com/ging/alexandria/internal/core/vc"
 )
 
-// signerKey is one key of the rotating signer.
-type signerKey struct {
-	pub       did.PublicKey
-	priv      ed25519.PrivateKey
-	published bool
-}
-
-// KeySigner holds several keys and signs with the active one.
+// KeySigner signs with a deterministic Ed25519 key; it implements app.KeySigner.
 type KeySigner struct {
-	mu     sync.Mutex
-	did    did.DID
-	keys   []signerKey
-	active int
-	Fail   error
+	mu   sync.Mutex
+	priv ed25519.PrivateKey
+	vm   string
 }
 
-// NewKeySigner creates a signer with one published and active key #key-1.
-func NewKeySigner(d did.DID) *KeySigner {
-	s := &KeySigner{did: d}
-	s.add(true)
-	return s
+// NewKeySigner returns a signer from a seed byte; vm is the verification method, or the did:key method when empty.
+func NewKeySigner(seed byte, vm string) *KeySigner {
+	s := make([]byte, ed25519.SeedSize)
+	s[0] = seed
+	priv := ed25519.NewKeyFromSeed(s)
+	if vm == "" {
+		_, vm = did.KeyDID(priv.Public().(ed25519.PublicKey))
+	}
+	return &KeySigner{priv: priv, vm: vm}
 }
 
-// add generates a key and returns its kid.
-func (s *KeySigner) add(published bool) string {
-	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
-	kid := fmt.Sprintf("%s#key-%d", s.did, len(s.keys)+1)
-	s.keys = append(s.keys, signerKey{did.PublicKey{Kid: kid, Key: pub}, priv, published})
-	return kid
-}
+// KeyDIDOf returns the did:key of the signer key.
+func (s *KeySigner) KeyDIDOf() did.DID { d, _ := did.KeyDID(s.PublicKey()); return d }
 
-// AddUnpublished creates a key that is not in the DID document.
-func (s *KeySigner) AddUnpublished() string { s.mu.Lock(); defer s.mu.Unlock(); return s.add(false) }
+// VerificationMethod returns the active verification method.
+func (s *KeySigner) VerificationMethod() string { s.mu.Lock(); defer s.mu.Unlock(); return s.vm }
 
-// Publish adds kid to the DID document.
-func (s *KeySigner) Publish(kid string) {
+// PublicKey returns the active public key.
+func (s *KeySigner) PublicKey() ed25519.PublicKey {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for i := range s.keys {
-		if s.keys[i].pub.Kid == kid {
-			s.keys[i].published = true
-		}
-	}
+	return s.priv.Public().(ed25519.PublicKey)
 }
 
-// Retire removes kid from the DID document.
-func (s *KeySigner) Retire(kid string) {
+// Sign adds an eddsa-jcs-2022 proof created at the given instant.
+func (s *KeySigner) Sign(unsecured []byte, created timex.Instant) ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for i := range s.keys {
-		if s.keys[i].pub.Kid == kid {
-			s.keys[i].published = false
-		}
-	}
+	return vc.Sign(unsecured, vc.Options(s.vm, created), s.priv)
 }
 
-// Activate makes kid the signing key; it must already be published.
-func (s *KeySigner) Activate(kid string) error {
+// Rotate switches to a new key and verification method.
+func (s *KeySigner) Rotate(seed byte, vm string) {
+	n := NewKeySigner(seed, vm)
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	for i, k := range s.keys {
-		if k.pub.Kid == kid {
-			if !k.published {
-				return errors.New("testkit: key must be published before it signs")
-			}
-			s.active = i
-			return nil
-		}
-	}
-	return errors.New("testkit: unknown kid")
+	s.priv, s.vm = n.priv, n.vm
+	s.mu.Unlock()
 }
 
-// PublishedKeys returns the keys of the DID document.
-func (s *KeySigner) PublishedKeys() []did.PublicKey {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var out []did.PublicKey
-	for _, k := range s.keys {
-		if k.published {
-			out = append(out, k.pub)
-		}
-	}
-	return out
+// Resolver resolves did:key locally and did:web from a settable document, counting resolutions.
+type Resolver struct {
+	mu    sync.Mutex
+	docs  map[did.DID]did.Document
+	Fail  bool
+	Calls int
 }
 
-// Sign signs msg with the active key, refusing if it is not published.
-func (s *KeySigner) Sign(msg []byte) (sign.Signature, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.Fail != nil {
-		return sign.Signature{}, s.Fail
-	}
-	k := s.keys[s.active]
-	if !k.published {
-		return sign.Signature{}, errors.New("testkit: active key is not published")
-	}
-	return sign.Signature{Kid: k.pub.Kid, Alg: sign.AlgEdDSA, Sig: sign.Encode(ed25519.Sign(k.priv, msg))}, nil
+// NewResolver returns a resolver without did:web documents.
+func NewResolver() *Resolver { return &Resolver{docs: map[did.DID]did.Document{}} }
+
+// SetDocument publishes a did:web document.
+func (r *Resolver) SetDocument(d did.DID, keys ...did.PublicKey) {
+	r.mu.Lock()
+	r.docs[d] = did.NewDocument(d, keys)
+	r.mu.Unlock()
 }
 
-// Document returns the current DID document.
-func (s *KeySigner) Document() did.Document { return did.NewDocument(s.did, s.PublishedKeys()) }
-
-// SignWith signs msg with kid even if it is no longer published (to forge stale or retired signatures).
-func (s *KeySigner) SignWith(kid string, msg []byte) sign.Signature {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, k := range s.keys {
-		if k.pub.Kid == kid {
-			return sign.Signature{Kid: kid, Alg: sign.AlgEdDSA, Sig: sign.Encode(ed25519.Sign(k.priv, msg))}
-		}
+// Resolve returns the document of d.
+func (r *Resolver) Resolve(d did.DID) (did.Document, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.Calls++
+	if d.Method() == "key" {
+		return did.ResolveKey(d)
 	}
-	return sign.Signature{}
+	doc, ok := r.docs[d]
+	if r.Fail || !ok {
+		return did.Document{}, errors.New("testkit: DID document unavailable")
+	}
+	return doc, nil
 }

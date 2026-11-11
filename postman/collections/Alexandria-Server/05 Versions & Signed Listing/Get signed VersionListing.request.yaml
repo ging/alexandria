@@ -1,0 +1,10 @@
+$kind: http-request
+method: GET
+url: '{{hubUrl}}/v1/namespaces/{{namespace}}/versions'
+order: 1000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('200 VersionListing VC 2.0 with Cache-Control no-cache', () => {\n  pm.response.to.have.status(200);\n\
+    \  pm.expect(pm.response.headers.get('Cache-Control')).to.eql('no-cache');\n  pm.expect(pm.response.json().type).to.include('VersionListing');\n\
+    });"

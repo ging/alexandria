@@ -1,0 +1,9 @@
+$kind: http-request
+method: GET
+url: '{{clientAdmin}}/readyz'
+order: 2000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: pm.test('200 when Active/Transition/Degraded, 503 Onboarding/FailClosed', () => pm.expect([200,
+    503]).to.include(pm.response.code));

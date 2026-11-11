@@ -1,0 +1,11 @@
+$kind: http-request
+method: GET
+url: '{{hubUrl}}/v1/namespaces/{{namespace}}'
+order: 3000
+auth:
+  type: noauth
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('200 namespace document', () => {\n  pm.response.to.have.status(200);\n  pm.expect(pm.response.json().slug).to.eql(pm.environment.get('namespace'));\n\
+    });"

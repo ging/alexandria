@@ -1,0 +1,18 @@
+$kind: http-request
+method: PUT
+url: '{{clientAdmin}}/rules/contract-request'
+order: 9000
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: text
+  content: "{\n  \"id\": \"contract-request\",\n  \"priority\": 100,\n  \"listener\": \"dsp-ingress\"\
+    ,\n  \"match\": {\n    \"method\": \"POST\",\n    \"path\": \"/negotiations/{pid}/request\"\n  },\n\
+    \  \"message\": \"ContractRequestMessage\",\n  \"verify\": {\n    \"gates\": [\n      \"dsp_message\"\
+    ,\n      \"policy_intake\"\n    ]\n  },\n  \"mode\": \"enforce\"\n}"
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('428 API_PRECONDITION_REQUIRED', () => {\n  pm.response.to.have.status(428);\n  pm.expect(pm.response.json().code).to.eql('API_PRECONDITION_REQUIRED');\n\
+    });"

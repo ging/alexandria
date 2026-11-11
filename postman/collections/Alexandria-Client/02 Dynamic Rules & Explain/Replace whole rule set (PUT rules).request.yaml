@@ -1,0 +1,17 @@
+$kind: http-request
+method: PUT
+url: '{{clientAdmin}}/rules'
+order: 7000
+headers:
+- key: Content-Type
+  value: application/json
+- key: If-Match
+  value: '{{rulesEtag}}'
+body:
+  type: text
+  content: '{{fullRulesetJson}}'
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('200 whole rule set replaced atomically', () => {\n  pm.response.to.have.status(200);\n\
+    \  pm.collectionVariables.set('rulesEtag', pm.response.headers.get('ETag'));\n});"

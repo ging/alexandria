@@ -1,5 +1,5 @@
 // Package lifecycle implements the pure in-force computation and reference states of a version, with the lease margin as an argument.
-// The hub uses margin 0 (§3.5) and the client margin L (§4.6) on the same code (REQ-CLI-009, REQ-SYS-007, REQ-HUB-009).
+// The hub uses margin 0 (§3.3.3) and the client margin L (§4.6) on the same code (REQ-CLI-009, REQ-SYS-007, REQ-HUB-009).
 package lifecycle
 
 import (
@@ -9,10 +9,10 @@ import (
 	"github.com/ging/alexandria/internal/core/timex"
 )
 
-// State is the reference state of a version (§3.5).
+// State is the reference state of a version (§3.3.3).
 type State string
 
-// Reference states of §3.5.
+// Reference states of §3.3.3.
 const (
 	Scheduled  State = "Scheduled"
 	Published  State = "Published"
@@ -58,7 +58,7 @@ func InForceSet(rs []Record, t timex.Instant, m timex.Duration) []Record {
 	return out
 }
 
-// StateAt evaluates the §3.5 table top-down for version v at reference instant t.
+// StateAt evaluates the §3.3.3 table top-down for version v at reference instant t.
 func StateAt(rs []Record, v Record, t timex.Instant) State {
 	switch {
 	case v.RevokedFrom != nil && *v.RevokedFrom <= t:

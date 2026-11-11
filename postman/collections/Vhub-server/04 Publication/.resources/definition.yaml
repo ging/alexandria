@@ -1,7 +1,0 @@
-$kind: collection
-name: '04 Publication'
-description: |-
-  Public /pub routes (§3.7): head redirect, versioned artefacts generated from the YAML, package files and blobs by hash. No authentication.
-order: 4000
-auth:
-  type: noauth

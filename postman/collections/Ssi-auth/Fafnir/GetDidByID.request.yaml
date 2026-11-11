@@ -1,5 +1,0 @@
-$kind: http-request
-url: "{{baseUrl}}/api/v1/ssi-auth/wallet/did/05181322-6643-468b-b6c4-2e9c523082fd"
-method: GET
-settings: {}
-order: 12000

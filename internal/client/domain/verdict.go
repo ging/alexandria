@@ -1,5 +1,5 @@
 // Package domain builds the VHub-Verdict header (RFC 9651 List of Tokens with parameters) and the DSP error bodies of §4.8.
-// The header lists one item per enforce gate whose classification is not ok (REQ-CLI-013, DP-11).
+// An absent providerPid or consumerPid is sent as null (Q4, REQ-CLI-013).
 package domain
 
 import (
@@ -11,14 +11,15 @@ import (
 	"github.com/ging/alexandria/internal/core/timex"
 )
 
-// HeaderName is the response header carrying the verdict.
+// HeaderName is the response header of §4.8.
 const HeaderName = "VHub-Verdict"
 
-// Item is one member of the VHub-Verdict list.
+// Item is one gate in enforce whose classification is not ok.
 type Item struct {
 	Result  Result
 	Gate    Gate
 	Code    codes.Code
+	Rule    string
 	Version string
 	Sunset  *timex.Instant
 }
@@ -32,7 +33,7 @@ func sfString(s string) string {
 func Header(items []Item) string {
 	parts := make([]string, 0, len(items))
 	for _, it := range items {
-		s := string(it.Result) + ";gate=" + string(it.Gate) + ";code=" + sfString(string(it.Code))
+		s := string(it.Result) + ";gate=" + string(it.Gate) + ";code=" + sfString(string(it.Code)) + ";rule=" + sfString(it.Rule)
 		if it.Result == Warning && it.Version != "" {
 			s += ";version=" + sfString(it.Version)
 		}
@@ -57,19 +58,16 @@ func ErrorType(message string) string {
 	return ""
 }
 
-// DSPError builds the reject body; providerPid and consumerPid are omitted when the input lacks them (Q4, DP-11).
-func DSPError(message string, code codes.Code, reasons []string, providerPid, consumerPid string) []byte {
+// DSPError builds the reject body; pids are copied from the input message and null when absent.
+func DSPError(message string, code codes.Code, reasons []string, providerPid, consumerPid *string) []byte {
 	body := map[string]any{
 		"@context": []string{"https://w3id.org/dspace/2025/1/context.jsonld"},
 		"@type":    ErrorType(message),
 		"code":     string(code),
 		"reason":   reasons,
 	}
-	if providerPid != "" {
-		body["providerPid"] = providerPid
-	}
-	if consumerPid != "" {
-		body["consumerPid"] = consumerPid
+	if body["@type"] != "CatalogError" {
+		body["providerPid"], body["consumerPid"] = providerPid, consumerPid
 	}
 	b, _ := json.Marshal(body)
 	return b

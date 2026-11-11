@@ -1,0 +1,4 @@
+$kind: request-group
+description: Publish incompatible release 2.0.0 admitting odrl:use and odrl:read, testing min_grace_window
+  validation (F6.2).
+order: 5000

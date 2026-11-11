@@ -1,0 +1,3 @@
+$kind: request-group
+description: Representative negative checks from the closed 77-code F5 catalog.
+order: 9000

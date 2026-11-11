@@ -1,0 +1,20 @@
+$kind: http-request
+method: POST
+url: '{{clientAdmin}}/rules'
+order: 5000
+headers:
+- key: Content-Type
+  value: application/json
+- key: If-Match
+  value: '{{rulesEtag}}'
+body:
+  type: text
+  content: "{\n  \"id\": \"custom-diag-rule\",\n  \"priority\": 950,\n  \"listener\": \"dsp-ingress\"\
+    ,\n  \"match\": {\n    \"method\": \"POST\",\n    \"path\": \"/negotiations/diag/request\"\n  },\n\
+    \  \"message\": \"ContractRequestMessage\",\n  \"verify\": {\n    \"gates\": [\n      \"dsp_message\"\
+    ,\n      \"policy_intake\"\n    ]\n  },\n  \"mode\": \"shadow\"\n}"
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('201 custom rule added', () => {\n  pm.response.to.have.status(201);\n  pm.collectionVariables.set('rulesEtag',\
+    \ pm.response.headers.get('ETag'));\n});"

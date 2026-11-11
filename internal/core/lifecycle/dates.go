@@ -1,4 +1,4 @@
-// Package lifecycle implements date planning (§3.3 table), approval invariants DATE-1/DATE-2, revocation REV-1..REV-4 and the S7 check.
+// Package lifecycle implements date planning (§3.3.2 table), approval invariants DATE-1/DATE-2, revocation REV-1..REV-4 and the S7 check.
 // Pure functions: the publication instant P and the existing records enter as arguments (REQ-HUB-005, REQ-HUB-006, REQ-HUB-007, REQ-HUB-014, REQ-CLI-004).
 package lifecycle
 
@@ -10,15 +10,13 @@ import (
 	"github.com/ging/alexandria/internal/core/timex"
 )
 
-// Approval carries the candidate data and the releaser options of :approve.
+// Approval carries the candidate data and the optional grace_window of :approve.
 type Approval struct {
-	Version       semver.Version
-	Class         Class
-	Emergency     *bool
-	Grace         *timex.Duration
-	Justification string
-	P             timex.Instant
-	Params        Params
+	Version semver.Version
+	Class   Class
+	Grace   *timex.Duration
+	P       timex.Instant
+	Params  Params
 }
 
 // ClassOf is N4: initial for the first version, breaking on a MAJOR increment, compatible otherwise.
@@ -35,16 +33,12 @@ func ClassOf(x semver.Version, latest *semver.Version) (Class, bool) {
 	return Compatible, true
 }
 
-// Plan computes the record dates of X following the exhaustive table of §3.3.
+// Plan computes the record dates of X following the exhaustive table of §3.3.2 (no emergency, minimum grace).
 func Plan(a Approval, rs []Record) (Record, *codes.Error) {
-	emergency := a.Emergency != nil && *a.Emergency
 	nc := a.P.Add(a.Params.PropagationWindow)
-	rec := Record{Version: a.Version, Class: a.Class, Emergency: emergency, PublishedAt: a.P, NewContentFrom: nc}
+	rec := Record{Version: a.Version, Class: a.Class, PublishedAt: a.P, NewContentFrom: nc}
 	switch a.Class {
 	case Initial, Compatible:
-		if emergency {
-			return Record{}, codes.New(codes.DatesEmergencyOnCompatible, "emergency is only allowed on breaking versions")
-		}
 		if a.Grace != nil {
 			return Record{}, codes.New(codes.DatesGraceOnCompatible, "grace_window is only allowed on breaking versions")
 		}
@@ -56,18 +50,12 @@ func Plan(a Approval, rs []Record) (Record, *codes.Error) {
 		}
 	case Breaking:
 		switch {
-		case !emergency && a.Grace == nil:
+		case a.Grace == nil:
 			rec.EnforcedFrom = nc.Add(a.Params.GraceWindow)
-		case !emergency && *a.Grace > 0:
+		case *a.Grace >= a.Params.MinGraceWindow:
 			rec.EnforcedFrom = nc.Add(*a.Grace)
-		case !emergency:
-			return Record{}, codes.New(codes.DatesZeroGraceWithoutEmergency, "a zero grace window requires emergency")
-		case a.Grace != nil && *a.Grace > 0:
-			return Record{}, codes.New(codes.DatesEmergencyWithGrace, "an emergency release cannot have a grace window")
-		case strings.TrimSpace(a.Justification) == "":
-			return Record{}, codes.New(codes.DatesJustificationRequired, "an emergency release requires a justification")
 		default:
-			rec.EnforcedFrom = nc
+			return Record{}, codes.New(codes.DatesGraceTooShort, "grace_window %s is below min_grace_window %s", *a.Grace, a.Params.MinGraceWindow)
 		}
 	}
 	return rec, nil
@@ -136,7 +124,7 @@ func CheckRevocation(in Revocation, rs []Record) (timex.Instant, *codes.Error) {
 	return rf, nil
 }
 
-// CheckRecords is S7 over a listing; paramsOf returns the space-lock parameters of each version.
+// CheckRecords is S7 over a listing; paramsOf returns the manifest lifecycle of each version.
 func CheckRecords(rs []Record, paramsOf func(semver.Version) Params) *codes.Error {
 	for _, r := range rs {
 		p := paramsOf(r.Version)
@@ -147,6 +135,8 @@ func CheckRecords(rs []Record, paramsOf func(semver.Version) Params) *codes.Erro
 			return codes.New(codes.SyncDatesInvalid, "%s: enforced_from is before new_content_from", r.Version)
 		case r.Class == Initial && r.EnforcedFrom != r.NewContentFrom:
 			return codes.New(codes.SyncDatesInvalid, "%s: an initial version must have enforced_from = new_content_from", r.Version)
+		case r.Class == Breaking && r.EnforcedFrom.Sub(r.NewContentFrom) < p.MinGraceWindow:
+			return codes.New(codes.SyncDatesInvalid, "%s: a breaking version needs at least min_grace_window of coexistence", r.Version)
 		}
 	}
 	var prev *Record

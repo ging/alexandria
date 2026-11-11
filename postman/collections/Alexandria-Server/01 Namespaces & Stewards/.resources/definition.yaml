@@ -1,0 +1,8 @@
+$kind: request-group
+description: Hub administrator operations to manage namespaces and stewards (§3.5, REQ-HUB-017, REQ-HUB-023..025,
+  F6.1).
+order: 2000
+auth:
+  type: bearer
+  credentials:
+    token: '{{adminToken}}'

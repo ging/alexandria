@@ -1,64 +1,77 @@
 # code	emitter	channel	severity	requirement	negative_case
-API_FORBIDDEN_ROLE	C-HUB	problem	error	REQ-HUB-017	Un principal con solo editor llama a :approve
-API_PRECONDITION_REQUIRED	C-HUB	problem	error	REQ-HUB-018	PUT /v1/drafts/{id} sin If-Match
-API_PRECONDITION_FAILED	C-HUB	problem	error	REQ-HUB-018	PUT con un ETag anterior a la última escritura
-API_NOT_FOUND	C-HUB,C-CLI	problem	error	REQ-HUB-019,REQ-CLI-026	GET /v1/drafts/{id} con un id inexistente
+API_UNAUTHENTICATED	C-HUB	problem	error	REQ-HUB-017,REQ-HUB-022	POST /v1/namespaces sin cabecera Authorization
+API_FORBIDDEN_ROLE	C-HUB	problem	error	REQ-HUB-003,REQ-HUB-017,REQ-HUB-023	Un steward de a llama a :approve en el namespace b
+API_PRECONDITION_REQUIRED	C-HUB,C-CLI	problem	error	REQ-HUB-018,REQ-CLI-028	PUT .../drafts/{id} sin If-Match
+API_PRECONDITION_FAILED	C-HUB,C-CLI	problem	error	REQ-HUB-018,REQ-CLI-028	PUT con un ETag anterior a la última escritura
+API_NOT_FOUND	C-HUB,C-CLI	problem	error	REQ-HUB-019,REQ-CLI-026	GET /v1/namespaces/no-existe
 API_INVALID_STATE	C-HUB	problem	error	REQ-HUB-002	:approve sobre un candidato ya aprobado
-RELEASE_ABORTED	C-HUB	problem	error	REQ-HUB-004	El registro de transparencia no responde en el paso 3
+NS_SLUG_INVALID	C-HUB	problem	error	REQ-HUB-025	slug: "Demo_1"
+NS_EXISTS	C-HUB	problem	error	REQ-HUB-025	Crear dos veces demo, o crear _vhub
+STEWARD_EXISTS	C-HUB	problem	error	REQ-HUB-023	Asignar dos veces el mismo (iss, sub) en un namespace
+VOCAB_NAME_INVALID	C-HUB	problem	error	REQ-HUB-026	name: "Mi Vocab"
+VOCAB_EXISTS	C-HUB	problem	error	REQ-HUB-026	Crear dos veces dcat-ap en el mismo namespace
+VOCAB_KIND_MISMATCH	C-HUB	problem	error	REQ-HUB-026	:refresh sobre un vocabulario hosted
+VOCAB_MEDIA_TYPE_MISMATCH	C-HUB	problem	error	REQ-HUB-026,REQ-HUB-027	Subir con Content-Type: text/turtle a un vocabulario application/ld+json
+VOCAB_UNPARSEABLE	C-HUB	problem	error	REQ-HUB-026	Subir { a un vocabulario application/schema+json
+VOCAB_TOO_LARGE	C-HUB	problem	error	REQ-HUB-026	Subir un fichero mayor que el máximo configurado
+VOCAB_UPSTREAM_FAILED	C-HUB	problem	error	REQ-HUB-027	:refresh con el upstream respondiendo 500
+RELEASE_ABORTED	C-HUB	problem	error	REQ-HUB-004	Fallo de escritura del almacén de blobs en el paso 3
+SIGNER_KEY_NOT_PUBLISHED	C-HUB	problem	error	REQ-HUB-004,REQ-HUB-015	:approve con la clave activa ausente de assertionMethod
 DATES_GRACE_ON_COMPATIBLE	C-HUB	problem	error	REQ-HUB-005	Versión MINOR aprobada con grace_window: P10D
-DATES_EMERGENCY_ON_COMPATIBLE	C-HUB	problem	error	REQ-HUB-005	Versión MINOR aprobada con emergency: true
-DATES_ZERO_GRACE_WITHOUT_EMERGENCY	C-HUB	problem	error	REQ-HUB-005	Versión MAJOR con grace_window: P0D y sin emergency
-DATES_EMERGENCY_WITH_GRACE	C-HUB	problem	error	REQ-HUB-005	Versión MAJOR con emergency: true y grace_window: P10D
-DATES_JUSTIFICATION_REQUIRED	C-HUB	problem	error	REQ-HUB-005,REQ-HUB-014	Versión MAJOR con emergency: true y sin justification
-DATES_NON_MONOTONIC	C-HUB	problem	error	REQ-HUB-006	Con 2.0.0 (MAJOR, P30D) en IGW, se aprueba 3.0.0 MAJOR con grace_window: P5D
-DATES_TOO_MANY_VERSIONS	C-HUB	problem	error	REQ-HUB-006	Con max_concurrent_versions: 2 y 2.0.0 en IGW, se aprueba 2.1.0
+DATES_GRACE_TOO_SHORT	C-HUB	problem	error	REQ-HUB-005	Versión MAJOR aprobada con grace_window: P3D y min_grace_window: P7D
+DATES_JUSTIFICATION_REQUIRED	C-HUB	problem	error	REQ-HUB-014	:revoke sin justification
+DATES_NON_MONOTONIC	C-HUB	problem	error	REQ-HUB-006	Con 2.0.0 (MAJOR, P30D) en convivencia, se aprueba 3.0.0 MAJOR con grace_window: P7D
+DATES_TOO_MANY_VERSIONS	C-HUB	problem	error	REQ-HUB-006	Con max_concurrent_versions: 2 y 2.0.0 en convivencia, se aprueba 2.1.0
 DATES_REVOCATION_TOO_EARLY	C-HUB	problem	error	REQ-HUB-014	revoked_from = R + P1D con propagation_window: P2D
 DATES_REVOKE_LEAVES_NO_HEAD	C-HUB	problem	error	REQ-HUB-014	Revocar la única versión vigente
 DATES_ALREADY_REVOKED	C-HUB	problem	error	REQ-HUB-014	Revocar dos veces la misma versión
-LIFECYCLE_STALENESS_LT_TTL	C-HUB	problem	error	N2	Definido en la spec del lenguaje; aquí solo se referencia
-LIFECYCLE_GRACE_ZERO	C-HUB	problem	error	REQ-HUB-001	lifecycle.grace_window: P0D
+LIFECYCLE_STALENESS_LT_TTL	C-HUB	problem	error	REQ-HUB-001	max_staleness: PT12H con ttl: PT24H (definido en la spec del lenguaje)
+LIFECYCLE_MIN_GRACE	C-HUB	problem	error	REQ-HUB-001	min_grace_window: P1D con propagation_window: P2D
+LIFECYCLE_GRACE_TOO_SHORT	C-HUB	problem	error	REQ-HUB-001	grace_window: P5D con min_grace_window: P7D
 LIFECYCLE_SYNC_INTERVAL	C-HUB	problem	error	REQ-HUB-001	ttl: PT24H y sync_interval: PT13H
 LIFECYCLE_CLOCK_SKEW	C-HUB	problem	error	REQ-HUB-001	clock_skew: PT0S
 LIFECYCLE_LEASE	C-HUB	problem	error	REQ-HUB-001	clock_skew: PT10S y lease_margin: PT5S
 LIFECYCLE_PROPAGATION	C-HUB	problem	error	REQ-HUB-001	ttl: PT24H y propagation_window: PT24H
 LIFECYCLE_MAX_VERSIONS	C-HUB	problem	error	REQ-HUB-001	max_concurrent_versions: 1
 CONFIG_SCHEMA	C-CLI	arranque	error	REQ-CLI-001	Configuración con un campo raíz desconocido
-CONFIG_ROUTE_OVERLAP	C-CLI	arranque	error	REQ-CLI-001	POST /negotiations/:a/request y POST /negotiations/:b/request en el mismo listener
-CONFIG_GATE_MESSAGE_MISMATCH	C-CLI	arranque	error	REQ-CLI-001	agreement_admission en una ruta ContractRequestMessage
-CONFIG_CREDENTIALS_UNREADABLE	C-CLI	arranque	error	REQ-CLI-001	credentials: file:///no/existe
-CONFIG_UPSTREAM_MISSING	C-CLI	arranque	error	REQ-CLI-001	Ruta en mgmt-ingress sin upstreams.management
+CONFIG_RULES_SEED_UNREADABLE	C-CLI	arranque	error	REQ-CLI-001	rules.seed: file:///no/existe con el almacén vacío
+RULES_SCHEMA	C-CLI	problem,arranque	error	REQ-CLI-028	Regla sin verify.gates
+RULES_DUPLICATE_ID	C-CLI	problem,arranque	error	REQ-CLI-028	POST /rules con un id que ya existe
+RULES_DUPLICATE_PRIORITY	C-CLI	problem,arranque	error	REQ-CLI-028	Dos reglas de dsp-ingress con priority: 100
+RULES_GATE_MESSAGE_MISMATCH	C-CLI	problem,arranque	error	REQ-CLI-028	agreement_admission en una regla ContractRequestMessage
+RULES_UPSTREAM_MISSING	C-CLI	problem,arranque	error	REQ-CLI-028	Regla en mgmt-ingress sin upstreams.management
 SYNC_UNREACHABLE	C-CLI	sync	error	REQ-CLI-004	El vhub no responde
-SYNC_UNAUTHORIZED	C-CLI	sync	error	REQ-CLI-004	El vhub responde 401 a GET /v1/versions
-SYNC_SIGNATURE_INVALID	C-CLI	sync	error	REQ-CLI-004,REQ-CLI-024	Listado con un byte de signed alterado
-SYNC_DID_UNRESOLVABLE	C-CLI	sync	error	REQ-CLI-027	Primer arranque, sin caché, con el DID document del hub inaccesible
-DID_KEY_ROTATED	C-CLI	sync	info	REQ-CLI-024	Listado firmado con un kid que no está en la caché pero sí en el DID document actual
+SYNC_NAMESPACE_NOT_FOUND	C-CLI	sync	error	REQ-CLI-004	trust.namespace inexistente: el vhub responde 404
+SYNC_MALFORMED	C-CLI	sync	error	REQ-CLI-004,REQ-CLI-034	Listado con issuer distinto de trust.hub_did
+SYNC_SIGNATURE_INVALID	C-CLI	sync	error	REQ-CLI-004,REQ-CLI-024	Listado con un byte de credentialSubject alterado
+SYNC_DID_UNRESOLVABLE	C-CLI	sync	error	REQ-CLI-027	Primer arranque con did:web, sin caché y con el DID document inaccesible
+DID_KEY_ROTATED	C-CLI	sync	info	REQ-CLI-024	Listado con un verificationMethod que no está en la caché pero sí en el DID document actual
 DID_REFRESH_FAILED	C-CLI	sync	info	REQ-CLI-027	Caché con did_ttl cumplido y DID document inaccesible
-SYNC_EXPIRED	C-CLI	sync	error	REQ-CLI-004	expires_at anterior al instante local
+SYNC_EXPIRED	C-CLI	sync	error	REQ-CLI-004	validUntil anterior al instante local
 SYNC_ROLLBACK	C-CLI	sync	error	REQ-CLI-004	sequence 417 tras aceptar la 418
 SYNC_SEQUENCE_CONFLICT	C-CLI	sync	error	REQ-CLI-004	sequence 418 con bytes distintos a la 418 aceptada
 SYNC_REVOCATION_DROPPED	C-CLI	sync	error	REQ-CLI-004	versions[] sin una versión que tenía revoked_from
 SYNC_DATES_CHANGED	C-CLI	sync	error	REQ-CLI-004	enforced_from de 2.0.0 adelantado un día
-SYNC_DATES_INVALID	C-CLI	sync	error	REQ-CLI-004	new_content_from − published_at = P1D con propagation_window: P2D
+SYNC_DATES_INVALID	C-CLI	sync	error	REQ-CLI-004,REQ-CLI-006	Versión breaking con enforced_from − new_content_from = P3D y min_grace_window: P7D
 SYNC_MANIFEST_DIGEST_MISMATCH	C-CLI	sync	error	REQ-CLI-006	manifest que no corresponde al manifest.json servido
-SYNC_MANIFEST_SIGNATURE_INVALID	C-CLI	sync	error	REQ-CLI-006,REQ-CLI-024	manifest.sig de otro manifiesto
-SYNC_RECEIPT_INVALID	C-CLI	sync	error	REQ-CLI-006	manifest.receipt de otro digest
+SYNC_MANIFEST_SIGNATURE_INVALID	C-CLI	sync	error	REQ-CLI-006,REQ-CLI-024	Manifiesto con un byte de files[] alterado y el digest del listado recalculado
 SYNC_FILE_HASH_MISMATCH	C-CLI	sync	error	REQ-CLI-007	shapes.ttl con un byte alterado
 SYNC_FILE_SET_MISMATCH	C-CLI	sync	error	REQ-CLI-007	Paquete con un fichero que no está en files[]
-SYNC_INCOHERENT	C-CLI	sync	error	REQ-CLI-007	manifest.version 2.0.1 para la entrada 2.0.0
+SYNC_INCOHERENT	C-CLI	sync	error	REQ-CLI-007	Manifiesto con version 2.0.1 para la entrada 2.0.0
 CLIENT_NOT_READY	C-CLI	clasificación	error	REQ-CLI-002	Mensaje antes de la primera sincronización, en enforce
 CLIENT_DEGRADED_REJECT	C-CLI	clasificación	error	REQ-CLI-018	Degraded con degraded.policy_intake: reject
 CLIENT_FAIL_CLOSED	C-CLI	clasificación	error	REQ-CLI-018	Vhub inalcanzable durante ttl + max_staleness
-NO_VERSION_IN_FORCE	C-CLI	clasificación	error	REQ-CLI-011	Única versión del espacio en Scheduled
-MESSAGE_UNPARSEABLE	C-CLI	clasificación	error	REQ-CLI-011	Cuerpo {
+NO_VERSION_IN_FORCE	C-CLI	clasificación	error	REQ-CLI-011	Única versión del namespace en Scheduled
+MESSAGE_UNPARSEABLE	C-CLI	clasificación	error	REQ-CLI-011,REQ-CLI-030	Cuerpo { en una petición que casa por URL
 CONTEXT_NOT_IN_PACKAGE	C-CLI	clasificación	error	REQ-CLI-010	@context https://evil.example/ctx.jsonld
 VERDICT_VIOLATION	C-CLI	clasificación	error	REQ-CLI-011	Acción no definida en ninguna versión vigente
-VERDICT_NOT_IN_HEAD	C-CLI	clasificación	warning	REQ-CLI-011	Acción solo definida en 1.0.0, durante la IGW de 2.0.0
+VERDICT_NOT_IN_HEAD	C-CLI	clasificación	warning	REQ-CLI-011	Acción solo definida en 1.0.0, durante la convivencia con 2.0.0
 VERDICT_RECOMMENDED_NONCONFORMANT	C-CLI	clasificación	info	REQ-CLI-011	Violación en un slot dcat con obligación recommended
 VERDICT_SHACL_WARNING	C-CLI	clasificación	info	REQ-CLI-011	Término deprecated en la versión cabeza
-ROUTE_DEFAULT_REJECT	C-CLI	clasificación	error	REQ-CLI-022	Ruta no configurada con default_action: reject
+RULE_DEFAULT_REJECT	C-CLI	clasificación	error	REQ-CLI-022	Petición sin regla con default_action: reject
 AGREEMENT_VERSION_REVOKED	C-CLI	clasificación	error	REQ-CLI-016	Transferencia de un agreement de una versión con revoked_from + L alcanzado
 AGREEMENT_UNKNOWN	C-CLI	clasificación	error|info	REQ-CLI-016	agreementId no registrado, con unknown_agreement: reject
-AGREEMENT_PROFILE_MISMATCH	C-CLI	evento	info	REQ-CLI-015	odrl:profile de una versión de perfil que no fija el space-lock.json
+AGREEMENT_PROFILE_MISMATCH	C-CLI	evento	info	REQ-CLI-015	odrl:profile que no figura en profiles[] del manifiesto
 AGREEMENT_REVOCATION_SCHEDULED	C-CLI	evento	info	REQ-CLI-016	Listado con una revocación nueva de una versión que tiene agreements registrados
 AUDIT_WILL_WARN	C-CLI	evento	info	REQ-CLI-023	Catálogo observado con un término que la versión nueva depreca
 AUDIT_WILL_REJECT	C-CLI	evento	info	REQ-CLI-023	Catálogo observado con un término que la versión nueva elimina

@@ -1,0 +1,82 @@
+# id	section	summary
+REQ-SYS-001	§2.11	Same rules, packages, listing and (message, instant) give the same classification, action and codes
+REQ-SYS-002	§2.11	No network request to decide on a message in Active or Transition
+REQ-SYS-003	§2.11	Integration is network configuration only; forwarded bodies are byte-identical
+REQ-SYS-004	§2.11	In-force dates come only from the hub records and listing
+REQ-SYS-005	§2.11	Bytes of immutable routes never change
+REQ-SYS-006	§2.11	Versions of registered agreements stay obtainable
+REQ-SYS-007	§2.11	expand, migrate, contract; rejects only after enforced_from + L with minimum grace
+REQ-SYS-008	§2.11	Without freshness beyond max_staleness, enforce rejects every message
+REQ-SYS-009	§2.11	Records, listings and manifests carry a proof verifiable with an assertionMethod key
+REQ-SYS-010	§2.11	No namespace operation reads or modifies another namespace
+REQ-HUB-001	§3.11	Drafts failing N1–N5 or LIFECYCLE_* are rejected with one problem per finding
+REQ-HUB-002	§3.11	Candidates are immutable; approve and reject only from open
+REQ-HUB-003	§3.11	No release without approval of a steward of the namespace
+REQ-HUB-004	§3.11	Release steps run in order; failures leave nothing visible
+REQ-HUB-005	§3.11	Dates follow the §3.3.2 table with the minimum grace
+REQ-HUB-006	§3.11	Approval fails on DATE-1 or DATE-2
+REQ-HUB-007	§3.11	Emitted dates never change; revoked_from is added once
+REQ-HUB-008	§3.11	Listings on date changes and at most every ttl/2, sequence +1, validity ttl
+REQ-HUB-009	§3.11	versions[] follows the membership rule
+REQ-HUB-010	§3.11	eddsa-jcs-2022 proofs with an assertionMethod verification method
+REQ-HUB-011	§3.11	Immutable routes serve the same bytes with ETag = SHA-256
+REQ-HUB-012	§3.11	Version listing and records are Cache-Control no-cache
+REQ-HUB-013	§3.11	Releases, artefacts, revisions, blobs and events are never modified
+REQ-HUB-014	§3.11	Revocation follows REV-1..REV-4 and issues a listing
+REQ-HUB-015	§3.11	Never sign with a key absent from assertionMethod; check own DID
+REQ-HUB-016	§3.11	GET /pub/{ns} answers 303 to the head
+REQ-HUB-017	§3.11	Non-public operations require a valid token and the §3.5 table
+REQ-HUB-018	§3.11	PUT drafts requires If-Match (428) and checks it (412)
+REQ-HUB-019	§3.11	Missing /v1 resources are API_NOT_FOUND
+REQ-HUB-020	§3.11	Every effectful operation emits an event with increasing id
+REQ-HUB-021	§3.11	A record equals its entry in the last listing
+REQ-HUB-022	§3.11	Token validation follows A1–A5 in order
+REQ-HUB-023	§3.11	Steward membership is evaluated on every request
+REQ-HUB-024	§3.11	Namespaces are isolated and have their own sequence
+REQ-HUB-025	§3.11	Slug pattern, unique, immutable, _vhub reserved
+REQ-HUB-026	§3.11	Vocabulary fields, content, size, revisions and dereferencing URLs
+REQ-HUB-027	§3.11	Upstream fetched only on create and refresh, never by /pub
+REQ-HUB-028	§3.11	Same bytes create no new revision
+REQ-HUB-029	§3.11	/v1 responses are compact JSON-LD, errors included
+REQ-HUB-030	§3.11	/pub/_vhub/v1 serves the A.5 context byte for byte and vocab.ttl
+REQ-HUB-031	§3.11	Credentials have the common form of §3.8
+REQ-CLI-001	§4.13	Startup checks CFG-1 and CFG-2 and exits non-zero with the code
+REQ-CLI-002	§4.13	Onboarding classification until the first E1
+REQ-CLI-003	§4.13	Sync at start and within the head sync_interval
+REQ-CLI-004	§4.13	S1–S7 on every listing
+REQ-CLI-005	§4.13	Sequence, dates and DID cache survive restarts
+REQ-CLI-006	§4.13	A failing version in S7–S13 discards the whole listing
+REQ-CLI-007	§4.13	A package is used whole or not at all
+REQ-CLI-008	§4.13	State machine of §4.5
+REQ-CLI-009	§4.13	V_t with lease margin
+REQ-CLI-010	§4.13	JSON-LD expansion resolves only manifest URLs
+REQ-CLI-011	§4.13	Classification follows the §4.7 pseudocode
+REQ-CLI-012	§4.13	Actions follow the mode and combination tables
+REQ-CLI-013	§4.13	Responses to the sender follow §4.8
+REQ-CLI-014	§4.13	Bodies and headers unchanged; only VHub-Verdict added
+REQ-CLI-015	§4.13	Agreement capture rules, before answering
+REQ-CLI-016	§4.13	Admission table and AGREEMENT_REVOCATION_SCHEDULED
+REQ-CLI-017	§4.13	Packages of agreement versions are kept
+REQ-CLI-018	§4.13	Degraded and FailClosed classification
+REQ-CLI-019	§4.13	Admin API never on DSP or management listeners
+REQ-CLI-020	§4.13	GET /status fields
+REQ-CLI-021	§4.13	Events of §4.12; vhub.verdict validates against A.4
+REQ-CLI-022	§4.13	No rule gives default_action
+REQ-CLI-023	§4.13	Passive audit of §4.11
+REQ-CLI-024	§4.13	Proof verification V0–V4
+REQ-CLI-025	§4.13	CLOCK_SKEW_EXCEEDED beyond clock_skew
+REQ-CLI-026	§4.13	Unknown agreement or rule id is API_NOT_FOUND
+REQ-CLI-027	§4.13	did:web resolution at did_ttl and at most once a minute on bad proofs
+REQ-CLI-028	§4.13	Rule changes need If-Match and RULE-1..5 on the whole set
+REQ-CLI-029	§4.13	One rule revision per message; vhub.rules on change
+REQ-CLI-030	§4.13	Rule selection follows select_rule
+REQ-CLI-031	§4.13	Rule set survives restarts; seed only with an empty store
+REQ-CLI-032	§4.13	:explain decides like the hot path without effects
+REQ-CLI-033	§4.13	Package collection of §4.10
+REQ-CLI-034	§4.13	SYNC_MALFORMED on shape, @context, issuer or namespace
+REQ-DOC-001	§4.13	Listing validates against A.1
+REQ-DOC-002	§4.13	Version record validates against A.2
+REQ-DOC-003	§4.13	Client configuration validates against A.3
+REQ-DOC-004	§4.13	vhub.verdict validates against A.4
+REQ-DOC-005	§4.13	Rule set validates against A.6
+REQ-DOC-006	§4.13	Manifest validates against A.7

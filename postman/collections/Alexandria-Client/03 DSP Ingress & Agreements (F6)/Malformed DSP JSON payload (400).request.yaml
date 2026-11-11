@@ -1,0 +1,15 @@
+$kind: http-request
+method: POST
+url: '{{clientIngress}}/negotiations/urn:uuid:p-1/request'
+order: 8000
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: text
+  content: '{"@type": "ContractRequestMessage", "broken": '
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('400 MESSAGE_UNPARSEABLE', () => {\n  pm.response.to.have.status(400);\n  pm.expect(pm.response.json().code).to.eql('MESSAGE_UNPARSEABLE');\n\
+    });"

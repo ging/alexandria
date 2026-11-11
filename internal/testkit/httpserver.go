@@ -1,103 +1,79 @@
-// Package testkit provides an in-process alexandria-server over the real adapters (SQLite, blob_fs, signer_file, auth_static) behind httptest.
-// Used by HTTP contract tests and by client tests that need a real hub over HTTP (F8 §8.7).
+// Package testkit provides an HTTP hub on httptest: the in-memory hub behind the real /v1 and /pub adapters and the real jwt_jwks verifier.
+// The fake IdP issues the tokens of Ana, Sergio and Eve, so A1–A5 and the §3.5 table run end to end (DP-4, REQ-HUB-017, REQ-HUB-022).
 package testkit
 
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
-	"path/filepath"
-	"strings"
 	"testing"
+	"time"
 
-	"github.com/ging/alexandria/internal/core/did"
-	"github.com/ging/alexandria/internal/core/lifecycle"
-	"github.com/ging/alexandria/internal/server/adapters/auth_static"
-	"github.com/ging/alexandria/internal/server/adapters/blob_fs"
-	"github.com/ging/alexandria/internal/server/adapters/compiler_poc"
-	"github.com/ging/alexandria/internal/server/adapters/http_did"
+	"github.com/ging/alexandria/internal/core/timex"
 	"github.com/ging/alexandria/internal/server/adapters/http_pub"
 	"github.com/ging/alexandria/internal/server/adapters/http_v1"
 	"github.com/ging/alexandria/internal/server/adapters/httpx"
-	"github.com/ging/alexandria/internal/server/adapters/scitt_fake"
-	"github.com/ging/alexandria/internal/server/adapters/signer_file"
-	"github.com/ging/alexandria/internal/server/adapters/sqlite"
-	"github.com/ging/alexandria/internal/server/app"
-	"github.com/ging/alexandria/internal/server/domain"
+	"github.com/ging/alexandria/internal/server/adapters/jwt_jwks"
 )
 
-// Bearer tokens of the HTTP fixture, one per role.
-const (
-	EditorToken   = "editor-token"
-	ReleaserToken = "releaser-token"
-	MemberToken   = "member-token"
-)
-
-// HTTPServer is a hub served over HTTP with real persistence.
+// HTTPServer is an F6 hub reachable over HTTP with valid tokens for its principals.
 type HTTPServer struct {
-	URL   string
-	DID   did.DID
-	Clock *FakeClock
-	Store *sqlite.Store
-	Hub   *app.Hub
-	srv   *httptest.Server
+	*Server
+	URL                       string
+	IDP                       *IDP
+	AnaTok, SergioTok, EveTok string
+	server                    *httptest.Server
 }
 
-// NewHTTPServer starts a hub on a random port with its state in a temp dir.
+// NewHTTPServer starts an F6 hub at t0 with namespace demo, behind httptest.
 func NewHTTPServer(t *testing.T, t0 string) *HTTPServer {
 	t.Helper()
-	dir := t.TempDir()
-	clk := NewClock(t0)
-	h := &HTTPServer{Clock: clk}
+	var idp *IDP
+	idpSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { idp.Handler().ServeHTTP(w, r) }))
+	t.Cleanup(idpSrv.Close)
+	idp = NewIDP(idpSrv.URL)
+	s := NewBareServer(t0)
+	h := &HTTPServer{Server: s, IDP: idp}
+	verifier := &jwt_jwks.Verifier{
+		Issuers: []jwt_jwks.Issuer{{Iss: idp.Issuer, DiscoveryURL: idp.Issuer + "/.well-known/openid-configuration"}}, Audience: "alexandria-vhub",
+		Algorithms: []string{"ES256"}, AdminClaim: "roles", AdminValue: "vhub-admin", Skew: 5 * timex.Second, CacheTTL: 10 * timex.Minute, Clock: s.Clock,
+	}
 	mux := http.NewServeMux()
-	h.srv = httptest.NewServer(httpx.WithDate(clk, mux))
-	t.Cleanup(h.srv.Close)
-	h.URL = h.srv.URL
-	u, _ := url.Parse(h.URL)
-	h.DID = did.DID("did:web:" + strings.ReplaceAll(u.Host, ":", "%3A"))
-	store, err := sqlite.Open(filepath.Join(dir, "hub.db"))
-	if err != nil {
-		t.Fatal(err)
+	http_v1.Handler{Hub: s.Hub, Tokens: verifier, Context: Context, Base: Base}.Register(mux)
+	http_pub.Handler{Pub: s.Hub.Publication, Problems: httpx.Problems{Context: Context}}.Register(mux)
+	h.server = httptest.NewServer(httpx.WithDate(s.Clock, mux))
+	t.Cleanup(h.server.Close)
+	h.URL = h.server.URL
+	now := s.Clock.Now().Time()
+	mint := func(sub string, admin bool) string {
+		tok, err := idp.Mint(Token{Sub: sub, Admin: admin, Now: now, TTL: 365 * 24 * time.Hour})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tok
 	}
-	t.Cleanup(func() { _ = store.Close() })
-	blobs, _ := blob_fs.New(filepath.Join(dir, "blobs"))
-	signer, err := signer_file.Load(filepath.Join(dir, "hub.key"), h.DID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	h.Store = store
-	h.Hub = app.New(app.Deps{
-		Drafts: store.Drafts(), Candidates: store.Candidates(), Releases: store.Releases(), Listings: store.Listings(),
-		Blobs: blobs, Log: scitt_fake.Log{Signer: signer, Clock: clk}, Signer: signer,
-		Compiler: compiler_poc.Compiler{Defaults: lifecycle.Defaults()}, Events: store.Events(), Clock: clk, DID: h.DID,
-		Defaults: lifecycle.Defaults(),
-	})
-	tokens := auth_static.Tokens{
-		EditorToken: Editor, ReleaserToken: Releaser, MemberToken: Member,
-		"all-token": {Name: "admin", Roles: []domain.Role{domain.Editor, domain.Releaser, domain.Member}},
-	}
-	http_v1.Handler{Hub: h.Hub, Auth: tokens}.Register(mux)
-	http_pub.Handler{Pub: h.Hub.Publication}.Register(mux)
-	http_did.Handler{Listing: h.Hub.Listing}.Register(mux)
+	h.AnaTok, h.SergioTok, h.EveTok = mint("ana", true), mint("sergio", false), mint("eve", false)
+	Ana.Iss, Sergio.Iss, Eve.Iss = idp.Issuer, idp.Issuer, idp.Issuer
 	return h
 }
 
-// Do sends a request with an optional bearer token and body, returning status, headers and body.
+// Do sends a request with an optional bearer token and headers and returns status, headers and body.
 func (h *HTTPServer) Do(t *testing.T, method, path, token string, body []byte, hdr map[string]string) (int, http.Header, []byte) {
 	t.Helper()
-	req, _ := http.NewRequestWithContext(context.Background(), method, h.URL+path, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(context.Background(), method, h.URL+path, bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	for k, v := range hdr {
 		req.Header.Set(k, v)
 	}
-	cl := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	resp, err := cl.Do(req)
+	c := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := c.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,39 +82,13 @@ func (h *HTTPServer) Do(t *testing.T, method, path, token string, body []byte, h
 	return resp.StatusCode, resp.Header, b
 }
 
-// Publish creates, proposes and approves a draft over HTTP at instant at.
-func (h *HTTPServer) Publish(t *testing.T, at string, doc []byte, approve string) []byte {
+// SetupHTTP creates namespace demo and assigns Sergio through the API (F6.1 steps 1–2).
+func (h *HTTPServer) SetupHTTP(t *testing.T) {
 	t.Helper()
-	h.Clock.Set(at)
-	st, _, b := h.Do(t, "POST", "/v1/drafts", EditorToken, doc, nil)
-	if st != http.StatusCreated {
-		t.Fatalf("create draft: %d %s", st, b)
+	if st, _, b := h.Do(t, "POST", "/v1/namespaces", h.AnaTok, []byte(`{"slug":"demo"}`), nil); st != 201 {
+		t.Fatalf("create namespace: %d %s", st, b)
 	}
-	var d struct{ ID string }
-	_ = json.Unmarshal(b, &d)
-	st, _, b = h.Do(t, "POST", "/v1/drafts/"+d.ID+":propose", EditorToken, nil, nil)
-	if st != http.StatusCreated {
-		t.Fatalf("propose: %d %s", st, b)
+	if st, _, b := h.Do(t, "POST", "/v1/namespaces/demo/stewards", h.AnaTok, []byte(`{"iss":"`+h.IDP.Issuer+`","sub":"sergio"}`), nil); st != 201 {
+		t.Fatalf("assign steward: %d %s", st, b)
 	}
-	var c struct{ ID string }
-	_ = json.Unmarshal(b, &c)
-	st, _, b = h.Do(t, "POST", "/v1/candidates/"+c.ID+":approve", ReleaserToken, []byte(approve), nil)
-	if st != http.StatusCreated {
-		t.Fatalf("approve: %d %s", st, b)
-	}
-	return b
-}
-
-// PublishF6 publishes 1.0.0 and 2.0.0 at the F6 instants.
-func (h *HTTPServer) PublishF6(t *testing.T) {
-	t.Helper()
-	h.Publish(t, "2026-09-01T10:00:00Z", DraftV1, "")
-	h.Publish(t, "2026-10-01T10:00:00Z", DraftV2, "")
-}
-
-// ProblemCode extracts the code of a problem body.
-func ProblemCode(b []byte) string {
-	var p struct{ Code string }
-	_ = json.Unmarshal(b, &p)
-	return p.Code
 }

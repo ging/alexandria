@@ -1,5 +1,0 @@
-$kind: http-request
-url: "{{baseUrl}}/.well-known/did.json"
-method: GET
-settings: {}
-order: 4000

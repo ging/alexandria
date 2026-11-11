@@ -1,5 +1,5 @@
 // Package testkit provides a settable fake clock shared by server and client tests.
-// Lets tests place the system at any F6 instant without waiting (DP-9).
+// Lets tests place the system at any F6 instant without waiting (DP-8).
 package testkit
 
 import (
@@ -25,3 +25,6 @@ func (c *FakeClock) Set(s string) { c.mu.Lock(); c.t = timex.MustInstant(s); c.m
 
 // Advance moves the clock forward by d.
 func (c *FakeClock) Advance(d timex.Duration) { c.mu.Lock(); c.t = c.t.Add(d); c.mu.Unlock() }
+
+// timexParse parses an RFC 3339 instant.
+func timexParse(s string) (timex.Instant, error) { return timex.ParseInstant(s) }

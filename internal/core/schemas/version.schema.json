@@ -1,75 +1,126 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:eunomia:vhub:schema:version:v1",
+  "$id": "https://w3id.org/alexandria-vhub/schemas/version/v1",
   "title": "Registro de versión v1",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "signed",
-    "signature"
+    "@context",
+    "type",
+    "issuer",
+    "validFrom",
+    "credentialSubject",
+    "proof"
   ],
   "properties": {
-    "signed": {
+    "@context": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "https://www.w3.org/ns/credentials/v2"
+        },
+        {
+          "type": "string",
+          "format": "iri"
+        }
+      ],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "type": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "VerifiableCredential"
+        },
+        {
+          "const": "VersionRecord"
+        }
+      ],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "issuer": {
+      "type": "string",
+      "pattern": "^did:(web:[A-Za-z0-9._%:-]+|key:z[1-9A-HJ-NP-Za-km-z]+)$"
+    },
+    "validFrom": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "credentialSubject": {
+      "$ref": "#/$defs/record"
+    },
+    "proof": {
+      "$ref": "#/$defs/proof"
+    }
+  },
+  "$defs": {
+    "proof": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "type",
-        "space",
-        "issued_at",
-        "record"
+        "cryptosuite",
+        "created",
+        "verificationMethod",
+        "proofPurpose",
+        "proofValue"
       ],
       "properties": {
         "type": {
-          "const": "eunomia.version/v1"
+          "const": "DataIntegrityProof"
         },
-        "space": {
+        "cryptosuite": {
+          "const": "eddsa-jcs-2022"
+        },
+        "created": {
           "type": "string",
-          "format": "iri"
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
         },
-        "issued_at": {
-          "$ref": "#/$defs/instant"
+        "verificationMethod": {
+          "type": "string",
+          "pattern": "^did:(web|key):[^#]+#.+$"
         },
-        "record": {
-          "$ref": "#/$defs/record"
+        "proofPurpose": {
+          "const": "assertionMethod"
+        },
+        "proofValue": {
+          "type": "string",
+          "pattern": "^z[1-9A-HJ-NP-Za-km-z]+$"
         }
       }
-    },
-    "signature": {
-      "$ref": "#/$defs/signature"
-    }
-  },
-  "$defs": {
-    "instant": {
-      "type": "string",
-      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
-    },
-    "semver": {
-      "type": "string",
-      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
-    },
-    "ni": {
-      "type": "string",
-      "pattern": "^ni:///sha-256;[A-Za-z0-9_-]+$"
     },
     "record": {
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "id",
+        "namespace",
         "version",
         "manifest",
         "class",
-        "emergency",
         "published_at",
         "new_content_from",
         "enforced_from",
         "revoked_from"
       ],
       "properties": {
+        "id": {
+          "type": "string",
+          "format": "iri"
+        },
+        "namespace": {
+          "type": "string",
+          "format": "iri"
+        },
         "version": {
-          "$ref": "#/$defs/semver"
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
         },
         "manifest": {
-          "$ref": "#/$defs/ni"
+          "type": "string",
+          "pattern": "^ni:///sha-256;[A-Za-z0-9_-]{43}$"
         },
         "class": {
           "enum": [
@@ -78,49 +129,28 @@
             "breaking"
           ]
         },
-        "emergency": {
-          "type": "boolean"
-        },
         "published_at": {
-          "$ref": "#/$defs/instant"
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
         },
         "new_content_from": {
-          "$ref": "#/$defs/instant"
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
         },
         "enforced_from": {
-          "$ref": "#/$defs/instant"
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
         },
         "revoked_from": {
           "oneOf": [
             {
-              "$ref": "#/$defs/instant"
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
             },
             {
               "type": "null"
             }
           ]
-        }
-      }
-    },
-    "signature": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "kid",
-        "alg",
-        "sig"
-      ],
-      "properties": {
-        "kid": {
-          "type": "string",
-          "pattern": "^did:web:[^#]+#.+$"
-        },
-        "alg": {
-          "const": "EdDSA"
-        },
-        "sig": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9_-]+$"
         }
       }
     }

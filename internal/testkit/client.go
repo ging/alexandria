@@ -1,111 +1,120 @@
-// Package testkit provides an in-process alexandria-client wired to an in-memory hub through fake HubAPI and DIDResolver adapters with fault injection.
-// Lets client tests replay F6 and corrupt listings, packages and DID documents without network (F8 §8.7).
+// Package testkit provides an in-process alexandria-client wired to the in-process hub, with in-memory stores, a fake upstream and an event recorder.
+// It also forges listings and packages re-signed with the hub key to build the S1–S13 negative corpus (F8 §8.7, REQ-CLI-004..007).
 package testkit
 
 import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
+	"testing"
 
 	"github.com/ging/alexandria/internal/client/adapters/evaluator_poc"
-	"github.com/ging/alexandria/internal/client/adapters/receipt_scitt_fake"
 	"github.com/ging/alexandria/internal/client/app"
 	"github.com/ging/alexandria/internal/client/domain"
-	"github.com/ging/alexandria/internal/core/did"
+	"github.com/ging/alexandria/internal/core/codes"
+	"github.com/ging/alexandria/internal/core/lifecycle"
 	"github.com/ging/alexandria/internal/core/ni"
 	"github.com/ging/alexandria/internal/core/pkgv"
-	"github.com/ging/alexandria/internal/core/timex"
+	"github.com/ging/alexandria/internal/core/vc"
 )
 
-// FakeHub serves the in-memory hub through the HubAPI port.
+// FakeHub serves the in-process hub to the client; hooks forge or break the answers.
 type FakeHub struct {
 	S            *Server
-	mu           sync.Mutex
 	Down         bool
-	Unauthorized bool
+	ListingHook  func([]byte) []byte
+	ManifestHook func(ni.Digest, []byte) []byte
+	FilesHook    func(map[string][]byte)
+	PackageHook  func(ni.Digest) (pkgv.Files, bool)
 	Calls        int
-	Date         *timex.Instant
-	Tamper       func([]byte) []byte
-	TamperPkg    func(ni.Digest, *pkgv.Files)
 }
 
-// Listing returns the hub listing, applying injected faults.
+// Listing returns the current listing of demo as the hub serves it.
 func (h *FakeHub) Listing() (app.ListingResponse, error) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.Calls++
-	switch {
-	case h.Down:
-		return app.ListingResponse{}, app.ErrUnreachable
-	case h.Unauthorized:
-		return app.ListingResponse{}, app.ErrUnauthorized
-	}
-	b, err := h.S.Hub.Listing.Latest(Member)
-	if err != nil {
-		return app.ListingResponse{}, app.ErrUnreachable
-	}
-	if h.Tamper != nil {
-		b = h.Tamper(append([]byte(nil), b...))
-	}
-	date := h.S.Clock.Now()
-	if h.Date != nil {
-		date = *h.Date
-	}
-	return app.ListingResponse{Body: b, Date: date, HasDate: true}, nil
-}
-
-// Package downloads a package from /pub, applying injected faults.
-func (h *FakeHub) Package(d ni.Digest) (pkgv.Files, error) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
 	h.Calls++
 	if h.Down {
-		return pkgv.Files{}, app.ErrUnreachable
+		return app.ListingResponse{}, errors.New("connection refused")
 	}
-	pub := h.S.Hub.Publication
-	var f pkgv.Files
-	var err error
-	for name, dst := range map[string]*[]byte{"manifest.json": &f.Manifest, "manifest.sig": &f.Sig, "manifest.receipt": &f.Receipt, "space-lock.json": &f.SpaceLock} {
-		if *dst, err = pub.PackageFile(d.Segment(), name); err != nil {
-			return pkgv.Files{}, err
+	b, err := h.S.Hub.Listing.Latest(NS)
+	if ce, ok := codes.As(err); ok && ce.Code == codes.APINotFound {
+		return app.ListingResponse{}, app.ErrNamespaceNotFound
+	}
+	if err != nil {
+		return app.ListingResponse{}, err
+	}
+	if h.ListingHook != nil {
+		b = h.ListingHook(b)
+	}
+	return app.ListingResponse{Body: b, Date: h.S.Clock.Now(), HasDate: true}, nil
+}
+
+// Package returns the manifest and blobs of a package.
+func (h *FakeHub) Package(d ni.Digest) (pkgv.Files, error) {
+	if h.Down {
+		return pkgv.Files{}, errors.New("connection refused")
+	}
+	if h.PackageHook != nil {
+		if f, ok := h.PackageHook(d); ok {
+			return f, nil
 		}
 	}
-	var m pkgv.Manifest
-	_ = json.Unmarshal(f.Manifest, &m)
-	f.Content = map[string][]byte{}
-	for _, e := range m.Files {
-		if f.Content[e.Path], err = pub.Blob(e.Digest.Hex()); err != nil {
+	m, err := h.S.Hub.Publication.Manifest(d.Segment())
+	if err != nil {
+		return pkgv.Files{}, err
+	}
+	c, err := pkgv.Parse(m)
+	if err != nil {
+		return pkgv.Files{}, err
+	}
+	files := map[string][]byte{}
+	for _, f := range c.Subject.Files {
+		b, err := h.S.Hub.Publication.Blob(f.Digest.Hex())
+		if err != nil {
 			return pkgv.Files{}, err
 		}
+		files[f.Path] = b
 	}
-	if h.TamperPkg != nil {
-		h.TamperPkg(d, &f)
+	if h.ManifestHook != nil {
+		m = h.ManifestHook(d, m)
 	}
-	return f, nil
+	if h.FilesHook != nil {
+		h.FilesHook(files)
+	}
+	return pkgv.Files{Manifest: m, Content: files}, nil
 }
 
-// FakeResolver resolves the hub DID from the in-memory signer.
-type FakeResolver struct {
-	S     *Server
-	mu    sync.Mutex
-	Down  bool
-	Calls int
-}
-
-// Resolve returns the current DID document of the signer.
-func (r *FakeResolver) Resolve(did.DID) (did.Document, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.Calls++
-	if r.Down {
-		return did.Document{}, errors.New("DID document unreachable")
+// Resign re-signs a secured document after mutating its decoded form, with the hub key.
+func (s *Server) Resign(t *testing.T, raw []byte, mutate func(map[string]any)) []byte {
+	t.Helper()
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
 	}
-	return r.S.Signer.Document(), nil
+	delete(doc, "proof")
+	mutate(doc)
+	b, _ := json.Marshal(doc)
+	var head struct {
+		ValidFrom string `json:"validFrom"`
+	}
+	_ = json.Unmarshal(b, &head)
+	created, _ := timexParse(head.ValidFrom)
+	out, err := s.Signer.Sign(b, created)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
 }
 
-// Recorder is an EventSink that keeps every event.
+// Subject returns the credentialSubject map of a decoded credential.
+func Subject(doc map[string]any) map[string]any {
+	m, _ := doc["credentialSubject"].(map[string]any)
+	return m
+}
+
+// Recorder is an EventSink keeping every event.
 type Recorder struct {
 	mu     sync.Mutex
 	Events []any
@@ -114,33 +123,24 @@ type Recorder struct {
 // Emit records an event.
 func (r *Recorder) Emit(e any) { r.mu.Lock(); r.Events = append(r.Events, e); r.mu.Unlock() }
 
-// Codes returns every code carried by recorded events, in order.
+// Codes returns the codes of every recorded event.
 func (r *Recorder) Codes() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var out []string
 	for _, e := range r.Events {
 		switch v := e.(type) {
+		case app.Notice:
+			out = append(out, v.Code)
 		case app.Verdict:
 			out = append(out, v.Codes...)
-		case app.Notice:
-			if v.Code != "" {
-				out = append(out, v.Code)
-			}
 		}
 	}
 	return out
 }
 
 // Has reports whether some event carries code.
-func (r *Recorder) Has(code string) bool {
-	for _, c := range r.Codes() {
-		if c == code {
-			return true
-		}
-	}
-	return false
-}
+func (r *Recorder) Has(code string) bool { return slices.Contains(r.Codes(), code) }
 
 // Count returns how many events carry code.
 func (r *Recorder) Count(code string) int {
@@ -153,7 +153,20 @@ func (r *Recorder) Count(code string) int {
 	return n
 }
 
-// Verdicts returns the vhub.verdict events.
+// Notices returns the notices of a type.
+func (r *Recorder) Notices(typ string) []app.Notice {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []app.Notice
+	for _, e := range r.Events {
+		if n, ok := e.(app.Notice); ok && n.Type == typ {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// Verdicts returns the recorded vhub.verdict events.
 func (r *Recorder) Verdicts() []app.Verdict {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -166,14 +179,15 @@ func (r *Recorder) Verdicts() []app.Verdict {
 	return out
 }
 
-// Reset forgets recorded events.
+// Reset forgets the recorded events.
 func (r *Recorder) Reset() { r.mu.Lock(); r.Events = nil; r.mu.Unlock() }
 
-// FakeUpstream records forwarded requests and answers with a fixed status.
+// FakeUpstream records forwarded requests and answers with a settable response.
 type FakeUpstream struct {
 	mu       sync.Mutex
 	Status   int
 	Body     []byte
+	Header   http.Header
 	Received []*app.Request
 }
 
@@ -186,20 +200,27 @@ func (u *FakeUpstream) Forward(r *app.Request) (*app.Response, error) {
 	if st == 0 {
 		st = http.StatusOK
 	}
+	h := http.Header{"Content-Type": {"application/json"}}
+	for k, v := range u.Header {
+		h[k] = v
+	}
 	body := u.Body
 	if body == nil {
-		body = []byte(`{"ok":true}`)
+		body = []byte(`{}`)
 	}
-	return &app.Response{Status: st, Header: http.Header{"Content-Type": {"application/json"}}, Body: body}, nil
+	return &app.Response{Status: st, Header: h, Body: body}, nil
 }
 
-// MemContinuity keeps continuity as JSON, as a file store would.
+// Count returns the number of forwarded requests.
+func (u *FakeUpstream) Count() int { u.mu.Lock(); defer u.mu.Unlock(); return len(u.Received) }
+
+// MemContinuity is an in-memory ContinuityStore.
 type MemContinuity struct {
 	mu sync.Mutex
 	b  []byte
 }
 
-// Load decodes the stored continuity.
+// Load returns the saved continuity.
 func (m *MemContinuity) Load() (app.Continuity, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -210,22 +231,22 @@ func (m *MemContinuity) Load() (app.Continuity, error) {
 	return c, json.Unmarshal(m.b, &c)
 }
 
-// Save encodes continuity.
+// Save stores the continuity as JSON, like a file store.
 func (m *MemContinuity) Save(c app.Continuity) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	b, err := json.Marshal(c)
+	m.mu.Lock()
 	m.b = b
+	m.mu.Unlock()
 	return err
 }
 
-// MemPackages keeps package files by digest.
+// MemPackages is an in-memory PackageStore.
 type MemPackages struct {
 	mu sync.Mutex
 	m  map[ni.Digest]pkgv.Files
 }
 
-// Get returns stored files.
+// Get returns a stored package.
 func (p *MemPackages) Get(d ni.Digest) (pkgv.Files, bool, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -233,7 +254,7 @@ func (p *MemPackages) Get(d ni.Digest) (pkgv.Files, bool, error) {
 	return f, ok, nil
 }
 
-// Put stores files.
+// Put stores a package.
 func (p *MemPackages) Put(d ni.Digest, f pkgv.Files) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -244,23 +265,26 @@ func (p *MemPackages) Put(d ni.Digest, f pkgv.Files) error {
 	return nil
 }
 
-// Retain drops packages not in keep.
-func (p *MemPackages) Retain(keep []ni.Digest) error {
+// Delete removes a package.
+func (p *MemPackages) Delete(d ni.Digest) error {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-	k := map[ni.Digest]bool{}
-	for _, d := range keep {
-		k[d] = true
-	}
-	for d := range p.m {
-		if !k[d] {
-			delete(p.m, d)
-		}
-	}
+	delete(p.m, d)
+	p.mu.Unlock()
 	return nil
 }
 
-// MemAgreements is an in-memory agreement registry.
+// List returns the stored digests.
+func (p *MemPackages) List() ([]ni.Digest, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var out []ni.Digest
+	for d := range p.m {
+		out = append(out, d)
+	}
+	return out, nil
+}
+
+// MemAgreements is an in-memory AgreementRepo.
 type MemAgreements struct {
 	mu sync.Mutex
 	m  map[string]domain.Entry
@@ -296,120 +320,175 @@ func (a *MemAgreements) All() ([]domain.Entry, error) {
 	return out, nil
 }
 
-// Client is an in-process alexandria-client with its doubles exposed.
+// MemRules is an in-memory RuleStore.
+type MemRules struct{ rs *domain.Ruleset }
+
+// Load returns the stored rule set.
+func (m *MemRules) Load() (*domain.Ruleset, bool, error) { return m.rs, m.rs != nil, nil }
+
+// Save stores the rule set.
+func (m *MemRules) Save(rs *domain.Ruleset) error { m.rs = rs; return nil }
+
+// noMetrics discards metrics.
+type noMetrics struct{}
+
+// Classified does nothing.
+func (noMetrics) Classified(string, string, string, string) {}
+
+// Client is an in-process client with its doubles exposed.
 type Client struct {
+	Server     *Server
 	Hub        *FakeHub
-	Resolver   *FakeResolver
 	Events     *Recorder
 	Upstream   *FakeUpstream
 	Continuity *MemContinuity
 	Packages   *MemPackages
 	Repo       *MemAgreements
-	Clock      timex.Clock
+	RuleStore  *MemRules
 	Cell       *app.Cell
+	RulesCell  *app.RulesCell
 	Trust      *app.HubTrust
 	Sync       *app.Sync
 	Edge       *app.Edge
-	Status     *app.Status
+	Rules      *app.Rules
 	Agreements *app.Agreements
 	Audit      *app.Audit
+	Status     *app.Status
+	GC         *app.GC
 }
 
-// noMetrics discards classification counts.
-type noMetrics struct{}
+// NewClient builds a client of demo trusting the hub DID, with the Annex C seed (contract-request in enforce).
+func NewClient(t *testing.T, s *Server) *Client {
+	t.Helper()
+	return NewClientWith(t, s, SeedPath(t), "forward", "forward")
+}
 
-// Classified ignores the count.
-func (noMetrics) Classified(string, string, string) {}
-
-// NewClient builds a client on the server's clock with the given routes.
-func NewClient(s *Server, routes []domain.Route) *Client {
+// NewClientWith builds a client with a seed file and the default and unknown-agreement actions.
+func NewClientWith(t *testing.T, s *Server, seed, defaultAction, unknown string) *Client {
+	t.Helper()
 	c := &Client{
-		Hub: &FakeHub{S: s}, Resolver: &FakeResolver{S: s}, Events: &Recorder{}, Upstream: &FakeUpstream{},
-		Continuity: &MemContinuity{}, Packages: &MemPackages{}, Repo: &MemAgreements{}, Clock: s.Clock,
+		Server: s, Hub: &FakeHub{S: s}, Events: &Recorder{}, Upstream: &FakeUpstream{}, Continuity: &MemContinuity{},
+		Packages: &MemPackages{}, Repo: &MemAgreements{}, RuleStore: &MemRules{}, Cell: &app.Cell{}, RulesCell: &app.RulesCell{},
 	}
-	c.wire(routes, "forward", "forward")
+	c.wire(t, seed, defaultAction, unknown)
 	return c
 }
 
-// wire builds the use cases over the doubles.
-func (c *Client) wire(routes []domain.Route, defaultAction, unknown string) {
-	c.Cell = &app.Cell{}
-	c.Trust = app.NewHubTrust(HubDID, c.Resolver, c.Clock, 6*timex.Hour, c.Events, Space)
-	ev := &evaluator_poc.Evaluator{Events: c.Events, Clock: c.Clock, Space: Space}
-	c.Agreements = &app.Agreements{Repo: c.Repo, Events: c.Events, Clock: c.Clock, Space: Space}
-	c.Audit = &app.Audit{Window: 100, Evaluator: ev, Events: c.Events, Clock: c.Clock, Space: Space}
-	c.Status = &app.Status{Cell: c.Cell, Clock: c.Clock, Trust: c.Trust, Packages: c.Packages, Events: c.Events, Space: Space, HubDID: string(HubDID), Gates: map[domain.Gate]domain.Mode{}}
+// Restart rebuilds every component on the same stores, as after a process restart.
+func (c *Client) Restart(t *testing.T, seed string) {
+	t.Helper()
+	c.Cell, c.RulesCell, c.Events = &app.Cell{}, &app.RulesCell{}, &Recorder{}
+	c.wire(t, seed, "forward", "forward")
+}
+
+// wire assembles the use cases over the doubles.
+func (c *Client) wire(t *testing.T, seed, defaultAction, unknown string) {
+	t.Helper()
+	s := c.Server
+	hubDID := s.DID
+	c.Trust = app.NewHubTrust(hubDID, s.Resolver, s.Clock, lifecycle.Defaults().SyncInterval, c.Events, NSIRI)
+	c.Agreements = &app.Agreements{Repo: c.Repo, Events: c.Events, Clock: s.Clock, Namespace: NSIRI}
+	ev := &evaluator_poc.Evaluator{Events: c.Events, Clock: s.Clock, Namespace: NSIRI}
+	c.Audit = &app.Audit{Window: 100, Evaluator: ev, Events: c.Events, Clock: s.Clock, Namespace: NSIRI}
+	c.Status = &app.Status{Cell: c.Cell, Rules: c.RulesCell, Trust: c.Trust, Packages: c.Packages, Events: c.Events, Clock: s.Clock, Namespace: NSIRI, HubDID: hubDID}
 	c.Sync = &app.Sync{
-		Hub: c.Hub, Trust: c.Trust, Receipts: receipt_scitt_fake.Verifier{}, Continuity: c.Continuity, Packages: c.Packages,
-		Agreements: c.Agreements, Audit: c.Audit, Status: c.Status, Cell: c.Cell, Clock: c.Clock, Events: c.Events, Space: Space,
+		Hub: c.Hub, Trust: c.Trust, Continuity: c.Continuity, Packages: c.Packages, Agreements: c.Agreements, Audit: c.Audit,
+		Status: c.Status, Cell: c.Cell, Clock: s.Clock, Events: c.Events, Namespace: NSIRI, HubDID: hubDID, Context: Context,
+	}
+	c.Rules = &app.Rules{Store: c.RuleStore, Cell: c.RulesCell, Events: c.Events, Clock: s.Clock, Namespace: NSIRI}
+	if err := c.Rules.Init(seed); err != nil {
+		t.Fatal(err)
 	}
 	c.Edge = &app.Edge{
-		Cell: c.Cell, Clock: c.Clock, Evaluator: ev, Upstream: c.Upstream, Agreements: c.Agreements, Audit: c.Audit,
-		Events: c.Events, Metrics: noMetrics{}, Routes: routes, DefaultAction: defaultAction, UnknownAgreement: unknown, Space: Space,
+		Explainer: app.Explainer{Snap: c.Cell, Rules: c.RulesCell, Evaluator: ev, Agreements: c.Repo, Clock: s.Clock, Settings: app.Settings{Namespace: NSIRI, DefaultAction: defaultAction, UnknownAgreement: unknown}},
+		Upstream:  c.Upstream, Capture: c.Agreements, Audit: c.Audit, Events: c.Events, Metrics: noMetrics{},
+	}
+	c.GC = &app.GC{Packages: c.Packages, Agreements: c.Agreements, Cell: c.Cell, Events: c.Events, Clock: s.Clock, Namespace: NSIRI, Interval: lifecycle.Defaults().Freshness.TTL}
+	if err := c.Sync.Restore(); err != nil {
+		t.Fatal(err)
 	}
 }
 
-// Configure rebuilds the client with other policies, keeping its stores (simulates a restart).
-func (c *Client) Configure(routes []domain.Route, defaultAction, unknown string) error {
-	c.wire(routes, defaultAction, unknown)
-	return c.Sync.Restore()
+// SyncNow runs one synchronization and fails the test on error.
+func (c *Client) SyncNow(t *testing.T) {
+	t.Helper()
+	if err := c.Sync.Run(); err != nil {
+		t.Fatalf("sync: %v", err)
+	}
 }
 
-// Send posts a body to a route path on a listener.
+// SetMode changes the mode of a rule through the CRUD use case.
+func (c *Client) SetMode(t *testing.T, id string, m domain.Mode) {
+	t.Helper()
+	rs := c.Rules.Get()
+	r, ok := rs.Find(id)
+	if !ok {
+		t.Fatalf("rule %s not found", id)
+	}
+	r.Mode = m
+	b, _ := json.Marshal(r)
+	if _, err := c.Rules.Update(app.ETag(rs.Revision), id, b); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Send handles a message on a listener.
 func (c *Client) Send(l domain.Listener, method, path string, body []byte) *app.Response {
-	return c.Edge.Handle(&app.Request{Listener: l, Method: method, Path: path, Header: http.Header{}, Body: body})
+	return c.Edge.Handle(&app.Request{Listener: l, Method: method, Path: path, Header: http.Header{"Content-Type": {"application/json"}}, Body: body})
 }
 
-// F6Routes returns the routes of the F6 scenario in enforce.
-func F6Routes() []domain.Route {
-	sel := func(s string) *domain.Body { return &domain.Body{Select: s} }
-	return []domain.Route{
-		{
-			Listener: domain.DSPIngress, Match: domain.Match{Method: "POST", Path: "/negotiations/request"}, Message: "ContractRequestMessage",
-			Gates: []domain.Gate{domain.GateDSP, domain.GatePolicy}, Mode: domain.Enforce, Body: sel("$.offer.permission[0]"),
-		},
-		{
-			Listener: domain.DSPEgress, Match: domain.Match{Method: "POST", Path: "/negotiations/:consumerPid/agreement"}, Message: "ContractAgreementMessage",
-			Gates: []domain.Gate{domain.GateDSP, domain.GatePolicy}, Mode: domain.Enforce, Body: sel("$.agreement.permission[0]"),
-		},
-		{
-			Listener: domain.DSPIngress, Match: domain.Match{Method: "POST", Path: "/transfers/request"}, Message: "TransferRequestMessage",
-			Gates: []domain.Gate{domain.GateDSP, domain.GateAdmission}, Mode: domain.Enforce,
-		},
-	}
+// SeedPath returns the absolute path of the Annex C rule set.
+func SeedPath(t *testing.T) string {
+	t.Helper()
+	return repoFile(t, "spec/examples/rules.json")
 }
 
-// ContractRequest builds a ContractRequestMessage whose offer uses action.
+// ContractRequest is an F6 ContractRequestMessage using action.
 func ContractRequest(action string) []byte {
-	return []byte(`{"@context":["https://w3id.org/dspace/2025/1/context.jsonld"],"@type":"ContractRequestMessage","consumerPid":"urn:uuid:c-1",` +
-		`"offer":{"@id":"urn:uuid:offer-1","@type":"Offer","target":"urn:uuid:ds-1","permission":[{"action":"` + action + `"}]},"callbackAddress":"http://consumer/cb"}`)
+	return []byte(`{"@type":"ContractRequestMessage","providerPid":"urn:uuid:p-1","consumerPid":"urn:uuid:c-1","action":"` + action + `"}`)
 }
 
-// AgreementMessage builds a ContractAgreementMessage for agreement id using action.
+// ContractRequestPath is the path of the enforce rule contract-request.
+const ContractRequestPath = "/negotiations/urn:uuid:p-1/request"
+
+// AgreementMessage is the ContractAgreementMessage of agreement id with action and an optional declared profile.
 func AgreementMessage(id, action, profile string) []byte {
 	p := ""
 	if profile != "" {
-		p = `"odrl:profile":"` + profile + `",`
+		p = `,"odrl:profile":"` + profile + `"`
 	}
-	return []byte(`{"@context":["https://w3id.org/dspace/2025/1/context.jsonld"],"@type":"ContractAgreementMessage","providerPid":"urn:uuid:p-1","consumerPid":"urn:uuid:c-1",` +
-		`"agreement":{"@id":"` + id + `","@type":"Agreement",` + p + `"target":"urn:uuid:ds-1","permission":[{"action":"` + action + `"}]},"callbackAddress":"http://provider/cb"}`)
+	return []byte(`{"@type":"ContractAgreementMessage","providerPid":"urn:uuid:p-1","consumerPid":"urn:uuid:c-1","action":"` + action + `","agreement":{"@id":"` + id + `"` + p + `}}`)
 }
 
-// TransferRequest builds a TransferRequestMessage for an agreement.
+// AgreementPath is the path of the contract-agreement rules.
+const AgreementPath = "/negotiations/urn:uuid:c-1/agreement"
+
+// TransferRequest is a TransferRequestMessage for an agreement.
 func TransferRequest(agreementID string) []byte {
-	return []byte(`{"@context":["https://w3id.org/dspace/2025/1/context.jsonld"],"@type":"TransferRequestMessage","consumerPid":"urn:uuid:t-1","agreementId":"` +
-		agreementID + `","format":"HTTP_PULL","callbackAddress":"http://consumer/cb"}`)
+	return []byte(`{"@type":"TransferRequestMessage","consumerPid":"urn:uuid:c-1","agreementId":"` + agreementID + `"}`)
 }
 
 // VerdictOf returns the VHub-Verdict header of a response.
 func VerdictOf(r *app.Response) string { return r.Header.Get(domain.HeaderName) }
 
-// BodyCode extracts "code" from a JSON error body.
+// BodyCode returns the code member of a JSON body.
 func BodyCode(b []byte) string {
-	var x struct{ Code string }
-	_ = json.Unmarshal(b, &x)
-	return x.Code
+	var v struct {
+		Code string `json:"code"`
+	}
+	_ = json.Unmarshal(b, &v)
+	return v.Code
 }
 
-// Contains reports whether the header mentions s.
+// Contains reports whether h contains s.
 func Contains(h, s string) bool { return strings.Contains(h, s) }
+
+// VC decodes a credential subject for assertions.
+func VC[T any](t *testing.T, raw []byte) vc.Credential[T] {
+	t.Helper()
+	var c vc.Credential[T]
+	if err := json.Unmarshal(raw, &c); err != nil {
+		t.Fatal(err)
+	}
+	return c
+}

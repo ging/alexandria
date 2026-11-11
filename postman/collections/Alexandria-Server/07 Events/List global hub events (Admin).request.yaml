@@ -1,0 +1,12 @@
+$kind: http-request
+method: GET
+url: '{{hubUrl}}/v1/events?after=0&limit=20'
+order: 2000
+auth:
+  type: bearer
+  credentials:
+    token: '{{adminToken}}'
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: pm.test('200 JSON-LD global event graph', () => pm.response.to.have.status(200));

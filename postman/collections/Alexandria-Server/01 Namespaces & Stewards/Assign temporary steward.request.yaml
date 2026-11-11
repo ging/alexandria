@@ -1,0 +1,16 @@
+$kind: http-request
+method: POST
+url: '{{hubUrl}}/v1/namespaces/{{namespace}}/stewards'
+order: 5000
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: text
+  content: "{\n  \"iss\": \"{{idpUrl}}\",\n  \"sub\": \"temp-steward\"\n}"
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('201 temporary steward assigned', () => {\n  pm.expect([201, 409]).to.include(pm.response.code);\n\
+    \  if (pm.response.code === 201) {\n    pm.collectionVariables.set('tempStewardId', pm.response.json().id.split('/').pop());\n\
+    \  }\n});"

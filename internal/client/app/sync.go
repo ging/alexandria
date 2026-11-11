@@ -1,39 +1,31 @@
-// Package app implements Sync: obtains the listing, applies S1–S13, persists continuity and publishes a new snapshot atomically.
-// Any failure keeps the previous snapshot and emits vhub.sync with its code; a bad package discards the whole listing (REQ-CLI-003..007).
+// Package app implements Sync: obtains the namespace listing, applies S1–S13, persists continuity and publishes a new snapshot atomically.
+// Any failure keeps the previous snapshot and emits vhub.sync with its code; a bad package discards the whole listing (REQ-CLI-003..007, REQ-CLI-034).
 package app
 
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
+	"slices"
 	"sync"
-	"sync/atomic"
 
 	"github.com/ging/alexandria/internal/client/domain"
 	"github.com/ging/alexandria/internal/core/codes"
+	"github.com/ging/alexandria/internal/core/did"
 	"github.com/ging/alexandria/internal/core/lifecycle"
+	"github.com/ging/alexandria/internal/core/logx"
 	"github.com/ging/alexandria/internal/core/ni"
 	"github.com/ging/alexandria/internal/core/pkgv"
+	"github.com/ging/alexandria/internal/core/schemas"
 	"github.com/ging/alexandria/internal/core/semver"
-	"github.com/ging/alexandria/internal/core/sign"
 	"github.com/ging/alexandria/internal/core/timex"
+	"github.com/ging/alexandria/internal/core/vc"
 )
-
-// Cell holds the current snapshot; Store and Load are atomic.
-type Cell struct {
-	p atomic.Pointer[domain.Snapshot]
-}
-
-// Load returns the current snapshot, or nil before the first E1.
-func (c *Cell) Load() *domain.Snapshot { return c.p.Load() }
-
-// Store publishes a snapshot.
-func (c *Cell) Store(s *domain.Snapshot) { c.p.Store(s) }
 
 // Sync implements FL2.
 type Sync struct {
 	Hub        HubAPI
 	Trust      *HubTrust
-	Receipts   ReceiptVerifier
 	Continuity ContinuityStore
 	Packages   PackageStore
 	Agreements *Agreements
@@ -42,7 +34,10 @@ type Sync struct {
 	Cell       *Cell
 	Clock      timex.Clock
 	Events     EventSink
-	Space      string
+	Logger     *slog.Logger
+	Namespace  string
+	HubDID     did.DID
+	Context    string
 
 	mu          sync.Mutex
 	accepted    *lifecycle.Accepted
@@ -52,7 +47,10 @@ type Sync struct {
 	failed      bool
 }
 
-// Restore reloads persisted continuity and rebuilds the snapshot without re-verifying signatures.
+// listingCredential is the decoded listing.
+type listingCredential = vc.Credential[lifecycle.ListingSubject]
+
+// Restore reloads persisted continuity and rebuilds the snapshot without re-verifying proofs (§4.4.1).
 func (s *Sync) Restore() error {
 	c, err := s.Continuity.Load()
 	if err != nil {
@@ -65,12 +63,8 @@ func (s *Sync) Restore() error {
 		return nil
 	}
 	s.accepted = c.Accepted
-	var l lifecycle.Listing
-	raw, err := sign.ParseRaw(c.Accepted.Raw)
-	if err != nil {
-		return err
-	}
-	if err := json.Unmarshal(raw.Signed, &l); err != nil {
+	var l listingCredential
+	if err := json.Unmarshal(c.Accepted.Raw, &l); err != nil {
 		return err
 	}
 	pkgs := map[ni.Digest]*pkgv.Package{}
@@ -79,15 +73,16 @@ func (s *Sync) Restore() error {
 		if err != nil || !ok {
 			continue
 		}
-		if p, cerr := pkgv.Verify(f, r.Manifest, r.Version.String()); cerr == nil {
+		if p, cerr := pkgv.Verify(f, r.Manifest, s.Namespace, r.Version.String()); cerr == nil {
 			pkgs[r.Manifest] = p
 		}
 	}
 	s.Cell.Store(snapshot(l, c.Accepted.Known, pkgs))
+	logx.Default(s.Logger).Info("restored snapshot from continuity", slog.String("namespace", s.Namespace), slog.Uint64("sequence", c.Accepted.Sequence), slog.Int("packages", len(pkgs)))
 	return nil
 }
 
-// Due reports whether a sync should run at now: sync_interval after a success, one minute after a failure.
+// Due reports whether a sync should run: sync_interval after a success, one minute after a failure (REQ-CLI-003).
 func (s *Sync) Due(now timex.Instant) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -95,16 +90,13 @@ func (s *Sync) Due(now timex.Instant) bool {
 		return true
 	}
 	if s.failed {
-		retry := timex.Minute
-		if iv := s.interval(); iv < retry {
-			retry = iv
-		}
+		retry := min(timex.Minute, s.interval())
 		return now >= s.lastAttempt.Add(retry)
 	}
-	return now >= s.lastSuccess.Add(s.interval())
+	return now >= s.lastSuccess.Add(s.interval()) || now < s.lastSuccess
 }
 
-// interval is the sync_interval of the head package, or the default before any package.
+// interval is the sync_interval of the head manifest, or the default before any package.
 func (s *Sync) interval() timex.Duration {
 	if snap := s.Cell.Load(); snap != nil {
 		return snap.Params.SyncInterval
@@ -128,7 +120,8 @@ func (s *Sync) Run() *codes.Error {
 	err := s.run(now)
 	s.failed = err != nil
 	if err != nil {
-		s.Events.Emit(notice(EvSync, s.Space, now, err.Code, err.Detail))
+		logx.Default(s.Logger).Warn("hub synchronization failed", slog.String("namespace", s.Namespace), logx.Err(err))
+		s.Events.Emit(notice(EvSync, s.Namespace, now, err.Code, err.Detail))
 		return err
 	}
 	s.lastSuccess = now
@@ -139,54 +132,68 @@ func (s *Sync) Run() *codes.Error {
 func (s *Sync) run(now timex.Instant) *codes.Error {
 	resp, err := s.Hub.Listing()
 	switch {
-	case errors.Is(err, ErrUnauthorized):
-		return codes.New(codes.SyncUnauthorized, "GET /v1/versions refused the credentials")
+	case errors.Is(err, ErrNamespaceNotFound):
+		return codes.New(codes.SyncNamespaceNotFound, "the hub has no namespace %s", s.Namespace)
 	case err != nil:
 		return codes.New(codes.SyncUnreachable, "%v", err)
 	}
 	if resp.HasDate {
 		s.Status.ObserveSkew(resp.Date, now)
 	}
-	raw, perr := sign.ParseRaw(resp.Body)
-	if perr != nil {
-		return codes.New(codes.SyncSignatureInvalid, "listing is not a signed envelope: %v", perr)
-	}
-	msg, perr := raw.Input()
-	if perr != nil {
-		return codes.New(codes.SyncSignatureInvalid, "listing signed part: %v", perr)
-	}
-	if cerr := s.Trust.Verify(msg, raw.Signature, codes.SyncSignatureInvalid); cerr != nil {
-		return cerr
-	}
-	var l lifecycle.Listing
-	if err := json.Unmarshal(raw.Signed, &l); err != nil || l.Type != lifecycle.ListingType {
-		return codes.New(codes.SyncSignatureInvalid, "listing content: %v", err)
-	}
-	if now >= l.ExpiresAt {
-		return codes.New(codes.SyncExpired, "expires_at %s is not after %s", l.ExpiresAt, now)
-	}
-	identical, cerr := lifecycle.CheckContinuity(s.accepted, l, resp.Body)
+	l, cerr := s.checkListing(resp.Body)
 	if cerr != nil {
 		return cerr
 	}
-	if identical {
-		return nil
+	if now >= *l.ValidUntil {
+		return codes.New(codes.SyncExpired, "validUntil %s is not after %s", l.ValidUntil, now)
 	}
-	pkgs, fresh, cerr := s.packages(l)
+	identical, cerr := lifecycle.CheckContinuity(s.accepted, l.Subject, resp.Body)
+	if cerr != nil || identical {
+		return cerr
+	}
+	pkgs, fresh, cerr := s.packages(l.Subject)
 	if cerr != nil {
 		return cerr
 	}
-	if cerr := lifecycle.CheckRecords(l.Versions, func(v semver.Version) lifecycle.Params {
-		r, _ := lifecycle.Find(l.Versions, v)
-		return pkgs[r.Manifest].SpaceLock.Lifecycle
+	if cerr := lifecycle.CheckRecords(l.Subject.Versions, func(v semver.Version) lifecycle.Params {
+		r, _ := lifecycle.Find(l.Subject.Versions, v)
+		return pkgs[r.Manifest].Manifest.Lifecycle
 	}); cerr != nil {
 		return cerr
 	}
 	return s.accept(l, resp.Body, pkgs, fresh)
 }
 
+// checkListing applies S2: schema A.1, @context, issuer, namespace and the hub proof.
+func (s *Sync) checkListing(raw []byte) (listingCredential, *codes.Error) {
+	var l listingCredential
+	if err := schemas.Validate(schemas.Versions, raw); err != nil {
+		return l, codes.New(codes.SyncMalformed, "listing: %v", err)
+	}
+	if err := json.Unmarshal(raw, &l); err != nil {
+		return l, codes.New(codes.SyncMalformed, "listing: %v", err)
+	}
+	if cerr := s.checkShape(l.Context, l.Issuer, l.Subject.Namespace); cerr != nil {
+		return l, cerr
+	}
+	return l, s.Trust.Verify(raw, codes.SyncSignatureInvalid)
+}
+
+// checkShape compares @context, issuer and namespace with the trust configuration (REQ-CLI-034).
+func (s *Sync) checkShape(ctx []string, issuer, ns string) *codes.Error {
+	switch {
+	case !slices.Equal(ctx, []string{vc.CredentialsV2, s.Context}):
+		return codes.New(codes.SyncMalformed, "@context %v is not [credentials/v2, %s]", ctx, s.Context)
+	case issuer != string(s.HubDID):
+		return codes.New(codes.SyncMalformed, "issuer %s is not %s", issuer, s.HubDID)
+	case ns != s.Namespace:
+		return codes.New(codes.SyncMalformed, "namespace %s is not %s", ns, s.Namespace)
+	}
+	return nil
+}
+
 // packages verifies every listed package not yet verified (S8–S13); one failure rejects the listing.
-func (s *Sync) packages(l lifecycle.Listing) (map[ni.Digest]*pkgv.Package, []*pkgv.Package, *codes.Error) {
+func (s *Sync) packages(l lifecycle.ListingSubject) (map[ni.Digest]*pkgv.Package, []*pkgv.Package, *codes.Error) {
 	have := map[ni.Digest]*pkgv.Package{}
 	if snap := s.Cell.Load(); snap != nil {
 		for d, p := range snap.Packages {
@@ -200,14 +207,13 @@ func (s *Sync) packages(l lifecycle.Listing) (map[ni.Digest]*pkgv.Package, []*pk
 			out[r.Manifest] = p
 			continue
 		}
-		f, ok, err := s.Packages.Get(r.Manifest)
-		if err == nil && ok {
-			if p, cerr := pkgv.Verify(f, r.Manifest, r.Version.String()); cerr == nil {
+		if f, ok, err := s.Packages.Get(r.Manifest); err == nil && ok {
+			if p, cerr := pkgv.Verify(f, r.Manifest, s.Namespace, r.Version.String()); cerr == nil {
 				out[r.Manifest] = p
 				continue
 			}
 		}
-		f, err = s.Hub.Package(r.Manifest)
+		f, err := s.Hub.Package(r.Manifest)
 		if err != nil {
 			return nil, nil, codes.New(codes.SyncUnreachable, "package %s: %v", r.Manifest, err)
 		}
@@ -221,26 +227,30 @@ func (s *Sync) packages(l lifecycle.Listing) (map[ni.Digest]*pkgv.Package, []*pk
 	return out, fresh, nil
 }
 
-// verifyPackage applies S8, S9, S10 and then S11–S13 to downloaded files.
+// verifyPackage applies S8, S9 and S11–S13 to downloaded files.
 func (s *Sync) verifyPackage(f pkgv.Files, r lifecycle.Record) (*pkgv.Package, *codes.Error) {
 	if ni.Sum(f.Manifest) != r.Manifest {
 		return nil, codes.New(codes.SyncManifestDigestMismatch, "manifest.json of %s does not match %s", r.Version, r.Manifest)
 	}
-	var sig sign.Signature
-	if err := json.Unmarshal(f.Sig, &sig); err != nil {
-		return nil, codes.New(codes.SyncManifestSignatureInvalid, "manifest.sig of %s: %v", r.Version, err)
+	if err := schemas.Validate(schemas.Manifest, f.Manifest); err != nil {
+		return nil, codes.New(codes.SyncMalformed, "manifest of %s: %v", r.Version, err)
 	}
-	if cerr := s.Trust.Verify(f.Manifest, sig, codes.SyncManifestSignatureInvalid); cerr != nil {
+	c, err := pkgv.Parse(f.Manifest)
+	if err != nil {
+		return nil, codes.New(codes.SyncMalformed, "manifest of %s: %v", r.Version, err)
+	}
+	// The manifest namespace is checked with the version in S13, after the proof (S9).
+	if cerr := s.checkShape(c.Context, c.Issuer, s.Namespace); cerr != nil {
 		return nil, cerr
 	}
-	if err := s.Receipts.Verify(r.Manifest, f.Receipt, s.Trust.Keys()); err != nil {
-		return nil, codes.New(codes.SyncReceiptInvalid, "manifest.receipt of %s: %v", r.Version, err)
+	if cerr := s.Trust.Verify(f.Manifest, codes.SyncManifestSignatureInvalid); cerr != nil {
+		return nil, cerr
 	}
-	return pkgv.Verify(f, r.Manifest, r.Version.String())
+	return pkgv.Verify(f, r.Manifest, s.Namespace, r.Version.String())
 }
 
-// accept persists continuity, stores packages and publishes the snapshot (E1).
-func (s *Sync) accept(l lifecycle.Listing, raw []byte, pkgs map[ni.Digest]*pkgv.Package, fresh []*pkgv.Package) *codes.Error {
+// accept persists continuity and packages, publishes the snapshot (E1) and runs the follow-ups.
+func (s *Sync) accept(l listingCredential, raw []byte, pkgs map[ni.Digest]*pkgv.Package, fresh []*pkgv.Package) *codes.Error {
 	var prevKnown map[string]lifecycle.Record
 	if s.accepted != nil {
 		prevKnown = s.accepted.Known
@@ -250,12 +260,12 @@ func (s *Sync) accept(l lifecycle.Listing, raw []byte, pkgs map[ni.Digest]*pkgv.
 			return codes.New(codes.SyncUnreachable, "storing package: %v", err)
 		}
 	}
-	acc := &lifecycle.Accepted{Sequence: l.Sequence, Digest: ni.Sum(raw), Raw: raw, Known: lifecycle.Merge(prevKnown, l)}
+	acc := &lifecycle.Accepted{Sequence: l.Subject.Sequence, Digest: ni.Sum(raw), Raw: raw, Known: lifecycle.Merge(prevKnown, l.Subject)}
 	doc, at := s.Trust.Cache()
 	if err := s.Continuity.Save(Continuity{Accepted: acc, DID: doc, ResolvedAt: at}); err != nil {
 		return codes.New(codes.SyncUnreachable, "persisting continuity: %v", err)
 	}
-	// Packages kept for agreements stay usable even after their version leaves the listing.
+	// Packages kept for agreements stay usable after their version leaves the listing; GC decides what goes.
 	if prev := s.Cell.Load(); prev != nil {
 		for d, p := range prev.Packages {
 			if _, ok := pkgs[d]; !ok {
@@ -266,26 +276,22 @@ func (s *Sync) accept(l lifecycle.Listing, raw []byte, pkgs map[ni.Digest]*pkgv.
 	s.accepted = acc
 	snap := snapshot(l, acc.Known, pkgs)
 	s.Cell.Store(snap)
-	if revs := lifecycle.NewRevocations(prevKnown, l); len(revs) > 0 {
+	if revs := lifecycle.NewRevocations(prevKnown, l.Subject); len(revs) > 0 {
 		s.Agreements.OnRevocations(revs, snap)
 	}
-	keep := s.Agreements.Retained()
-	for _, r := range l.Versions {
-		keep = append(keep, r.Manifest)
-	}
-	_ = s.Packages.Retain(keep)
 	for _, p := range fresh {
-		if r, ok := lifecycle.Find(l.Versions, semver.MustParse(p.Manifest.Version)); ok {
+		if r, ok := lifecycle.Find(l.Subject.Versions, semver.MustParse(p.Manifest.Version)); ok {
 			s.Audit.OnNewVersion(r, snap)
 		}
 	}
+	logx.Default(s.Logger).Info("hub listing accepted", slog.String("namespace", s.Namespace), slog.Uint64("sequence", l.Subject.Sequence), slog.Int("versions", len(l.Subject.Versions)), slog.Int("fresh_packages", len(fresh)))
 	return nil
 }
 
 // snapshot builds the immutable snapshot of a listing.
-func snapshot(l lifecycle.Listing, known map[string]lifecycle.Record, pkgs map[ni.Digest]*pkgv.Package) *domain.Snapshot {
+func snapshot(l listingCredential, known map[string]lifecycle.Record, pkgs map[ni.Digest]*pkgv.Package) *domain.Snapshot {
 	return &domain.Snapshot{
-		Space: l.Space, Sequence: l.Sequence, IssuedAt: l.IssuedAt, ExpiresAt: l.ExpiresAt, Records: l.Versions,
-		Known: known, Packages: pkgs, Params: domain.HeadParams(l.Versions, pkgs),
+		Namespace: l.Subject.Namespace, Sequence: l.Subject.Sequence, ValidFrom: l.ValidFrom, ValidUntil: *l.ValidUntil,
+		Records: l.Subject.Versions, Known: known, Packages: pkgs, Params: domain.HeadParams(l.Subject.Versions, pkgs),
 	}
 }

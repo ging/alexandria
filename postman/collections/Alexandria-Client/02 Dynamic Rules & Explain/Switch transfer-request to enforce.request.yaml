@@ -1,0 +1,23 @@
+$kind: http-request
+method: PUT
+url: '{{clientAdmin}}/rules/transfer-request'
+order: 4000
+headers:
+- key: Content-Type
+  value: application/json
+- key: If-Match
+  value: '{{rulesEtag}}'
+body:
+  type: text
+  content: "{\n  \"id\": \"transfer-request\",\n  \"priority\": 200,\n  \"listener\": \"dsp-ingress\"\
+    ,\n  \"match\": {\n    \"method\": \"POST\",\n    \"path\": \"/transfers/request\",\n    \"body\"\
+    : [\n      {\n        \"pointer\": \"/@type\",\n        \"equals\": \"TransferRequestMessage\"\n \
+    \     }\n    ]\n  },\n  \"message\": \"TransferRequestMessage\",\n  \"verify\": {\n    \"gates\":\
+    \ [\n      \"dsp_message\",\n      \"agreement_admission\"\n    ]\n  },\n  \"mode\": \"enforce\"\n\
+    }"
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('200 rule updated', () => {\n  pm.response.to.have.status(200);\n  pm.collectionVariables.set('rulesEtag',\
+    \ pm.response.headers.get('ETag'));\n  pm.collectionVariables.set('fullRulesetJson', pm.response.text());\n\
+    });"

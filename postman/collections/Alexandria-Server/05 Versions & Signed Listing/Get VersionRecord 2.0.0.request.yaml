@@ -1,0 +1,9 @@
+$kind: http-request
+method: GET
+url: '{{hubUrl}}/v1/namespaces/{{namespace}}/versions/2.0.0'
+order: 3000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('200 VersionRecord 2.0.0', () => {\n  pm.response.to.have.status(200);\n  pm.expect(pm.response.json().credentialSubject.version).to.eql('2.0.0');\n\
+    });"

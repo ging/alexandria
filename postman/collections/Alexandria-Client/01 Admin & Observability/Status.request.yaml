@@ -1,0 +1,9 @@
+$kind: http-request
+method: GET
+url: '{{clientAdmin}}/status'
+order: 3000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('200 client status snapshot', () => {\n  pm.response.to.have.status(200);\n  pm.expect(pm.response.json().state).to.be.a('string');\n\
+    });"

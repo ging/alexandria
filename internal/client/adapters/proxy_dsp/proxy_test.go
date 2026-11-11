@@ -44,9 +44,9 @@ var connectorBody = []byte("{ \"@type\" : \"ContractNegotiation\",\n  \"state\":
 // setup returns a synced F6 client whose upstream is a real connector, and the proxy and connector captures.
 func setup(t *testing.T, at string) (*testkit.Client, *httptest.Server, *capture, *capture) {
 	t.Helper()
-	s := testkit.NewServer("2026-09-01T10:00:00Z")
+	s := testkit.NewServer(t, "2026-08-01T00:00:00Z")
 	s.PublishF6(t)
-	c := testkit.NewClient(s, testkit.F6Routes())
+	c := testkit.NewClient(t, s)
 	s.Clock.Set(at)
 	if err := c.Sync.Run(); err != nil {
 		t.Fatal(err)
@@ -94,11 +94,11 @@ func TestT_SYS_003_RequestForwardedByteForByte(t *testing.T) {
 
 func TestT_CLI_014_ResponseUnchangedExceptVerdict(t *testing.T) {
 	_, proxy, _, _ := setup(t, "2026-10-10T12:00:00Z")
-	st, h, b := post(t, proxy.URL, "/negotiations/request", testkit.ContractRequest("odrl:use"))
+	st, h, b := post(t, proxy.URL, testkit.ContractRequestPath, testkit.ContractRequest("odrl:use"))
 	if !bytes.Equal(b, connectorBody) || st != 201 || h.Get("X-Connector") != "1" || h.Get(domain.HeaderName) != "" {
 		t.Fatalf("forward changed the response: %d %v %q", st, h, b)
 	}
-	_, h, b = post(t, proxy.URL, "/negotiations/request", testkit.ContractRequest("ex:access"))
+	_, h, b = post(t, proxy.URL, testkit.ContractRequestPath, testkit.ContractRequest("ex:access"))
 	if !bytes.Equal(b, connectorBody) || h.Get(domain.HeaderName) == "" {
 		t.Fatalf("forward-notice: %v %q", h, b)
 	}
@@ -119,6 +119,7 @@ func TestT_CLI_019_AdminNotServedOnDSP(t *testing.T) {
 
 func TestEgressForwardProxyCapturesProviderAgreement(t *testing.T) {
 	c, _, _, atConn := setup(t, "2026-10-10T12:00:00Z")
+	c.SetMode(t, "contract-agreement-out", domain.Enforce)
 	egress := httptest.NewServer(proxy_dsp.Handler{Edge: c.Edge, Listener: domain.DSPEgress})
 	defer egress.Close()
 	pu, _ := url.Parse(egress.URL)

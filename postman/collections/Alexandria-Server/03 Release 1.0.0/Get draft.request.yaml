@@ -1,0 +1,8 @@
+$kind: http-request
+method: GET
+url: '{{hubUrl}}/v1/namespaces/{{namespace}}/drafts/{{draftId}}'
+order: 2000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: pm.test('200 draft with ETag', () => pm.response.to.have.status(200));

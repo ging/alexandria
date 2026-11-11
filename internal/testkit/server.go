@@ -1,4 +1,4 @@
-// Package testkit provides an in-process alexandria-server built on the in-memory doubles, plus F6 drafts and principals.
+// Package testkit provides an in-process alexandria-server on the in-memory doubles, with the F6 namespace, principals and drafts.
 // Server and client tests share it to publish real signed listings and packages without network (F8 §8.7).
 package testkit
 
@@ -10,34 +10,36 @@ import (
 	"github.com/ging/alexandria/internal/core/did"
 	"github.com/ging/alexandria/internal/core/lifecycle"
 	"github.com/ging/alexandria/internal/server/adapters/compiler_poc"
-	"github.com/ging/alexandria/internal/server/adapters/scitt_fake"
 	"github.com/ging/alexandria/internal/server/app"
 	"github.com/ging/alexandria/internal/server/domain"
 )
 
 // Fixture identities of the F6 scenario.
 const (
-	Space  = "https://example.com/spaces/demo"
-	HubDID = did.DID("did:web:hub.example.com")
+	Base    = "https://hub.example.com"
+	NS      = "demo"
+	NSIRI   = Base + "/v1/namespaces/demo"
+	Context = Base + "/pub/_vhub/v1/context.jsonld"
+	IDPIss  = "https://idp.example.com"
 )
 
-// Principals for each role.
+// Principals of F6: Ana is admin, Sergio is the steward of demo, Eve has a token but no permission.
 var (
-	Editor   = domain.Principal{Name: "steward", Roles: []domain.Role{domain.Editor}}
-	Releaser = domain.Principal{Name: "releaser", Roles: []domain.Role{domain.Releaser}}
-	Member   = domain.Principal{Name: "client", Roles: []domain.Role{domain.Member}}
+	Ana    = &domain.Principal{Iss: IDPIss, Sub: "ana", IsAdmin: true}
+	Sergio = &domain.Principal{Iss: IDPIss, Sub: "sergio"}
+	Eve    = &domain.Principal{Iss: IDPIss, Sub: "eve"}
 )
 
 // Draft builds a Part 5.1 draft of version v whose policy schema admits the given actions.
 func Draft(v string, actions ...string) []byte {
 	enum, _ := json.Marshal(actions)
-	return []byte(`{"space":"` + Space + `","version":"` + v + `",
-"slots":[{"slot":"odrl","obligation":"mandatory","profiles":["https://example.com/profiles/odrl/` + v + `"]}],
-"files":[{"path":"schemas/policy.schema.json","media_type":"application/schema+json","role":"json-schema","slot":"odrl","applies_to":["policy_intake"],
+	return []byte(`{"version":"` + v + `","profiles":["` + Base + `/pub/demo/profiles/odrl/` + v + `"],
+"slots":[{"slot":"policy","obligation":"mandatory","applies_to":["policy_intake"]}],
+"files":[{"path":"schemas/policy.schema.json","media_type":"application/schema+json","role":"json-schema","slot":"policy","applies_to":["policy_intake"],
 "content":{"type":"object","properties":{"action":{"enum":` + string(enum) + `}},"required":["action"]}}]}`)
 }
 
-// DraftWith replaces the lifecycle object of a draft.
+// DraftWith adds a lifecycle object to a draft.
 func DraftWith(doc []byte, lifecycleJSON string) []byte {
 	return []byte(strings.Replace(string(doc), `"slots":`, `"lifecycle":`+lifecycleJSON+`,"slots":`, 1))
 }
@@ -50,59 +52,142 @@ var (
 
 // Server is an in-process hub with its doubles exposed.
 type Server struct {
-	Hub    *app.Hub
-	DB     *MemDB
-	Clock  *FakeClock
-	Signer *KeySigner
+	Hub      *app.Hub
+	DB       *MemDB
+	Clock    *FakeClock
+	Signer   *KeySigner
+	Resolver *Resolver
+	Fetcher  *FakeFetcher
+	DID      did.DID
 }
 
-// NewServer builds a hub whose clock starts at t0.
-func NewServer(t0 string) *Server {
-	return NewServerWith(t0, compiler_poc.Compiler{Defaults: lifecycle.Defaults()})
+// NewServer builds a did:key hub whose clock starts at t0, with namespace demo and Sergio as its steward.
+func NewServer(t *testing.T, t0 string) *Server {
+	t.Helper()
+	s := NewBareServer(t0)
+	s.Setup(t)
+	return s
 }
 
-// NewServerWith builds a hub whose clock starts at t0 and that compiles drafts with c.
-func NewServerWith(t0 string, c app.ProfileCompiler) *Server {
-	db := NewMemDB()
-	clk := NewClock(t0)
-	signer := NewKeySigner(HubDID)
-	hub := app.New(app.Deps{
-		Drafts: MemDrafts{db}, Candidates: MemCandidates{db}, Releases: MemReleases{db}, Listings: MemListings{db},
-		Blobs: MemBlobs{db}, Log: FailingLog{scitt_fake.Log{Signer: signer, Clock: clk}, db}, Signer: signer,
-		Compiler: c, Events: MemEvents{db}, Clock: clk, DID: HubDID,
-		Defaults: lifecycle.Defaults(),
+// NewBareServer builds a did:key hub with compiler_poc, without namespaces and with its key checked.
+func NewBareServer(t0 string) *Server {
+	return NewBareServerWith(t0, compiler_poc.Compiler{Defaults: lifecycle.Defaults()})
+}
+
+// NewServerWith builds an F6 hub with namespace demo and the given compiler.
+func NewServerWith(t *testing.T, t0 string, c app.ProfileCompiler) *Server {
+	t.Helper()
+	s := NewBareServerWith(t0, c)
+	s.Setup(t)
+	return s
+}
+
+// NewServerOn builds an F6 hub with compiler_poc on another store, keeping blobs in memory (contract tests of store adapters).
+func NewServerOn(t *testing.T, t0 string, store app.Store) *Server {
+	t.Helper()
+	s := newServer(t0, compiler_poc.Compiler{Defaults: lifecycle.Defaults()}, store)
+	s.Setup(t)
+	return s
+}
+
+// NewBareServerWith builds a did:key hub with the given compiler.
+func NewBareServerWith(t0 string, c app.ProfileCompiler) *Server { return newServer(t0, c, nil) }
+
+// WebDID is the did:web identity of the FL9 fixtures.
+const WebDID = did.DID("did:web:hub.example.com")
+
+// NewWebServer builds an F6 hub identified by did:web:hub.example.com with its key #key-1 published (DP-5, FL9).
+func NewWebServer(t *testing.T, t0 string) *Server {
+	t.Helper()
+	signer := NewKeySigner(1, string(WebDID)+"#key-1")
+	r := NewResolver()
+	r.SetDocument(WebDID, did.PublicKey{Kid: signer.VerificationMethod(), Key: signer.PublicKey()})
+	s := build(t0, compiler_poc.Compiler{Defaults: lifecycle.Defaults()}, nil, signer, r, WebDID)
+	s.Setup(t)
+	return s
+}
+
+// newServer builds a did:key hub on store, or on the memory store when nil.
+func newServer(t0 string, c app.ProfileCompiler, store app.Store) *Server {
+	signer := NewKeySigner(1, "")
+	return build(t0, c, store, signer, NewResolver(), signer.KeyDIDOf())
+}
+
+// build assembles a hub with the given identity.
+func build(t0 string, c app.ProfileCompiler, store app.Store, signer *KeySigner, resolver *Resolver, hubDID did.DID) *Server {
+	db, clock := NewMemDB(), NewClock(t0)
+	if store == nil {
+		store = db
+	}
+	s := &Server{DB: db, Clock: clock, Signer: signer, Resolver: resolver, Fetcher: NewFakeFetcher(), DID: hubDID}
+	s.Hub = app.New(app.Deps{
+		Store: store, Blobs: MemBlobs{db}, Signer: signer, Resolver: s.Resolver, Fetcher: s.Fetcher,
+		Compiler: c, Clock: clock, Base: Base,
+		DID: hubDID, Context: Context, Defaults: lifecycle.Defaults(), VocabMaxSize: 1 << 16, AllowInsecureLocalhost: true,
 	})
-	return &Server{Hub: hub, DB: db, Clock: clk, Signer: signer}
+	s.Hub.Keys.CheckSigningKey()
+	return s
 }
 
-// Propose creates a draft and proposes it, returning the candidate id.
+// Setup creates namespace demo and assigns Sergio (F6.1 steps 1–2).
+func (s *Server) Setup(t *testing.T) {
+	t.Helper()
+	if _, err := s.Hub.Namespaces.Create(Ana, app.NamespaceInput{Slug: NS}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Hub.Namespaces.AssignSteward(Ana, NS, app.StewardInput{Iss: Sergio.Iss, Sub: Sergio.Sub}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Propose creates a draft of doc in demo and returns its candidate id.
 func (s *Server) Propose(t *testing.T, doc []byte) string {
 	t.Helper()
-	d, err := s.Hub.Authoring.CreateDraft(Editor, doc)
+	d, err := s.Hub.Authoring.CreateDraft(Sergio, NS, doc)
 	if err != nil {
-		t.Fatalf("create draft: %v", err)
+		t.Fatal(err)
 	}
-	c, err := s.Hub.Authoring.Propose(Editor, d.ID)
+	c, err := s.Hub.Authoring.Propose(Sergio, NS, d.ID)
 	if err != nil {
-		t.Fatalf("propose: %v", err)
+		t.Fatal(err)
 	}
 	return c.ID
 }
 
-// Publish proposes and approves a draft at instant at, returning the signed record.
+// Publish proposes and approves doc at instant at, returning the signed record.
 func (s *Server) Publish(t *testing.T, at string, doc []byte, o app.ApproveOptions) []byte {
 	t.Helper()
 	s.Clock.Set(at)
-	rec, err := s.Hub.Release.Approve(Releaser, s.Propose(t, doc), o)
+	id := s.Propose(t, doc)
+	rec, err := s.Hub.Release.Approve(Sergio, NS, id, o)
 	if err != nil {
-		t.Fatalf("approve: %v", err)
+		t.Fatal(err)
 	}
 	return rec
 }
 
-// PublishF6 publishes 1.0.0 and 2.0.0 at the F6 instants.
+// PublishF6 publishes 1.0.0 on 2026-09-01 and 2.0.0 on 2026-10-01, as in F6.2.
 func (s *Server) PublishF6(t *testing.T) {
 	t.Helper()
 	s.Publish(t, "2026-09-01T10:00:00Z", DraftV1, app.ApproveOptions{})
 	s.Publish(t, "2026-10-01T10:00:00Z", DraftV2, app.ApproveOptions{})
+}
+
+// FakeFetcher is an UpstreamFetcher returning a settable response and counting calls (REQ-HUB-027).
+type FakeFetcher struct {
+	Body        []byte
+	ContentType string
+	Err         error
+	Calls       int
+}
+
+// NewFakeFetcher returns a fetcher serving an empty JSON-LD context.
+func NewFakeFetcher() *FakeFetcher {
+	return &FakeFetcher{Body: []byte(`{"@context":{}}`), ContentType: "application/ld+json"}
+}
+
+// Fetch returns the configured response.
+func (f *FakeFetcher) Fetch(string, int64) ([]byte, string, error) {
+	f.Calls++
+	return f.Body, f.ContentType, f.Err
 }

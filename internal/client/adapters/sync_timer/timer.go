@@ -1,5 +1,5 @@
-// Package sync_timer is a driving adapter that ticks on wall time, runs Sync when due by the client Clock and watches state changes.
-// Syncs at start and then within sync_interval of the head package (REQ-CLI-003, REQ-CLI-027).
+// Package sync_timer is the driving adapter of the client timers: Sync when due, GC every gc_interval and the state watcher.
+// It ticks on wall time but decides with the client Clock, so file_clock jumps take effect (REQ-CLI-003, REQ-CLI-008, REQ-CLI-033).
 package sync_timer
 
 import (
@@ -10,9 +10,13 @@ import (
 )
 
 // Run syncs immediately and then checks every tick until ctx ends.
-func Run(ctx context.Context, s *app.Sync, st *app.Status, tick time.Duration) {
-	s.RunIfDue()
-	st.Watch()
+func Run(ctx context.Context, s *app.Sync, gc *app.GC, st *app.Status, tick time.Duration) {
+	step := func() {
+		s.RunIfDue()
+		gc.RunIfDue()
+		st.Watch()
+	}
+	step()
 	t := time.NewTicker(tick)
 	defer t.Stop()
 	for {
@@ -20,8 +24,7 @@ func Run(ctx context.Context, s *app.Sync, st *app.Status, tick time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			s.RunIfDue()
-			st.Watch()
+			step()
 		}
 	}
 }

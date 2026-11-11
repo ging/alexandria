@@ -1,9 +1,0 @@
-$kind: http-request
-method: GET
-url: '{{clientAdmin}}/readyz'
-order: 2000
-scripts:
-  - type: afterResponse
-    language: text/javascript
-    code: |-
-      pm.test('200 in Active, Transition and Degraded; 503 in Onboarding and FailClosed', () => pm.expect(pm.response.code).to.be.oneOf([200, 503]));

@@ -1,34 +1,5 @@
 version: "3"
 
-# secp256k1 exists in jwx only under this build tag, and its absence is silent:
-# without it the curve is simply missing from the JWA registry. Setting it as
-# GOFLAGS means every go invocation below — build, test, lint, air — picks it
-# up, rather than each command carrying its own -tags.
-env:
-  GOFLAGS: -tags=jwx_es256k
-  # The compose file is named for the environment it describes, so every
-  # `docker compose` below — and any run by hand in a shell that exports this —
-  # finds it without a -f on each command.
-  COMPOSE_FILE: docker-compose.dev.yaml
-
-# Written by `task auth:bootstrap`, and absent until it runs: it carries the
-# client secret and the session key, which is why it is generated rather than
-# committed. Task tolerates it not existing.
-dotenv: [".env"]
-
-vars:
-  BIN: alexandria
-  # Read from the configuration rather than repeated here: the port the process
-  # actually listens on is `internal_port`, since what the outside world sees is
-  # the proxy's.
-  NODE_PORT:
-    sh: sed -n 's/^[[:space:]]*internal_port:[[:space:]]*"\(.*\)".*/\1/p' config/config.yaml | head -n 1
-  ISSUER:
-    sh: sed -n 's/^[[:space:]]*issuer:[[:space:]]*"\(.*\)".*/\1/p' config/config.yaml | head -n 1
-  MAIN: ./cmd/alexandria
-  VERSION:
-    sh: git describe --tags --always --dirty 2>/dev/null || echo dev
-
 tasks:
   default:
     cmds: [{ task: check }]
@@ -43,29 +14,7 @@ tasks:
 
   test:
     desc: Run tests with the race detector and a coverage profile.
-    env:
-      ALEXANDRIA_AUTH_CONFIG_ENABLED: "false"
     cmds: ["go test -race -coverprofile=coverage.out ./..."]
-
-  test:integration:
-    desc: Run all integration tests against live wallet services.
-    env:
-      ALEXANDRIA_AUTH_CONFIG_ENABLED: "false"
-    cmds: ['go test -race -v -tags="integration,jwx_es256k" ./...']
-
-  test:integration:fafnir:
-    desc: Run Fafnir integration tests.
-    cmds: ['go test -race -v -tags="integration,jwx_es256k" ./internal/ssi-auth/fafnir/...']
-
-  test:integration:identityhub:
-    desc: Run IdentityHub integration tests.
-    cmds: ['go test -race -v -tags="integration,jwx_es256k" ./internal/ssi-auth/identityhub/...']
-
-  test:all:
-    desc: Run both unit tests and integration tests.
-    env:
-      ALEXANDRIA_AUTH_CONFIG_ENABLED: "false"
-    cmds: ['go test -race -v -tags="integration,jwx_es256k" -coverprofile=coverage.out ./...']
 
   cover:
     desc: Open the coverage report in the browser.
@@ -73,17 +22,17 @@ tasks:
     cmds: ["go tool cover -html=coverage.out"]
 
   build:
-    desc: Build all project binaries (alexandria, alexandriac, alexandria-server, alexandria-client, fake-connector) into bin/.
+    desc: Build all project binaries (alexandriac, alexandria-server, alexandria-client, fake-idp, fake-connector) into bin/.
     cmds:
       - mkdir -p bin
-      - go build -ldflags="-s -w -X main.version={{.VERSION}}" -o bin/{{.BIN}} {{.MAIN}}
       - go build -o bin/alexandriac ./cmd/alexandriac
       - go build -o bin/alexandria-server ./cmd/alexandria-server
       - go build -o bin/alexandria-client ./cmd/alexandria-client
+      - go build -o bin/fake-idp ./deploy/fake-idp
       - go build -o bin/fake-connector ./deploy/fake-connector
 
   conformance:
-    desc: Run the Vocabulary Hub conformance suite (N1-N5, negative cases, and F6).
+    desc: Run the Vocabulary Hub conformance suite (T-*, N-*, and F6).
     cmds: ["go test ./conformance/..."]
 
   e2e:
@@ -103,235 +52,6 @@ tasks:
     desc: Remove compiled binaries in bin/ and coverage artifacts.
     cmds: ["rm -rf bin coverage.out"]
 
-  run:
-    desc: Run the application.
-    cmds: ["go run {{.MAIN}}"]
-
-  dev:
-    desc: Hot reload with air.
-    cmds: ["go tool air"]
-
-  dev:auto:
-    desc: "One command to start working: clear what is stale, bring everything up, run the node."
-    deps: [tls:ca]
-    cmds:
-      # A node left running from yesterday holds the port this one wants, and
-      # the error that produces names neither the process nor the port.
-      - |
-        stale="$(lsof -ti tcp:{{.NODE_PORT}} 2>/dev/null || true)"
-        if [ -n "$stale" ]; then
-          echo "stale      node on {{.NODE_PORT}}, stopping it"
-          echo "$stale" | xargs kill
-        fi
-      # Everything the node talks to. Idempotent: already-running services are
-      # left alone, and --wait blocks until they are actually answering rather
-      # than merely started.
-      - docker compose up -d --wait postgres caddy zitadel fafnir-wallet
-      # Idempotent too: it finds the project and application if they are there,
-      # and re-registers the redirect URI in case the configuration moved.
-      - bash scripts/zitadel-bootstrap.sh
-      # Likewise: it gives the wallet a key and a DID only if it has none. The
-      # node's first call is GET /dids/default, and a wallet that has just been
-      # created answers 404 to it.
-      - bash scripts/fafnir-bootstrap.sh
-      # The one thing no task can do for you, because it needs an administrator.
-      - |
-        if ! curl -sf {{.ISSUER}}/.well-known/openid-configuration >/dev/null 2>&1; then
-          echo
-          echo "  This machine does not trust the project authority yet, so the"
-          echo "  node will not reach {{.ISSUER}}:"
-          echo
-          echo "      task tls:trust"
-          echo
-        fi
-      - task: dev
-
-  db:up:
-    desc: Start the local Postgres and wait for it to accept connections.
-    cmds: ["docker compose up -d --wait postgres"]
-
-  db:down:
-    desc: Stop the local Postgres, keeping its data.
-    cmds: ["docker compose down"]
-
-  db:reset:
-    desc: Destroy the local Postgres and its data, then start it again.
-    prompt: This deletes the local database volume. Continue?
-    cmds:
-      - docker compose down -v
-      - task: db:up
-
-  db:psql:
-    desc: Open a psql shell on the local Postgres.
-    cmds: ['docker compose exec postgres sh -c ''psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
-
-  db:logs:
-    desc: Follow the local Postgres logs.
-    cmds: ["docker compose logs -f postgres"]
-
-  wallet:up:
-    desc: Start the local wallet and wait for it to answer.
-    cmds: ["docker compose up -d --wait fafnir-wallet"]
-
-  wallet:bootstrap:
-    desc: Give the wallet a signing key and a default DID, if it has none.
-    deps: [wallet:up]
-    cmds: ["bash scripts/fafnir-bootstrap.sh"]
-
-  wallet:down:
-    desc: Stop the local wallet, keeping its keys and its data.
-    cmds: ["docker compose stop fafnir-wallet fafnir-db"]
-
-  wallet:reset:
-    desc: Destroy the local wallet, its keys and its data, then start over.
-    prompt: This deletes the node's private key. Its DID cannot be recovered. Continue?
-    cmds:
-      - docker compose rm -sfv fafnir-wallet fafnir-db fafnir-setup
-      # Compose prefixes a volume with the project, which is the directory name
-      # unless COMPOSE_PROJECT_NAME says otherwise.
-      - docker volume rm -f ${COMPOSE_PROJECT_NAME:-alexandria}_fafnir-data ${COMPOSE_PROJECT_NAME:-alexandria}_fafnir-keys
-      - task: wallet:bootstrap
-
-  wallet:logs:
-    desc: Follow the local wallet logs.
-    cmds: ["docker compose logs -f fafnir-wallet"]
-
-  identityhub:up:
-    desc: Start IdentityHub container and wait for it to be healthy.
-    cmds:
-      - |
-        if [ ! "$(docker ps -q -f name=identityhub-test)" ]; then
-          if [ "$(docker ps -aq -f status=exited -f name=identityhub-test)" ]; then
-            docker rm identityhub-test
-          fi
-          docker run -d --rm --name identityhub-test \
-            -p 8181:8181 -p 8182:8182 \
-            -e "WEB_HTTP_PORT=8181" \
-            -e "WEB_HTTP_PATH=/api" \
-            -e "WEB_HTTP_IDENTITY_PORT=8182" \
-            -e "WEB_HTTP_IDENTITY_PATH=/api/identity" \
-            ${IDENTITYHUB_IMAGE:-identity-hub:latest}
-        fi
-      - |
-        echo "Waiting for IdentityHub to be healthy..."
-        for i in $(seq 1 30); do
-          if curl -sf http://127.0.0.1:8181/api/check/health >/dev/null 2>&1; then
-            echo "IdentityHub is healthy on :8181 / :8182"
-            exit 0
-          fi
-          sleep 1
-        done
-        echo "Timed out waiting for IdentityHub" >&2
-        exit 1
-
-  identityhub:down:
-    desc: Stop the IdentityHub container.
-    cmds:
-      - docker stop identityhub-test 2>/dev/null || true
-
-  identityhub:logs:
-    desc: Follow IdentityHub container logs.
-    cmds:
-      - docker logs -f identityhub-test
-
-  vault:up:
-    desc: "Start Vault, seed it, and run the wallet against it instead of files."
-    cmds:
-      - docker compose --profile vault up -d --wait vault
-      - docker compose --profile vault up vault-seed
-      # The wallet reads is_vault_real from its YAML, and there is no
-      # environment override for it, so switching modes means mounting the
-      # other file. --force-recreate because only the mount changed.
-      - FAFNIR_CONFIG=./config/fafnir/wallet-vault.yaml docker compose up -d --force-recreate --wait fafnir-wallet
-      - |
-        echo
-        echo "  The wallet now keeps its keys in Vault. Its previous file-backed"
-        echo "  identity is still on the fafnir-keys volume but is not in use, so"
-        echo "  give it one here:"
-        echo
-        echo "      task wallet:bootstrap"
-        echo
-        echo "  Vault UI  http://127.0.0.1:8200   token alexandria-dev-root"
-        echo
-
-  vault:down:
-    desc: "Stop Vault and put the wallet back on files."
-    cmds:
-      - docker compose up -d --force-recreate --wait fafnir-wallet
-      - docker compose --profile vault rm -sf vault vault-seed
-
-  vault:logs:
-    desc: Follow the local Vault logs.
-    cmds: ["docker compose --profile vault logs -f vault"]
-
-  tls:ca:
-    desc: Create the project's certificate authority in .certs/, if it has none.
-    cmds: ["bash scripts/tls-ca.sh"]
-
-  tls:trust:
-    desc: Trust that authority on this machine. Needs sudo, once.
-    deps: [tls:ca]
-    cmds:
-      - |
-        case "$(uname -s)" in
-          Darwin)
-            sudo security add-trusted-cert -d -r trustRoot \
-              -k /Library/Keychains/System.keychain .certs/root.crt
-            ;;
-          Linux)
-            sudo cp .certs/root.crt /usr/local/share/ca-certificates/alexandria-local.crt
-            sudo update-ca-certificates
-            ;;
-          *)
-            echo "Trust .certs/root.crt by hand on this system." >&2
-            exit 1
-            ;;
-        esac
-
-  tls:up:
-    desc: Start the local TLS terminator.
-    deps: [tls:ca]
-    cmds: ["docker compose up -d --wait caddy"]
-
-  tls:logs:
-    desc: Follow the Caddy logs.
-    cmds: ["docker compose logs -f caddy"]
-
-  auth:up:
-    desc: Start the local Zitadel and wait for it to answer.
-    cmds: ["docker compose up -d --wait zitadel"]
-
-  auth:bootstrap:
-    desc: Create the Zitadel project and application, and write .env.
-    # Not tls:up. TLS is infrastructure of its own: it fronts the node whether
-    # or not authentication is enabled, and this talks to Zitadel directly.
-    deps: [auth:up]
-    cmds: ["bash scripts/zitadel-bootstrap.sh"]
-
-  auth:down:
-    desc: Stop the local Zitadel, keeping its data.
-    cmds: ["docker compose stop zitadel zitadel-db"]
-
-  auth:reset:
-    desc: Destroy the local Zitadel and its data, then start it again.
-    prompt: This deletes every user, project and application in the local Zitadel. Continue?
-    cmds:
-      - docker compose rm -sfv zitadel zitadel-db zitadel-init
-      # Compose prefixes a volume with the project, which is the directory name
-      # unless COMPOSE_PROJECT_NAME says otherwise. Spelling the default here
-      # rather than hard-coding "alexandria" keeps a renamed checkout working.
-      - docker volume rm -f ${COMPOSE_PROJECT_NAME:-alexandria}_zitadel-data ${COMPOSE_PROJECT_NAME:-alexandria}_zitadel-machinekey
-      - rm -f .env
-      - task: auth:bootstrap
-
-  auth:logs:
-    desc: Follow the local Zitadel logs.
-    cmds: ["docker compose logs -f zitadel"]
-
-  auth:console:
-    desc: Open the Zitadel console in the browser.
-    cmds: ["open http://127.0.0.1:1600/ui/console"]
-
   tidy:
     desc: Sync go.mod and go.sum.
     cmds: ["go mod tidy"]
@@ -345,6 +65,19 @@ tasks:
     dir: docs
     cmds: ["pnpm dev"]
 
+  build:gui:
+    desc: Build the console (gui/) and embed it in alexandria-server and alexandria-client under /ui/ (requires pnpm).
+    deps: [build]
+    cmds:
+      - cd gui && pnpm install --frozen-lockfile && pnpm build:embed
+      - go build -tags gui -o bin/alexandria-server ./cmd/alexandria-server
+      - go build -tags gui -o bin/alexandria-client ./cmd/alexandria-client
+
+  gui:dev:
+    desc: Start the console with the Vite dev server and API proxies (http://localhost:5273).
+    dir: gui
+    cmds: ["pnpm install", "pnpm dev"]
+
   docs:build:
     desc: Build static documentation for GitHub Pages.
     dir: docs
@@ -356,7 +89,7 @@ tasks:
     cmds: ["./tutorial/run"]
 
   tutorial:exec:
-    desc: Execute and verify all 6 Jupyter notebooks in tutorial/ headlessly against the Go binaries.
+    desc: Execute and verify the Jupyter notebooks in tutorial/ headlessly against the Go binaries.
     deps: [build]
     cmds: ["python3 ./tutorial/run.py exec -v"]
 

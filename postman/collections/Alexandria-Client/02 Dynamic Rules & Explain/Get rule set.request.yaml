@@ -1,0 +1,10 @@
+$kind: http-request
+method: GET
+url: '{{clientAdmin}}/rules'
+order: 1000
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('200 rule set with ETag', () => {\n  pm.response.to.have.status(200);\n  pm.collectionVariables.set('rulesEtag',\
+    \ pm.response.headers.get('ETag'));\n  pm.collectionVariables.set('fullRulesetJson', pm.response.text());\n\
+    });"

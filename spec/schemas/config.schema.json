@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://w3id.org/alexandria-vhub/schemas/client-config/v1",
+  "title": "Configuración del vhub-client v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "trust",
+    "upstreams",
+    "listeners",
+    "events"
+  ],
+  "properties": {
+    "trust": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hub",
+        "namespace",
+        "hub_did"
+      ],
+      "properties": {
+        "hub": {
+          "type": "string",
+          "pattern": "^https://"
+        },
+        "namespace": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{1,62}$"
+        },
+        "hub_did": {
+          "type": "string",
+          "pattern": "^did:(web:[A-Za-z0-9._%:-]+|key:z[1-9A-HJ-NP-Za-km-z]+)$"
+        },
+        "context": {
+          "type": "string",
+          "format": "iri",
+          "default": "https://w3id.org/alexandria-vhub/v1"
+        },
+        "did_ttl": {
+          "type": "string",
+          "pattern": "^P(?=[0-9]|T[0-9])([0-9]+D)?(T([0-9]+H)?([0-9]+M)?([0-9]+S)?)?$",
+          "default": "PT6H"
+        }
+      }
+    },
+    "upstreams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dsp"
+      ],
+      "properties": {
+        "dsp": {
+          "type": "string",
+          "format": "uri"
+        },
+        "management": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "listeners": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "admin"
+      ],
+      "properties": {
+        "dsp-ingress": {
+          "$ref": "#/$defs/listener"
+        },
+        "mgmt-ingress": {
+          "$ref": "#/$defs/listener"
+        },
+        "dsp-egress": {
+          "$ref": "#/$defs/listener"
+        },
+        "admin": {
+          "$ref": "#/$defs/listener"
+        }
+      }
+    },
+    "rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "seed": {
+          "type": "string",
+          "pattern": "^file:"
+        }
+      }
+    },
+    "default_action": {
+      "enum": [
+        "forward",
+        "reject"
+      ],
+      "default": "forward"
+    },
+    "unknown_agreement": {
+      "enum": [
+        "forward",
+        "reject"
+      ],
+      "default": "forward"
+    },
+    "audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "window": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 100
+        }
+      }
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "gc_interval": {
+          "type": "string",
+          "pattern": "^P(?=[0-9]|T[0-9])([0-9]+D)?(T([0-9]+H)?([0-9]+M)?([0-9]+S)?)?$",
+          "default": "P1D"
+        }
+      }
+    },
+    "events": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sink"
+      ],
+      "properties": {
+        "sink": {
+          "type": "string",
+          "pattern": "^(file:|http:|https:)"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "listener": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bind"
+      ],
+      "properties": {
+        "bind": {
+          "type": "string",
+          "pattern": "^[^:]+:[0-9]{1,5}$"
+        }
+      }
+    }
+  }
+}

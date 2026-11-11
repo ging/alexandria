@@ -1,0 +1,17 @@
+$kind: http-request
+method: POST
+url: '{{hubUrl}}/v1/namespaces/{{namespace}}/candidates/{{candidateId}}:approve'
+order: 7000
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: text
+  content: '{}'
+scripts:
+- type: afterResponse
+  language: text/javascript
+  code: "pm.test('201 signed VersionRecord VC 2.0', () => {\n  pm.response.to.have.status(201);\n  const\
+    \ vc = pm.response.json();\n  pm.expect(vc.proof.cryptosuite).to.eql('eddsa-jcs-2022');\n  const seg\
+    \ = vc.credentialSubject.manifest.replace('ni:///sha-256;', '');\n  pm.collectionVariables.set('manifestSegment',\
+    \ seg);\n});"

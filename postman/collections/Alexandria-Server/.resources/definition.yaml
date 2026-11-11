@@ -1,0 +1,33 @@
+$kind: collection
+description: "Alexandria Vocabulary Hub — alexandria-server API (Specification v0.3.0: /v1 management\
+  \ API, /pub immutable distribution, fake-idp OIDC/JWKS, and fake-connector helpers).\n\nRecommended\
+  \ local setup (with shared clock file so propagation/grace windows can be stepped instantly):\n  1.\
+  \ make build && mkdir -p var && echo '2026-09-01T09:00:00Z' > var/clock\n  2. ./bin/fake-idp serve\n\
+  \  3. ./bin/fake-connector\n  4. ./bin/alexandria-server -config config/server.yaml -clock-file var/clock\n\
+  \  5. Mint ES256 at+jwt tokens and paste into the alexandria-local environment:\n       ./bin/fake-idp\
+  \ token --sub ana --admin --ttl 2400h --clock-file var/clock  -> adminToken\n       ./bin/fake-idp token\
+  \ --sub sergio --ttl 2400h --clock-file var/clock       -> stewardToken\n       ./bin/fake-idp token\
+  \ --sub eve --ttl 2400h --clock-file var/clock          -> unprivilegedToken\n  6. Disable SSL certificate\
+  \ verification in Postman Settings for the self-signed lab certificate (DP-14).\n  7. Advance var/clock\
+  \ (e.g. echo '2026-09-04T00:00:00Z' > var/clock) once 1.0.0 is approved so 1.0.0 enters Published state."
+variables:
+  draftId: ''
+  draftEtag: ''
+  candidateId: ''
+  rejectCandidateId: ''
+  candidate2Id: ''
+  tempStewardId: ''
+  vocabEtag: ''
+  manifestSegment: ''
+  blobHex: ''
+auth:
+  type: bearer
+  credentials:
+    token: '{{stewardToken}}'
+scripts:
+- type: http:afterResponse
+  language: text/javascript
+  code: "if (pm.response.code >= 400 && pm.request.url.toString().includes('/v1/')) {\n  pm.test('RFC\
+    \ 9457 problem+json typed by F5 catalog code', () => {\n    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');\n\
+    \    const p = pm.response.json();\n    if (p.code) {\n      pm.expect(p.type).to.eql('https://w3id.org/alexandria-vhub/problems#'\
+    \ + p.code);\n    }\n  });\n}"

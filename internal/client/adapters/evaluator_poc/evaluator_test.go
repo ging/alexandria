@@ -17,9 +17,10 @@ const dspContext = "https://w3id.org/dspace/2025/1/context.jsonld"
 func shaclPackage() *pkgv.Package {
 	return &pkgv.Package{
 		Digest: "ni:///sha-256;test",
-		Manifest: pkgv.Manifest{Slots: []pkgv.Slot{{Slot: "odrl", Obligation: "mandatory"}}, Files: []pkgv.File{
+		Slots:  []pkgv.Slot{{Slot: "odrl", Obligation: "mandatory", AppliesTo: []string{"policy_intake"}}},
+		Manifest: pkgv.Manifest{Files: []pkgv.File{
 			{Path: "shapes.ttl", Role: "shacl", Slot: "odrl", AppliesTo: []string{"policy_intake"}},
-			{Path: "ctx.jsonld", Role: "mapping", Slot: "odrl", URL: dspContext, AppliesTo: []string{}},
+			{Path: "ctx.jsonld", Role: "other", Slot: "odrl", URL: dspContext},
 		}},
 		Raw: pkgv.Files{Content: map[string][]byte{"shapes.ttl": []byte("."), "ctx.jsonld": []byte(`{"@context":{"offer":"https://w3id.org/dspace/2025/1/offer"}}`)}},
 	}
@@ -39,7 +40,21 @@ func TestDeclaredContextPasses(t *testing.T) {
 
 func TestNestedUndeclaredContextIsCaught(t *testing.T) {
 	r := evaluate(`{"@context":"` + dspContext + `","@id":"urn:m","offer":{"@context":"https://evil.example/ctx.jsonld","@id":"urn:o"}}`)
-	if r.Pass || len(r.Findings) != 1 || r.Findings[0].Code != codes.ContextNotInPackage {
+	if r.Pass || len(r.Findings) != 2 || r.Findings[0].Code != codes.ContextNotInPackage {
+		t.Fatalf("got %+v", r)
+	}
+}
+
+func TestShaclIsReportedAsUnsupportedInfo(t *testing.T) {
+	r := evaluate(`{"@context":"` + dspContext + `","@id":"urn:m"}`)
+	if !r.Pass || len(r.Findings) != 1 || r.Findings[0].Severity != "Info" || r.Findings[0].Code != PocEvalUnsupportedRole {
+		t.Fatalf("got %+v", r)
+	}
+}
+
+func TestSlotOfAnotherGateIsNotEvaluated(t *testing.T) {
+	e := &Evaluator{}
+	if r := e.Evaluate(domain.Message{Root: []byte(`{}`), Selected: []byte(`{}`)}, domain.GateDSP, shaclPackage()); !r.Pass || len(r.Findings) != 0 {
 		t.Fatalf("got %+v", r)
 	}
 }

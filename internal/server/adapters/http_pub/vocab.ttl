@@ -1,0 +1,61 @@
+@prefix avh: <https://w3id.org/alexandria-vhub/v1#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Minimal description of the alexandria-vhub vocabulary of Appendix A.5 (DP-9, REQ-HUB-030).
+<https://w3id.org/alexandria-vhub/v1#> a owl:Ontology ;
+  rdfs:label "alexandria-vhub vocabulary v1" .
+
+avh:Namespace a rdfs:Class ; rdfs:label "Namespace" .
+avh:Steward a rdfs:Class ; rdfs:label "Steward" .
+avh:Vocabulary a rdfs:Class ; rdfs:label "Vocabulary" .
+avh:Revision a rdfs:Class ; rdfs:label "Revision" .
+avh:VersionRecord a rdfs:Class ; rdfs:label "Version record" .
+avh:VersionListing a rdfs:Class ; rdfs:label "Version listing" .
+avh:PackageManifest a rdfs:Class ; rdfs:label "Package manifest" .
+avh:Event a rdfs:Class ; rdfs:label "Event" .
+
+avh:slug a rdf:Property ; rdfs:range xsd:string .
+avh:createdAt a rdf:Property ; rdfs:range xsd:dateTime .
+avh:namespace a rdf:Property ; rdfs:range avh:Namespace .
+avh:version a rdf:Property ; rdfs:range xsd:string .
+avh:manifest a rdf:Property .
+avh:changeClass a rdf:Property ; rdfs:range xsd:string .
+avh:publishedAt a rdf:Property ; rdfs:range xsd:dateTime .
+avh:newContentFrom a rdf:Property ; rdfs:range xsd:dateTime .
+avh:enforcedFrom a rdf:Property ; rdfs:range xsd:dateTime .
+avh:revokedFrom a rdf:Property ; rdfs:range xsd:dateTime .
+avh:sequence a rdf:Property ; rdfs:range xsd:integer .
+avh:versions a rdf:Property ; rdfs:range rdf:List .
+avh:lifecycle a rdf:Property ; rdfs:range rdf:JSON .
+avh:profile a rdf:Property .
+avh:file a rdf:Property .
+avh:path a rdf:Property ; rdfs:range xsd:string .
+avh:mediaType a rdf:Property ; rdfs:range xsd:string .
+avh:digest a rdf:Property .
+avh:role a rdf:Property ; rdfs:range xsd:string .
+avh:slot a rdf:Property ; rdfs:range xsd:string .
+avh:appliesTo a rdf:Property ; rdfs:range xsd:string .
+avh:url a rdf:Property .
+avh:source a rdf:Property .
+avh:kind a rdf:Property ; rdfs:range xsd:string .
+avh:upstream a rdf:Property .
+avh:revision a rdf:Property ; rdfs:range rdf:List .
+avh:revisionNumber a rdf:Property ; rdfs:range xsd:integer .
+avh:size a rdf:Property ; rdfs:range xsd:integer .
+avh:createdBy a rdf:Property ; rdfs:range xsd:string .
+avh:issuer a rdf:Property ; rdfs:range xsd:string .
+avh:subject a rdf:Property ; rdfs:range xsd:string .
+avh:label a rdf:Property ; rdfs:range xsd:string .
+avh:assignedAt a rdf:Property ; rdfs:range xsd:dateTime .
+avh:assignedBy a rdf:Property ; rdfs:range xsd:string .
+avh:timestamp a rdf:Property ; rdfs:range xsd:dateTime .
+avh:principal a rdf:Property ; rdfs:range xsd:string .
+avh:eventSubject a rdf:Property ; rdfs:range xsd:string .
+avh:code a rdf:Property ; rdfs:range xsd:string .
+avh:severity a rdf:Property ; rdfs:range xsd:string .
+avh:httpStatus a rdf:Property ; rdfs:range xsd:integer .
+avh:detail a rdf:Property ; rdfs:range xsd:string .
+avh:line a rdf:Property ; rdfs:range xsd:integer .

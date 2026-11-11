@@ -1,0 +1,37 @@
+{
+  "trust": {
+    "hub": "https://hub.example.com",
+    "namespace": "demo",
+    "hub_did": "did:web:hub.example.com",
+    "did_ttl": "PT6H"
+  },
+  "upstreams": {
+    "dsp": "http://connector:8080/dsp",
+    "management": "http://connector:8081/management"
+  },
+  "listeners": {
+    "dsp-ingress": {
+      "bind": "0.0.0.0:9080"
+    },
+    "dsp-egress": {
+      "bind": "127.0.0.1:9081"
+    },
+    "admin": {
+      "bind": "127.0.0.1:9090"
+    }
+  },
+  "rules": {
+    "seed": "file:///etc/vhub-client/rules.json"
+  },
+  "default_action": "forward",
+  "unknown_agreement": "forward",
+  "audit": {
+    "window": 100
+  },
+  "retention": {
+    "gc_interval": "P1D"
+  },
+  "events": {
+    "sink": "file:///var/log/vhub-client/events.jsonl"
+  }
+}
