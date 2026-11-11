@@ -46,3 +46,16 @@ None of `Q18`–`Q22` blocks v1 (F7.2). Their treatment in this PoC is:
 - **Issue:** By §3.8, a version belongs to `versions[]` while its reference state is `Scheduled`, `Published`, or `Deprecated`, or when `revoked_from != null`. At `enforced_from(2.0.0) = 2026-11-02T10:00:00Z`, version `1.0.0` becomes `Retired` in reference time, so any listing reissued by the hub in `[enforced_from, enforced_from + L)` already omits `1.0.0`. Meanwhile, F6.3 row 4 (`2026-11-02T10:00:05Z`, with `L = 10s`) expects local `V_t = {2.0.0, 1.0.0}` because the client's periodic sync happened before the barrier (e.g. `2026-11-02T06:00:00Z` under `sync_interval = PT6H`).
 - **Handling in PoC:** In `TestT_SYS_007_F6Rows` and `conformance/f6/scenario.go`, the client syncs before each barrier as in F6 (`2026-11-02T06:00:00Z`), reproducing all F6.3 rows identically.
 - **Recommended spec clarification:** Either note in §3.8 that `versions[]` retains a newly `Retired`/`Superseded` version until `enforced_from + lease_margin + clock_skew`, or note in §4.4 that the client keeps previously known non-revoked versions in its local snapshot until `enforced_from + L`.
+
+### G11 — `/pub` Route Collision with Namespaces Named `packages` or `blobs`
+
+- **Where:** §3.2 (slug pattern, only `_vhub` reserved) and §3.10 (`/pub/packages/{digest}/manifest.json`, `/pub/blobs/sha256/{hex}`, `/pub/{ns}/{version}/{path}`).
+- **Issue:** The slugs `packages` and `blobs` are valid, so `/pub/packages/{x}/manifest.json` is ambiguous between a package manifest and the file `manifest.json` of version `{x}` of namespace `packages`.
+- **Handling in PoC:** `http_pub` routes the fixed prefixes first, so artefacts of namespaces named `packages` or `blobs` at those exact shapes are shadowed. No code is invented to reject the slugs.
+- **Options:** reserve `packages` and `blobs` next to `_vhub` (preferred, reusing `NS_EXISTS` as for `_vhub`), or move the content-addressed routes under `/pub/_vhub/`.
+
+### G12 — Who Reads the Events of a Namespace (§3.5 vs. §3.9)
+
+- **Where:** §3.5 authorization table (row "…revocaciones de ns; eventos de ns": admin is 403 unless also steward) and §3.9 (`GET /v1/namespaces/{ns}/events`: "steward de ns o admin").
+- **Handling in PoC:** the §3.5 table is applied, as §3.9 says its "Quién" column follows that table: only stewards of `ns` read its events; the admin reads global events at `GET /v1/events`.
+- **Options:** align §3.9 with §3.5 (preferred), or move "eventos de ns" to the "Listar los stewards de ns" row of §3.5.
