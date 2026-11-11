@@ -1,0 +1,186 @@
+---
+title: "Alexandria Console (GUI)"
+description: "Web console for alexandria-server and alexandria-client: views, development and embedded modes, OAuth 2.0 / OIDC sign-in, the interactive fake-idp, and the admin and steward roles."
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Steps } from 'fumadocs-ui/components/steps';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
+
+# Alexandria Console (`gui/`)
+
+The **console** is a single-page application for operating both binaries from the browser. It lives in `gui/` (React, TypeScript, Vite, TanStack Router / Query / Table, Tailwind CSS) and talks only to the public HTTP APIs: `/v1` and `/pub` on `alexandria-server`, and the admin listener of `alexandria-client`.
+
+<Callout type="warn">
+**Laboratory tool (`DP-14`).** The console, like `fake-idp` and the lab TLS certificate, is meant for development and demonstrations. It is not a hardened production deployment.
+</Callout>
+
+---
+
+## 1. Workspaces and Views
+
+| Workspace | View | What it does |
+|:---|:---|:---|
+| **Server** (`C-HUB`) | Namespaces | Lists namespaces; the admin creates new ones. |
+| | Overview | Namespace identity, release line and steward management. |
+| | Vocabularies | Hosted and proxy vocabularies, immutable revisions, content upload and upstream refresh. |
+| | Authoring | Draft → validate → propose → approve or reject, with the planned lifecycle dates and the diff. |
+| | Versions | Signed `VersionListing`, lifecycle timeline, `VersionRecord` proofs and revocation. |
+| | Events | Namespace audit trail, and the hub-wide log for the admin. |
+| | Publication | A `GET` explorer for `/pub`: redirects, ETag, caching headers and artefact bodies. |
+| **Client** (`C-CLI`) | Status | Operational state machine, listing freshness, hub trust anchor and health probes. |
+| | Versions | Synchronized lifecycle records and which packages are held on disk. |
+| | Rules | Rule set CRUD under `If-Match`, with a quick `observe` / `shadow` / `enforce` switch. |
+| | Explain | Side-effect-free dry run of a DSP message (`POST /rules:explain`). |
+| | Agreements | Look up a captured agreement binding and whether it is still usable. |
+| | Audit | Latest passive catalog audit report. |
+| | Metrics | OpenMetrics exposition parsed into figures and a classification table. |
+
+`⌘K` / `Ctrl K` opens the command palette. Light, dark and system themes are available from the title bar.
+
+<Callout type="info">
+The hub has no list endpoints for drafts or candidates, so **Authoring** rebuilds its index from the namespace event log. **Agreements** only supports lookup by id for the same reason.
+</Callout>
+
+---
+
+## 2. Running the Console
+
+<Tabs items={['Embedded in the binaries', 'Development server']}>
+<Tab value="Embedded in the binaries">
+
+```bash
+make build-gui        # or: task build:gui
+```
+
+This builds `gui/` into `internal/webui/dist` and recompiles `alexandria-server` and `alexandria-client` with the `gui` build tag. Each binary then serves **its own workspace** under `/ui/`, with no Node, Vite or proxy at runtime:
+
+| Binary | URL | Workspace |
+|:---|:---|:---|
+| `alexandria-server` | `{base}/ui/` — e.g. `https://127.0.0.1:8443/ui/` | Server, next to `/v1` and `/pub` |
+| `alexandria-client` | `http://{admin bind}/ui/` | Client, on the admin listener only |
+
+On startup the binary logs `console enabled`. Open the hub console on the exact host of its configured `base` (`127.0.0.1`, not `localhost`): `/pub` redirects are absolute and would otherwise be cross-origin.
+
+</Tab>
+<Tab value="Development server">
+
+```bash
+make gui-dev          # or: task gui:dev  →  http://localhost:5273
+```
+
+The Vite dev server shows **both** workspaces and proxies the upstreams same-origin, so no CORS setup is needed and the lab TLS certificate is accepted. Override the targets in `gui/.env.local`:
+
+| Variable | Default | Proxied under |
+|:---|:---|:---|
+| `ALEXANDRIA_HUB_URL` | `https://127.0.0.1:8443` | `/api/hub` |
+| `ALEXANDRIA_CLIENT_ADMIN_URL` | `http://127.0.0.1:9090` | `/api/client` |
+| `ALEXANDRIA_OIDC_ISSUER` | `http://127.0.0.1:9400` | `/api/idp` |
+
+</Tab>
+</Tabs>
+
+<Callout type="warn">
+`make build` and `go build ./...` produce binaries **without** the console: no assets are embedded and `/ui/` answers `404`. Use `make build-gui` whenever the binaries should include it. When the tag is present the console is always mounted; on the client it is unauthenticated, like the rest of the admin API.
+</Callout>
+
+### How the embedding works
+
+- `internal/webui` embeds the build with `go:embed` behind the `gui` tag, serves it as a single-page application and injects the runtime configuration (workspace and, for the hub, its accepted issuer and audience) into the page.
+- Two thin driving adapters mount it: `internal/server/adapters/http_ui` on the hub listener and `internal/client/adapters/http_ui` on the admin listener. No domain or application code is involved.
+
+---
+
+## 3. Authentication (OAuth 2.0 / OIDC)
+
+`alexandria-server` is an OAuth 2.0 resource server that validates RFC 9068 `at+jwt` bearer tokens against the issuer's JWKS. The console obtains a token in one of two ways, both from the identity menu at the top right:
+
+- **Sign in with OIDC** — Authorization Code with PKCE (`S256`), `state` and `nonce`, driven by the issuer's discovery document. Refresh tokens are redeemed silently before expiry, and sign-out uses RP-initiated logout when `end_session_endpoint` is advertised.
+- **Access token** — paste a token minted elsewhere.
+
+Several identities can be saved and switched, which is convenient because the admin and the stewards are different principals. Tokens are kept in the browser's `localStorage` for the console origin.
+
+### Roles: admin and stewards
+
+There is no user table in the hub. A principal is whatever the token says:
+
+| Role | How it is granted | What it can do |
+|:---|:---|:---|
+| **Admin** | The token carries `vhub-admin` in its `roles` claim (`roles_claim` / `admin_role` in the server configuration). | Create namespaces, assign and remove stewards, read the hub-wide event log. |
+| **Steward** | The admin assigns the principal (`iss` + `sub`) to a namespace. | Every operation inside that namespace: vocabularies, drafts, candidates, releases, revocation and namespace events. |
+
+<Callout type="info">
+Being admin does **not** grant namespace operations. The usual bootstrap is: sign in as the admin, create the namespace, assign a steward, then sign in as that steward. To do everything with one identity, assign the admin as a steward of the namespace.
+</Callout>
+
+### With a real identity provider
+
+Register a **public** client (no secret) with the redirect URI of the console:
+
+| Mode | Redirect URI |
+|:---|:---|
+| Embedded | `{base}/ui/auth/callback` |
+| Development server | `http://localhost:5273/auth/callback` |
+
+The issuer must be one the hub accepts (`auth_config.issuer`), and the access token must be a JWT carrying the hub audience and, for admins, the `vhub-admin` role. The embedded console calls the issuer directly from the browser, so the provider must allow the hub origin (CORS).
+
+---
+
+## 4. The Interactive `fake-idp`
+
+`deploy/fake-idp` is the laboratory identity provider. Besides OIDC Discovery and the JWKS, `fake-idp serve` now implements the interactive flow the console needs:
+
+| Endpoint | Purpose |
+|:---|:---|
+| `GET /.well-known/openid-configuration` | Provider metadata, advertising the endpoints below. |
+| `GET /jwks.json` | ES256 public key used by the hub to validate tokens. |
+| `GET /authorize` | Subject picker: sign in as any `sub`, optionally with the admin role. **No password.** |
+| `POST /token` | Redeems an authorization code (PKCE required) or a refresh token. |
+| `GET /logout` | Ends the session and returns to the console. |
+
+<Steps>
+
+### 1. Start the lab services
+
+```bash
+./bin/fake-idp serve
+./bin/fake-connector
+./bin/alexandria-server -config config/server.yaml
+./bin/alexandria-client -config config/client.yaml
+```
+
+### 2. Sign in as the admin
+
+Open `https://127.0.0.1:8443/ui/`, choose **Sign in or add token… → Sign in**, and on the `fake-idp` page press **ana · admin**. A purple `admin` badge appears next to the name.
+
+### 3. Create a namespace and assign a steward
+
+Create the namespace in **Namespaces**, then in its **Overview** assign a steward with issuer `http://127.0.0.1:9400` and subject `sergio`.
+
+### 4. Sign in as the steward
+
+Sign in again and press **sergio · steward** to register vocabularies and author releases.
+
+</Steps>
+
+The same tokens can still be minted from the command line and pasted in the **Access token** tab:
+
+```bash
+./bin/fake-idp token --sub ana --admin --ttl 24h   # admin
+./bin/fake-idp token --sub sergio --ttl 24h        # steward (after being assigned)
+```
+
+`fake-idp serve` accepts `--ttl` for the lifetime of issued tokens and `--clock-file` to align `iat`, `nbf` and `exp` with the shared file clock of the demo. Authorization codes are single-use, refresh tokens rotate, and redirects are only allowed to `localhost` or loopback addresses so the lab provider can never act as an open redirector.
+
+---
+
+## 5. Troubleshooting
+
+| Symptom | Cause and fix |
+|:---|:---|
+| `404` on `/ui/` | The binary was built without the `gui` tag. Run `make build-gui` and restart it. |
+| "Discovery document not reachable" | The issuer is down, or it does not send CORS headers to the embedded console. Restart `fake-idp serve` from a current build. |
+| "no authorize endpoint" in the sign-in dialog | The issuer only publishes keys. Use a current `fake-idp`, or paste a token. |
+| `401` invalid token | The token is expired, was minted with another key or issuer, or was pasted incomplete. Sign in again. |
+| `403 API_FORBIDDEN_ROLE` | The identity lacks the role: namespace operations need a steward, hub operations need the admin. |
+| Client console unreachable | The admin listener bind is taken by another process. Change `listeners.admin.bind` in the client configuration. |
