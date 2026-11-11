@@ -1,6 +1,8 @@
-# Build artifacts
+# Build artifacts and local runtime state
 /bin/
 /tmp/
+/var/
+/alexandria-client-state/
 *.exe
 *.test
 

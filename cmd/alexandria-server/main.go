@@ -22,7 +22,7 @@ import (
 
 // main parses flags and starts the alexandria-server process.
 func main() {
-	cfgPath := flag.String("config", "deploy/server.json", "path to server.json")
+	cfgPath := flag.String("config", "config/server.yaml", "path to server configuration (YAML or JSON)")
 	clockFile := flag.String("clock-file", "", "read the current instant from this file (PoC and tests only)")
 	flag.Parse()
 	if err := run(*cfgPath, *clockFile); err != nil {

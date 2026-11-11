@@ -1,0 +1,63 @@
+# Local development configuration for alexandria-server.
+#
+# Both YAML (.yaml / .yml) and JSON (.json) are accepted by alexandria-server,
+# in either this section layout (common_config, auth_config, did_config,
+# observability, vhub_config) or the flat Appendix B layout (see deploy/server.json).
+# Relative file: paths are resolved from the directory containing this file.
+
+common_config:
+  hosts:
+    http:
+      # Public address and internal bind port of the hub.
+      protocol: "https"
+      url: "127.0.0.1"
+      port: "8443"
+      internal_port: "8443"
+    grpc: null
+    graphql: null
+  db:
+    db_type: "SQLite"
+    database: "file:../var/hub/hub.db"
+    blobs: "file:../var/hub/blobs"
+  connection:
+    is_local: true
+    is_prod: false
+    has_tls_proxy: false
+    tls:
+      cert: "file:../var/tls/hub.crt"
+      key: "file:../var/tls/hub.key"
+
+# OAuth 2.0 resource-server authentication (RFC 9068, §3.5 checks A1–A5).
+auth_config:
+  enabled: true
+  issuer: "http://127.0.0.1:9400"
+  internal_issuer: ""
+  audience: "alexandria-vhub"
+  algorithms: ["RS256", "ES256", "EdDSA"]
+  roles_claim: "roles"
+  admin_role: "vhub-admin"
+  jwks_refresh: "PT10M"
+
+# Hub identity and VC 2.0 signing key (eddsa-jcs-2022).
+did_config:
+  type: "key"
+  did: ""
+  signing_key: "file:../var/hub/hub.key"
+  verification_method: ""
+
+observability:
+  log_level: "info"
+  log_format: "auto"
+  metrics: true
+  pprof: false
+  port: "2112"
+
+# Vocabulary Hub settings (Appendix B, DP-6, DP-9, DP-11).
+vhub_config:
+  rdf_context: "self-hosted"
+  compiler: "poc"
+  clock_skew: "PT5S"
+  vocab:
+    max_size: 10485760
+    proxy_timeout: "PT30S"
+    allow_insecure_localhost: true

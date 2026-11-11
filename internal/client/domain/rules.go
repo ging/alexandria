@@ -3,10 +3,13 @@
 package domain
 
 import (
+	"bytes"
 	"encoding/json"
 	"sort"
 	"strconv"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/ging/alexandria/internal/core/codes"
 	"github.com/ging/alexandria/internal/core/schemas"
@@ -69,13 +72,17 @@ type Ruleset struct {
 // JSON serializes the rule set.
 func (rs *Ruleset) JSON() []byte { b, _ := json.Marshal(rs); return b }
 
-// ParseRuleset applies RULE-1 to raw bytes and decodes them.
+// ParseRuleset applies RULE-1 to raw JSON or YAML bytes and decodes them.
 func ParseRuleset(raw []byte) (*Ruleset, *codes.Error) {
-	if err := schemas.Validate(schemas.Rules, raw); err != nil {
+	b, err := toJSON(raw)
+	if err != nil {
+		return nil, codes.New(codes.RulesSchema, "%v", err)
+	}
+	if err := schemas.Validate(schemas.Rules, b); err != nil {
 		return nil, codes.New(codes.RulesSchema, "%v", err)
 	}
 	var rs Ruleset
-	if err := json.Unmarshal(raw, &rs); err != nil {
+	if err := json.Unmarshal(b, &rs); err != nil {
 		return nil, codes.New(codes.RulesSchema, "%v", err)
 	}
 	if rs.Rules == nil {
@@ -84,16 +91,36 @@ func ParseRuleset(raw []byte) (*Ruleset, *codes.Error) {
 	return &rs, nil
 }
 
-// ParseRule applies RULE-1 to one rule by wrapping it in a rule set.
+// ParseRule applies RULE-1 to one JSON or YAML rule by wrapping it in a rule set.
 func ParseRule(raw []byte) (Rule, *codes.Error) {
-	rs, err := ParseRuleset([]byte(`{"revision":0,"rules":[` + string(raw) + `]}`))
+	b, err := toJSON(raw)
 	if err != nil {
-		return Rule{}, err
+		return Rule{}, codes.New(codes.RulesSchema, "%v", err)
+	}
+	rs, cerr := ParseRuleset([]byte(`{"revision":0,"rules":[` + string(b) + `]}`))
+	if cerr != nil {
+		return Rule{}, cerr
 	}
 	if len(rs.Rules) != 1 {
 		return Rule{}, codes.New(codes.RulesSchema, "expected exactly one rule")
 	}
 	return rs.Rules[0], nil
+}
+
+// toJSON converts YAML or JSON bytes to canonical JSON bytes.
+func toJSON(raw []byte) ([]byte, error) {
+	if json.Valid(raw) {
+		return raw, nil
+	}
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[') {
+		return raw, nil
+	}
+	var v any
+	if err := yaml.Unmarshal(raw, &v); err != nil {
+		return nil, err
+	}
+	return json.Marshal(v)
 }
 
 // Check applies RULE-1 (on the serialized set) and RULE-2..RULE-5 in order, reporting the first failure.

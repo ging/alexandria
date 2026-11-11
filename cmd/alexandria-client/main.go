@@ -23,7 +23,7 @@ import (
 
 // main parses flags, validates configuration, and starts the alexandria-client process.
 func main() {
-	cfgPath := flag.String("config", "deploy/client.json", "path to the client configuration (Appendix A.3, JSON or YAML)")
+	cfgPath := flag.String("config", "config/client.yaml", "path to the client configuration (YAML or JSON)")
 	stateDir := flag.String("state-dir", "alexandria-client-state", "directory for continuity, packages and agreements")
 	clockFile := flag.String("clock-file", "", "read the current instant from this file (PoC and tests only)")
 	insecure := flag.Bool("did.allow_insecure_localhost", false, "allow http:// for a localhost did:web (PoC only, DP-5)")

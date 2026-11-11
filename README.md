@@ -7,7 +7,7 @@
 [![go report card](https://goreportcard.com/badge/github.com/ging/alexandria)](https://goreportcard.com/report/github.com/ging/alexandria)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-> **Laboratory Environment Notice (`DP-14`):** The configurations in `deploy/` (`server.json`, `client.json`, `rules.seed.json`), the local OAuth 2.0/OIDC issuer `deploy/fake-idp` (`DP-4`), the simulated DSP connector `deploy/fake-connector` (`Part 5.2`), local PEM signing keys, and transient lab TLS certificates (`-hub-ca`) are for laboratory and PoC demonstration only (`PRE-01`–`PRE-07`, `DP-1`–`DP-14`) and **are not intended for production deployment**.
+> **Laboratory Environment Notice (`DP-14`):** The configurations in `config/` (`server.yaml`, `client.yaml`) and `deploy/` (`server.yaml`, `server.json`, `client.yaml`, `client.json`, `rules.seed.json`), the local OAuth 2.0/OIDC issuer `deploy/fake-idp` (`DP-4`), the simulated DSP connector `deploy/fake-connector` (`Part 5.2`), local PEM signing keys, and transient lab TLS certificates (`-hub-ca`) are for laboratory and PoC demonstration only (`PRE-01`–`PRE-07`, `DP-1`–`DP-14`) and **are not intended for production deployment**.
 
 ---
 
@@ -59,8 +59,9 @@ alexandria/
 │   ├── alexandria-server/    # Vocabulary Hub server composition root (C-HUB)
 │   ├── alexandria-client/    # L7 edge validation & sync proxy composition root (C-CLI)
 │   └── alexandriac/          # Offline profile DSL compiler CLI
+├── config/                   # server.yaml & client.yaml (common_config, auth_config, did_config, observability, vhub/client_config)
 ├── conformance/              # Conformance battery, negative corpus (N-*), F6 E2E, demo & trace generator
-├── deploy/                   # server.json, client.json, rules.seed.json, fake-idp/ & fake-connector/
+├── deploy/                   # server.yaml/.json, client.yaml/.json, rules.seed.json, fake-idp/ & fake-connector/
 ├── docs/                     # Documentation portal (Fumadocs + Next.js)
 ├── internal/
 │   ├── archtest/             # Hexagonal architecture, DP-1 dependency & DP-8 clock enforcement tests

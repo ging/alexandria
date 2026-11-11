@@ -1,0 +1,47 @@
+# Local development configuration for alexandria-client (YAML equivalent of deploy/client.json).
+common_config:
+  hosts:
+    http:
+      protocol: "http"
+      url: "127.0.0.1"
+      port: "9080"
+      internal_port: "9080"
+    grpc: null
+    graphql: null
+  connection:
+    is_local: true
+    is_prod: false
+    has_tls_proxy: false
+
+did_config:
+  type: "key"
+  hub_did: "did:key:z6MkpTHR8VNsBxYAAWHut2Geadd9jSwuBV8xRoAnwWsdvktH"
+
+observability:
+  log_level: "info"
+  log_format: "auto"
+  metrics: true
+  pprof: false
+  port: "9090"
+  events_sink: "file:var/client/events.jsonl"
+
+client_config:
+  class_id: "Provider"
+  display: null
+  trust:
+    hub: "https://127.0.0.1:8443"
+    namespace: "demo"
+    context: "https://127.0.0.1:8443/pub/_vhub/v1/context.jsonld"
+  upstreams:
+    dsp: "http://127.0.0.1:8282/dsp"
+  listeners:
+    dsp-ingress:
+      bind: "127.0.0.1:9080"
+    dsp-egress:
+      bind: "127.0.0.1:9081"
+    admin:
+      bind: "127.0.0.1:9090"
+  rules:
+    seed: "file:deploy/rules.seed.json"
+  default_action: "forward"
+  unknown_agreement: "forward"
