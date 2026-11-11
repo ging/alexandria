@@ -17,7 +17,7 @@ import (
 
 // Fixed values of §3.8.
 const (
-	CredentialsV2   = "https://www.w3.org/ns/credentials/v2"
+	CredentialsV2   = "https://www.w3.org/ns/credentials/v2" // #nosec G101 -- W3C VC 2.0 context IRI, not a credential.
 	ProofType       = "DataIntegrityProof"
 	Cryptosuite     = "eddsa-jcs-2022"
 	AssertionMethod = "assertionMethod"

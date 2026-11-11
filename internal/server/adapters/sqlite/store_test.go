@@ -3,6 +3,7 @@
 package sqlite_test
 
 import (
+	"errors"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -78,7 +79,7 @@ func TestT_HUB_008_SequenceIsUniquePerNamespace(t *testing.T) {
 	s, _ := open(t)
 	f6On(t, s)
 	l, _, _ := s.LatestListing(testkit.NS)
-	if err := s.PutListing(testkit.NS, l); err != app.ErrSequenceTaken {
+	if err := s.PutListing(testkit.NS, l); !errors.Is(err, app.ErrSequenceTaken) {
 		t.Fatalf("got %v", err)
 	}
 }

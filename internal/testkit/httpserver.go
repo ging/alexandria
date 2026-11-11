@@ -4,6 +4,7 @@ package testkit
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -21,7 +22,7 @@ import (
 type HTTPServer struct {
 	*Server
 	URL                       string
-	IdP                       *IdP
+	IDP                       *IDP
 	AnaTok, SergioTok, EveTok string
 	server                    *httptest.Server
 }
@@ -29,12 +30,12 @@ type HTTPServer struct {
 // NewHTTPServer starts an F6 hub at t0 with namespace demo, behind httptest.
 func NewHTTPServer(t *testing.T, t0 string) *HTTPServer {
 	t.Helper()
-	var idp *IdP
+	var idp *IDP
 	idpSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { idp.Handler().ServeHTTP(w, r) }))
 	t.Cleanup(idpSrv.Close)
-	idp = NewIdP(idpSrv.URL)
+	idp = NewIDP(idpSrv.URL)
 	s := NewBareServer(t0)
-	h := &HTTPServer{Server: s, IdP: idp}
+	h := &HTTPServer{Server: s, IDP: idp}
 	verifier := &jwt_jwks.Verifier{
 		Issuers: []jwt_jwks.Issuer{{Iss: idp.Issuer, DiscoveryURL: idp.Issuer + "/.well-known/openid-configuration"}}, Audience: "alexandria-vhub",
 		Algorithms: []string{"ES256"}, AdminClaim: "roles", AdminValue: "vhub-admin", Skew: 5 * timex.Second, CacheTTL: 10 * timex.Minute, Clock: s.Clock,
@@ -61,7 +62,7 @@ func NewHTTPServer(t *testing.T, t0 string) *HTTPServer {
 // Do sends a request with an optional bearer token and headers and returns status, headers and body.
 func (h *HTTPServer) Do(t *testing.T, method, path, token string, body []byte, hdr map[string]string) (int, http.Header, []byte) {
 	t.Helper()
-	req, err := http.NewRequest(method, h.URL+path, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(context.Background(), method, h.URL+path, bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +88,7 @@ func (h *HTTPServer) SetupHTTP(t *testing.T) {
 	if st, _, b := h.Do(t, "POST", "/v1/namespaces", h.AnaTok, []byte(`{"slug":"demo"}`), nil); st != 201 {
 		t.Fatalf("create namespace: %d %s", st, b)
 	}
-	if st, _, b := h.Do(t, "POST", "/v1/namespaces/demo/stewards", h.AnaTok, []byte(`{"iss":"`+h.IdP.Issuer+`","sub":"sergio"}`), nil); st != 201 {
+	if st, _, b := h.Do(t, "POST", "/v1/namespaces/demo/stewards", h.AnaTok, []byte(`{"iss":"`+h.IDP.Issuer+`","sub":"sergio"}`), nil); st != 201 {
 		t.Fatalf("assign steward: %d %s", st, b)
 	}
 }

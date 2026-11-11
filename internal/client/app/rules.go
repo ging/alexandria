@@ -70,7 +70,7 @@ func (r *Rules) GetRule(id string) (domain.Rule, error) {
 
 // Replace substitutes the whole set.
 func (r *Rules) Replace(ifMatch string, raw []byte) (*domain.Ruleset, error) {
-	return r.change(ifMatch, nil, func(cur *domain.Ruleset) (*domain.Ruleset, []string, error) {
+	return r.change(ifMatch, nil, func(_ *domain.Ruleset) (*domain.Ruleset, []string, error) {
 		next, cerr := domain.ParseRuleset(raw)
 		if cerr != nil {
 			return nil, nil, cerr

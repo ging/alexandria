@@ -54,7 +54,7 @@ func walk(roots []string, fn func(path string, src []byte)) {
 			if err != nil || d.IsDir() || !strings.HasSuffix(p, ".go") {
 				return nil
 			}
-			b, err := os.ReadFile(p) // #nosec G304 -- repository files.
+			b, err := os.ReadFile(p) // #nosec G304 G122 -- repository files.
 			if err == nil {
 				fn(p, b)
 			}
@@ -155,7 +155,7 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
-	tests, mods := testsByReq(), map[string][]string{}
+	tests := testsByReq()
 	mods, orphans := modulesByReq()
 	all, covered, err := codeCoverage()
 	if err != nil {

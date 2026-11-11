@@ -1,6 +1,0 @@
-$kind: collection
-name: '02 DSP ingress'
-description: |-
-  ContractRequestMessage m1-m3 of F6 and a transfer of A1, through the enforce routes of config/config.json.
-  forward: the connector answer unchanged; forward-notice: the same plus VHub-Verdict; reject: 400 with the DSP error of the message type.
-order: 2000

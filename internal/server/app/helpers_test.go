@@ -4,6 +4,7 @@ package app_test
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/ging/alexandria/internal/core/codes"
@@ -21,7 +22,8 @@ func newHub(t *testing.T) *testkit.Server { return testkit.NewServer(t, t0) }
 
 // codeOf returns the code of a coded error, the first finding of a Findings, or "".
 func codeOf(err error) codes.Code {
-	if f, ok := err.(app.Findings); ok {
+	var f app.Findings
+	if errors.As(err, &f) {
 		return f[0].Code
 	}
 	if ce, ok := codes.As(err); ok {

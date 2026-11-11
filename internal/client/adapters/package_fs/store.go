@@ -40,7 +40,7 @@ func (s Store) Get(d ni.Digest) (pkgv.Files, bool, error) {
 		if err != nil || e.IsDir() {
 			return err
 		}
-		b, err := os.ReadFile(p) // #nosec G304 -- inside the package directory.
+		b, err := os.ReadFile(p) // #nosec G304 G122 -- inside the package directory.
 		if err != nil {
 			return err
 		}

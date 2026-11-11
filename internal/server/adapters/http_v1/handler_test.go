@@ -144,8 +144,10 @@ func TestT_HUB_029_ResponsesExpandAsJSONLD(t *testing.T) {
 	h := hub(t)
 	publish(t, h, testkit.DraftV1)
 	l := loader(t, schemas.Context())
-	paths := []string{"/v1/namespaces", "/v1/namespaces/demo", "/v1/namespaces/demo/stewards", "/v1/namespaces/demo/events",
-		"/v1/namespaces/demo/vocabularies", "/v1/namespaces/no-existe"}
+	paths := []string{
+		"/v1/namespaces", "/v1/namespaces/demo", "/v1/namespaces/demo/stewards", "/v1/namespaces/demo/events",
+		"/v1/namespaces/demo/vocabularies", "/v1/namespaces/no-existe",
+	}
 	for _, p := range paths {
 		_, hdr, b := h.Do(t, "GET", p, h.SergioTok, nil, nil)
 		if ct := hdr.Get("Content-Type"); ct != "application/ld+json" && ct != "application/problem+json" {

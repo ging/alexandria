@@ -3,6 +3,7 @@
 package did_resolver
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -33,7 +34,11 @@ func (r Resolver) Resolve(d did.DID) (did.Document, error) {
 	if c == nil {
 		c = &http.Client{Timeout: 10 * time.Second}
 	}
-	resp, err := c.Get(u) // #nosec G107 -- URL derived from the configured hub DID.
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, u, nil)
+	if err != nil {
+		return did.Document{}, err
+	}
+	resp, err := c.Do(req) // #nosec G107 -- URL derived from the configured hub DID.
 	if err != nil {
 		return did.Document{}, err
 	}

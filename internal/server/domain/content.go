@@ -51,32 +51,32 @@ func TurtleLexOK(s string) bool {
 	depth, last := 0, byte(0)
 	for i := 0; i < len(s); i++ {
 		c := s[i]
-		switch {
-		case c == '#':
+		switch c {
+		case '#':
 			for i < len(s) && s[i] != '\n' {
 				i++
 			}
 			continue
-		case c == '<':
+		case '<':
 			j := strings.IndexByte(s[i+1:], '>')
 			if j < 0 || strings.ContainsAny(s[i+1:i+1+j], " \n\"{}|^`") {
 				return false
 			}
 			i += j + 1
-		case c == '"' || c == '\'':
+		case '"', '\'':
 			end := skipString(s, i)
 			if end < 0 {
 				return false
 			}
 			i = end
-		case c == '[' || c == '(':
+		case '[', '(':
 			depth++
-		case c == ']' || c == ')':
+		case ']', ')':
 			depth--
 			if depth < 0 {
 				return false
 			}
-		case c == '{' || c == '}':
+		case '{', '}':
 			return false
 		}
 		if c != ' ' && c != '\t' && c != '\n' && c != '\r' {

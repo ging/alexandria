@@ -4,6 +4,7 @@ package conformance
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -83,7 +84,7 @@ func startClient(t *testing.T, cfg string) string {
 	p := filepath.Join(dir, "client.json")
 	_ = os.WriteFile(p, []byte(cfg), 0o600)
 	var stderr bytes.Buffer
-	cmd := exec.Command(bin("alexandria-client"), "-config", p, "-state-dir", filepath.Join(dir, "state")) // #nosec G204 -- test binary.
+	cmd := exec.CommandContext(context.Background(), bin("alexandria-client"), "-config", p, "-state-dir", filepath.Join(dir, "state")) // #nosec G204 -- test binary.
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err == nil {
 		t.Fatal("the client started with an invalid configuration")

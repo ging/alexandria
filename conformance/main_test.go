@@ -3,6 +3,7 @@
 package conformance
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -25,7 +26,7 @@ func TestMain(m *testing.M) {
 		"alexandria-server": "./cmd/alexandria-server", "alexandria-client": "./cmd/alexandria-client",
 		"fake-idp": "./deploy/fake-idp", "fake-connector": "./deploy/fake-connector",
 	} {
-		cmd := exec.Command("go", "build", "-o", filepath.Join(dir, name), pkg) // #nosec G204 -- fixed package list.
+		cmd := exec.CommandContext(context.Background(), "go", "build", "-o", filepath.Join(dir, name), pkg) // #nosec G204 -- fixed package list.
 		cmd.Dir, cmd.Stdout, cmd.Stderr = "..", os.Stderr, os.Stderr
 		if err := cmd.Run(); err != nil {
 			fmt.Fprintln(os.Stderr, "build", name, err)

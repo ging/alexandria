@@ -12,18 +12,18 @@ import (
 	"time"
 
 	"github.com/ging/alexandria/internal/core/timex"
-	. "github.com/ging/alexandria/internal/server/adapters/jwt_jwks"
+	"github.com/ging/alexandria/internal/server/adapters/jwt_jwks"
 	"github.com/ging/alexandria/internal/testkit"
 )
 
 // now is the hub instant of the tests.
 var now = time.Date(2026, 10, 1, 10, 0, 0, 0, time.UTC)
 
-// setup serves an IdP and returns it with a verifier and a JWKS request counter.
-func setup(t *testing.T) (*testkit.IdP, *Verifier, *atomic.Int32) {
+// setup serves an IDP and returns it with a verifier and a JWKS request counter.
+func setup(t *testing.T) (*testkit.IDP, *jwt_jwks.Verifier, *atomic.Int32) {
 	t.Helper()
 	var hits atomic.Int32
-	var idp *testkit.IdP
+	var idp *testkit.IDP
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/jwks.json" {
 			hits.Add(1)
@@ -31,9 +31,9 @@ func setup(t *testing.T) (*testkit.IdP, *Verifier, *atomic.Int32) {
 		idp.Handler().ServeHTTP(w, r)
 	}))
 	t.Cleanup(srv.Close)
-	idp = testkit.NewIdP(srv.URL)
-	v := &Verifier{
-		Issuers: []Issuer{{Iss: srv.URL, DiscoveryURL: srv.URL + "/.well-known/openid-configuration"}}, Audience: "alexandria-vhub",
+	idp = testkit.NewIDP(srv.URL)
+	v := &jwt_jwks.Verifier{
+		Issuers: []jwt_jwks.Issuer{{Iss: srv.URL, DiscoveryURL: srv.URL + "/.well-known/openid-configuration"}}, Audience: "alexandria-vhub",
 		Algorithms: []string{"ES256"}, AdminClaim: "roles", AdminValue: "vhub-admin", Skew: 5 * timex.Second, CacheTTL: 10 * timex.Minute,
 		Clock: testkit.NewClock("2026-10-01T10:00:00Z"),
 	}
@@ -42,7 +42,7 @@ func setup(t *testing.T) (*testkit.IdP, *Verifier, *atomic.Int32) {
 
 // check returns the failed check of err, or "".
 func check(err error) string {
-	var f *Failure
+	var f *jwt_jwks.Failure
 	if errors.As(err, &f) {
 		return f.Check
 	}

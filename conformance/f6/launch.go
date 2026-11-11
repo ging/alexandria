@@ -43,7 +43,7 @@ func (s *syncWriter) Write(p []byte) (int, error) {
 // Env describes a running F6 environment.
 type Env struct {
 	Work, BinDir, ClockFile string
-	HubURL, IdPURL, ConnURL string
+	HubURL, IDPURL, ConnURL string
 	Ingress, Egress, Admin  string
 	HubDID                  did.DID
 	CAFile, EventsFile      string
@@ -114,7 +114,7 @@ func Launch(binDir, work string, log io.Writer) (Env, func(), error) {
 	}
 	e := Env{
 		Work: work, BinDir: binDir, ClockFile: filepath.Join(work, "clock"),
-		HubURL: fmt.Sprintf("https://127.0.0.1:%d", ports[0]), IdPURL: fmt.Sprintf("http://127.0.0.1:%d", ports[1]),
+		HubURL: fmt.Sprintf("https://127.0.0.1:%d", ports[0]), IDPURL: fmt.Sprintf("http://127.0.0.1:%d", ports[1]),
 		ConnURL: fmt.Sprintf("http://127.0.0.1:%d", ports[2]), Ingress: fmt.Sprintf("http://127.0.0.1:%d", ports[3]),
 		Egress: fmt.Sprintf("127.0.0.1:%d", ports[4]), Admin: fmt.Sprintf("http://127.0.0.1:%d", ports[5]),
 		CAFile: filepath.Join(work, "hub.crt"), EventsFile: filepath.Join(work, "client", "events.jsonl"),
@@ -133,7 +133,7 @@ func Launch(binDir, work string, log io.Writer) (Env, func(), error) {
 	server := map[string]any{
 		"listen": strings.TrimPrefix(e.HubURL, "https://"), "base": e.HubURL, "signing": map[string]string{"key": "file:hub.key"},
 		"rdf":   map[string]string{"context": "self-hosted"},
-		"auth":  map[string]any{"issuers": []map[string]string{{"iss": e.IdPURL, "discovery_url": e.IdPURL + "/.well-known/openid-configuration"}}, "audience": "alexandria-vhub"},
+		"auth":  map[string]any{"issuers": []map[string]string{{"iss": e.IDPURL, "discovery_url": e.IDPURL + "/.well-known/openid-configuration"}}, "audience": "alexandria-vhub"},
 		"vocab": map[string]any{"allow_insecure_localhost": true}, "storage": map[string]string{"database": "file:hub/hub.db", "blobs": "file:hub/blobs"},
 		"tls": map[string]string{"cert": "file:hub.crt", "key": "file:hub-tls.key"},
 	}
@@ -148,7 +148,7 @@ func Launch(binDir, work string, log io.Writer) (Env, func(), error) {
 		}
 	}
 	start := func(name string, args ...string) error {
-		cmd := exec.Command(filepath.Join(binDir, name), args...) // #nosec G204 -- test binaries built by the suite.
+		cmd := exec.CommandContext(context.Background(), filepath.Join(binDir, name), args...) // #nosec G204 -- test binaries built by the suite.
 		cmd.Dir, cmd.Stdout, cmd.Stderr = work, e.Log, e.Log
 		if err := cmd.Start(); err != nil {
 			return err
@@ -158,7 +158,7 @@ func Launch(binDir, work string, log io.Writer) (Env, func(), error) {
 	}
 	steps := []func() error{
 		func() error {
-			return start("fake-idp", "serve", "--addr", strings.TrimPrefix(e.IdPURL, "http://"), "--issuer", e.IdPURL, "--key", "idp.key")
+			return start("fake-idp", "serve", "--addr", strings.TrimPrefix(e.IDPURL, "http://"), "--issuer", e.IDPURL, "--key", "idp.key")
 		},
 		func() error { return start("fake-connector", "-listen", strings.TrimPrefix(e.ConnURL, "http://")) },
 		func() error { return start("alexandria-server", "-config", "server.json", "-clock-file", e.ClockFile) },
@@ -169,7 +169,7 @@ func Launch(binDir, work string, log io.Writer) (Env, func(), error) {
 			return e, nil, err
 		}
 	}
-	for _, u := range []string{e.IdPURL + "/.well-known/openid-configuration", e.ConnURL + "/_received", e.HubURL + "/v1/namespaces"} {
+	for _, u := range []string{e.IDPURL + "/.well-known/openid-configuration", e.ConnURL + "/_received", e.HubURL + "/v1/namespaces"} {
 		if err := e.waitUp(u); err != nil {
 			stop()
 			return e, nil, err
@@ -200,7 +200,7 @@ func (e Env) StartClient(log io.Writer) (func(), error) {
 	if w == nil {
 		w = &syncWriter{w: log}
 	}
-	cmd := exec.Command(filepath.Join(e.BinDir, "alexandria-client"), "-config", "client.json", "-state-dir", "client", "-clock-file", e.ClockFile, "-hub-ca", e.CAFile) // #nosec G204 -- test binary.
+	cmd := exec.CommandContext(context.Background(), filepath.Join(e.BinDir, "alexandria-client"), "-config", "client.json", "-state-dir", "client", "-clock-file", e.ClockFile, "-hub-ca", e.CAFile) // #nosec G204 -- test binary.
 	cmd.Dir, cmd.Stdout, cmd.Stderr = e.Work, w, w
 	if err := cmd.Start(); err != nil {
 		return nil, err
@@ -215,11 +215,11 @@ func (e Env) StartClient(log io.Writer) (func(), error) {
 
 // Token mints an access token for sub at the current file-clock instant, valid for 100 days.
 func (e Env) Token(sub string, admin bool) (string, error) {
-	args := []string{"token", "--issuer", e.IdPURL, "--key", "idp.key", "--sub", sub, "--ttl", "2400h", "--clock-file", e.ClockFile}
+	args := []string{"token", "--issuer", e.IDPURL, "--key", "idp.key", "--sub", sub, "--ttl", "2400h", "--clock-file", e.ClockFile}
 	if admin {
 		args = append(args, "--admin")
 	}
-	cmd := exec.Command(filepath.Join(e.BinDir, "fake-idp"), args...) // #nosec G204 -- test binary.
+	cmd := exec.CommandContext(context.Background(), filepath.Join(e.BinDir, "fake-idp"), args...) // #nosec G204 -- test binary.
 	cmd.Dir = e.Work
 	out, err := cmd.Output()
 	return strings.TrimSpace(string(out)), err
@@ -229,7 +229,8 @@ func (e Env) Token(sub string, admin bool) (string, error) {
 func (e Env) waitUp(u string) error {
 	c := e.HTTP()
 	for i := 0; i < 100; i++ {
-		if resp, err := c.Get(u); err == nil {
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, u, nil)
+		if resp, err := c.Do(req); err == nil {
 			_ = resp.Body.Close()
 			return nil
 		}

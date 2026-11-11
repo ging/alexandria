@@ -3,6 +3,7 @@
 package jwt_jwks
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -181,7 +182,11 @@ func (v *Verifier) fetch(iss Issuer) (jose.JSONWebKeySet, error) {
 
 // getJSON GETs a JSON document.
 func getJSON(c *http.Client, u string, v any) error {
-	resp, err := c.Get(u) // #nosec G107 -- discovery and JWKS URLs come from server.json.
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, u, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.Do(req) // #nosec G107 -- discovery and JWKS URLs come from server.json.
 	if err != nil {
 		return err
 	}

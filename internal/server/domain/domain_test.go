@@ -18,10 +18,22 @@ func TestT_HUB_017_AuthzMatrix(t *testing.T) {
 		want    Decision
 	}
 	cells := []cell{
-		{OpPublic, nil, false, Allow}, {OpPublic, plain, false, Allow}, {OpPublic, plain, true, Allow}, {OpPublic, admin, false, Allow},
-		{OpAdmin, nil, false, Unauthenticated}, {OpAdmin, plain, false, Forbidden}, {OpAdmin, plain, true, Forbidden}, {OpAdmin, admin, false, Allow},
-		{OpListStewards, nil, false, Unauthenticated}, {OpListStewards, plain, false, Forbidden}, {OpListStewards, plain, true, Allow}, {OpListStewards, admin, false, Allow},
-		{OpNamespace, nil, false, Unauthenticated}, {OpNamespace, plain, false, Forbidden}, {OpNamespace, plain, true, Allow}, {OpNamespace, admin, false, Forbidden},
+		{OpPublic, nil, false, Allow},
+		{OpPublic, plain, false, Allow},
+		{OpPublic, plain, true, Allow},
+		{OpPublic, admin, false, Allow},
+		{OpAdmin, nil, false, Unauthenticated},
+		{OpAdmin, plain, false, Forbidden},
+		{OpAdmin, plain, true, Forbidden},
+		{OpAdmin, admin, false, Allow},
+		{OpListStewards, nil, false, Unauthenticated},
+		{OpListStewards, plain, false, Forbidden},
+		{OpListStewards, plain, true, Allow},
+		{OpListStewards, admin, false, Allow},
+		{OpNamespace, nil, false, Unauthenticated},
+		{OpNamespace, plain, false, Forbidden},
+		{OpNamespace, plain, true, Allow},
+		{OpNamespace, admin, false, Forbidden},
 		{OpNamespace, admin, true, Allow},
 	}
 	for i, c := range cells {

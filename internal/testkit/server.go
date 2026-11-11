@@ -20,14 +20,14 @@ const (
 	NS      = "demo"
 	NSIRI   = Base + "/v1/namespaces/demo"
 	Context = Base + "/pub/_vhub/v1/context.jsonld"
-	IdPIss  = "https://idp.example.com"
+	IDPIss  = "https://idp.example.com"
 )
 
 // Principals of F6: Ana is admin, Sergio is the steward of demo, Eve has a token but no permission.
 var (
-	Ana    = &domain.Principal{Iss: IdPIss, Sub: "ana", IsAdmin: true}
-	Sergio = &domain.Principal{Iss: IdPIss, Sub: "sergio"}
-	Eve    = &domain.Principal{Iss: IdPIss, Sub: "eve"}
+	Ana    = &domain.Principal{Iss: IDPIss, Sub: "ana", IsAdmin: true}
+	Sergio = &domain.Principal{Iss: IDPIss, Sub: "sergio"}
+	Eve    = &domain.Principal{Iss: IDPIss, Sub: "eve"}
 )
 
 // Draft builds a Part 5.1 draft of version v whose policy schema admits the given actions.

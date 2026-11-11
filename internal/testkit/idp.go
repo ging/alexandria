@@ -18,24 +18,24 @@ import (
 	"github.com/go-jose/go-jose/v4/jwt"
 )
 
-// IdP holds the signing key and issuer of the fake identity provider.
-type IdP struct {
+// IDP holds the signing key and issuer of the fake identity provider.
+type IDP struct {
 	Issuer string
 	Key    *ecdsa.PrivateKey
 	Kid    string
 }
 
-// NewIdP returns an IdP with a fresh P-256 key.
-func NewIdP(issuer string) *IdP {
+// NewIDP returns an IDP with a fresh P-256 key.
+func NewIDP(issuer string) *IDP {
 	k, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	return &IdP{Issuer: issuer, Key: k, Kid: "idp-1"}
+	return &IDP{Issuer: issuer, Key: k, Kid: "idp-1"}
 }
 
-// LoadIdP reads a P-256 key from a PEM file, generating it if absent.
-func LoadIdP(issuer, path string) (*IdP, error) {
+// LoadIDP reads a P-256 key from a PEM file, generating it if absent.
+func LoadIDP(issuer, path string) (*IDP, error) {
 	b, err := os.ReadFile(path) // #nosec G304 -- test and demo key path.
 	if errors.Is(err, os.ErrNotExist) {
-		idp := NewIdP(issuer)
+		idp := NewIDP(issuer)
 		der, _ := x509.MarshalPKCS8PrivateKey(idp.Key)
 		return idp, os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), 0o600)
 	}
@@ -54,11 +54,11 @@ func LoadIdP(issuer, path string) (*IdP, error) {
 	if !ok {
 		return nil, errors.New("idp: key is not ECDSA")
 	}
-	return &IdP{Issuer: issuer, Key: ek, Kid: "idp-1"}, nil
+	return &IDP{Issuer: issuer, Key: ek, Kid: "idp-1"}, nil
 }
 
 // Handler serves /.well-known/openid-configuration and /jwks.json.
-func (i *IdP) Handler() http.Handler {
+func (i *IDP) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -86,7 +86,7 @@ type Token struct {
 }
 
 // Mint signs an at+jwt access token (RFC 9068) with the roles claim.
-func (i *IdP) Mint(t Token) (string, error) {
+func (i *IDP) Mint(t Token) (string, error) {
 	if t.Typ == "" {
 		t.Typ = "at+jwt"
 	}

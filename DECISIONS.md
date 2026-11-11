@@ -27,8 +27,8 @@ This document records the 14 PoC decisions defined in Part 2 of the specificatio
 
 ## 2. Agent Decisions During Implementation
 
-1. **Binary Naming in the Alexandria Monorepo (`cmd/alexandria-server`, `cmd/alexandria-client`, `cmd/alexandriac`):**
-   - **Reason:** Per workspace convention established in this repository, the `vhub-server` and `vhub-client` binaries are named `alexandria-server` and `alexandria-client` under `cmd/alexandria-server` and `cmd/alexandria-client` (alongside `cmd/alexandriac` and `cmd/alexandria`), while preserving the exact F8 §8.2 internal package hierarchy (`internal/core`, `internal/server`, `internal/client`, `internal/clock`, `internal/testkit`).
+1. **Binary Naming (`cmd/alexandria-server`, `cmd/alexandria-client`, `cmd/alexandriac`):**
+   - **Reason:** Per repository naming convention, the `vhub-server` and `vhub-client` binaries are named `alexandria-server` and `alexandria-client` under `cmd/alexandria-server` and `cmd/alexandria-client` (alongside `cmd/alexandriac`), while preserving the exact F8 §8.2 internal package hierarchy (`internal/core`, `internal/server`, `internal/client`, `internal/clock`, `internal/testkit`).
 2. **Bounded-Context `module.go` Wiring (`internal/server/module.go`, `internal/client/module.go`):**
    - **Reason:** Exposes `server.New(cfg, clock)` and `client.New(cfg, stateDir, clock, Opts)` as self-contained hexagonal modules so both standalone CLI binaries and in-process tests wire dependencies identically while enforcing F8 §8.6 construction guarantees (`Edge` has no `HubAPI` or `DIDResolver`; `Explain` has no `Upstream`, `AgreementRepo`, or `EventSink`; `Vocabularies` read path has no `UpstreamFetcher`).
 3. **Direct `http.Transport.RoundTrip` in `proxy_dsp` (`REQ-SYS-003`, `REQ-CLI-014`):**

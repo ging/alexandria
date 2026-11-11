@@ -3,6 +3,7 @@
 package fetch_http
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -35,7 +36,11 @@ func (f Fetcher) Fetch(raw string, limit int64) ([]byte, string, error) {
 		}
 		return f.check(r.URL.String())
 	}}
-	resp, err := c.Get(raw) // #nosec G107 -- upstream registered by a steward and checked against the allow-list.
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, raw, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	resp, err := c.Do(req) // #nosec G107 -- upstream registered by a steward and checked against the allow-list.
 	if err != nil {
 		return nil, "", err
 	}
@@ -53,7 +58,7 @@ func (f Fetcher) check(raw string) error {
 	if err != nil {
 		return err
 	}
-	if u.Scheme != "https" && !(u.Scheme == "http" && f.AllowInsecureLocalhost && did.IsLocalhost(u.Host)) {
+	if u.Scheme != "https" && (u.Scheme != "http" || !f.AllowInsecureLocalhost || !did.IsLocalhost(u.Host)) {
 		return fmt.Errorf("%s is not https", raw)
 	}
 	if len(f.Allow) == 0 {

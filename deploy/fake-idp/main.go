@@ -48,7 +48,7 @@ func serve(args []string) error {
 	iss, key := common(fs)
 	addr := fs.String("addr", "127.0.0.1:9400", "listen address")
 	_ = fs.Parse(args)
-	idp, err := testkit.LoadIdP(*iss, *key)
+	idp, err := testkit.LoadIDP(*iss, *key)
 	if err != nil {
 		return err
 	}
@@ -70,7 +70,7 @@ func token(args []string) error {
 	if *sub == "" {
 		return errors.New("--sub is required")
 	}
-	idp, err := testkit.LoadIdP(*iss, *key)
+	idp, err := testkit.LoadIDP(*iss, *key)
 	if err != nil {
 		return err
 	}

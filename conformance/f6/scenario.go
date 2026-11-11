@@ -5,6 +5,7 @@ package f6
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -105,7 +106,7 @@ func httpClient(caFile string) *http.Client {
 
 // call sends a request and returns status, headers and body.
 func (e Env) call(method, url, token, ifMatch string, body []byte) (int, http.Header, []byte, error) {
-	req, err := http.NewRequest(method, url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(context.Background(), method, url, bytes.NewReader(body))
 	if err != nil {
 		return 0, nil, nil, err
 	}
@@ -173,15 +174,15 @@ func (r *Runner) add(step string, status int, code, verdict string) {
 	}
 }
 
-// publish creates, proposes and approves a draft; grace is the :approve body.
-func (r *Runner) publish(v, grace string) (string, error) {
+// publish creates and proposes a draft.
+func (r *Runner) publish(v string) (string, error) {
 	st, hdr, b, err := r.E.call("POST", r.E.HubURL+"/v1/namespaces/demo/drafts", r.sergio, "", Draft(r.E.HubURL, v))
 	if err != nil || st != 201 {
-		return "", fmt.Errorf("draft %s: %d %s %v", v, st, b, err)
+		return "", fmt.Errorf("draft %s: %d %s %w", v, st, b, err)
 	}
 	st, _, b, err = r.E.call("POST", r.E.HubURL+"/v1/namespaces/demo/drafts/"+last(hdr.Get("Location"))+":propose", r.sergio, "", nil)
 	if err != nil || st != 201 {
-		return "", fmt.Errorf("propose %s: %d %s %v", v, st, b, err)
+		return "", fmt.Errorf("propose %s: %d %s %w", v, st, b, err)
 	}
 	return last(field(b, "id")), nil
 }
@@ -251,7 +252,7 @@ func (r *Runner) setMode(id string) error {
 	nb, _ := json.Marshal(rule)
 	st, _, out, err := r.E.call("PUT", r.E.Admin+"/rules/"+id, "", hdr.Get("ETag"), nb)
 	if err != nil || st != 200 {
-		return fmt.Errorf("rule %s: %d %s %v", id, st, out, err)
+		return fmt.Errorf("rule %s: %d %s %w", id, st, out, err)
 	}
 	return nil
 }
@@ -290,7 +291,7 @@ func (r *Runner) Run(startClient func() error) error {
 		return fail("namespace", err)
 	}
 	r.add("F6.1 create namespace demo", st, "", "")
-	st, _, _, err = r.E.call("POST", r.E.HubURL+"/v1/namespaces/demo/stewards", r.ana, "", []byte(`{"iss":"`+r.E.IdPURL+`","sub":"sergio"}`))
+	st, _, _, err = r.E.call("POST", r.E.HubURL+"/v1/namespaces/demo/stewards", r.ana, "", []byte(`{"iss":"`+r.E.IDPURL+`","sub":"sergio"}`))
 	if err != nil {
 		return fail("steward", err)
 	}
@@ -314,7 +315,7 @@ func (r *Runner) Run(startClient func() error) error {
 	if err = r.at("2026-09-01T10:00:00Z"); err != nil {
 		return err
 	}
-	id, err := r.publish("1.0.0", "")
+	id, err := r.publish("1.0.0")
 	if err != nil {
 		return err
 	}
@@ -335,7 +336,7 @@ func (r *Runner) Run(startClient func() error) error {
 	if err = r.at("2026-10-01T10:00:00Z"); err != nil {
 		return err
 	}
-	if id, err = r.publish("2.0.0", ""); err != nil {
+	if id, err = r.publish("2.0.0"); err != nil {
 		return err
 	}
 	if err := r.approve("F6.2 approve 2.0.0 grace P3D", id, `{"grace_window":"P3D"}`); err != nil {

@@ -13,7 +13,6 @@ import (
 	"github.com/ging/alexandria/internal/core/did"
 	"github.com/ging/alexandria/internal/core/ni"
 	"github.com/ging/alexandria/internal/core/pkgv"
-	"github.com/ging/alexandria/internal/core/timex"
 	"github.com/ging/alexandria/internal/server/app"
 	"github.com/ging/alexandria/internal/testkit"
 )
@@ -44,9 +43,6 @@ func init() {
 func testkitKey(s *testkit.Server, fragment string) did.PublicKey {
 	return did.PublicKey{Kid: string(testkit.WebDID) + fragment, Key: s.Signer.PublicKey()}
 }
-
-// ptrInstant parses an instant into a pointer.
-func ptrInstant(s string) *timex.Instant { i := timex.MustInstant(s); return &i }
 
 // manifestSignatureInvalid serves a manifest with an altered byte and the listing digest recomputed (S9).
 func manifestSignatureInvalid(t *testing.T) []string {

@@ -1,5 +1,0 @@
-$kind: collection
-name: '07 Errors'
-description: |-
-  One request per error of the §3.6 contract. Each expects exactly its catalog code.
-order: 7000

@@ -4,6 +4,7 @@ package compiler_dsl_test
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"testing"
 
@@ -79,8 +80,8 @@ func TestManifestValidatesAndCarriesSlots(t *testing.T) {
 func TestDraftWithoutSpaceIsRejected(t *testing.T) {
 	s := testkit.NewServerWith(t, "2026-09-01T10:00:00Z", compiler_dsl.Compiler{})
 	_, err := s.Hub.Authoring.CreateDraft(testkit.Sergio, testkit.NS, []byte("kind: OdrlProfile\n"))
-	f, ok := err.(app.Findings)
-	if !ok || len(f) == 0 {
+	var f app.Findings
+	if !errors.As(err, &f) || len(f) == 0 {
 		t.Fatalf("got %v", err)
 	}
 }

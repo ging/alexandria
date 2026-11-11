@@ -103,8 +103,10 @@ func New(deps Deps) (*Module, error) {
 	if err != nil {
 		return nil, err
 	}
-	explainer := app.Explainer{Snap: cell, Rules: rulesCell, Evaluator: ev, Agreements: store_sqlite.Agreements{S: store}, Clock: deps.Clock,
-		Settings: app.Settings{Namespace: ns, DefaultAction: cfg.DefaultAction, UnknownAgreement: cfg.UnknownAgreement}}
+	explainer := app.Explainer{
+		Snap: cell, Rules: rulesCell, Evaluator: ev, Agreements: store_sqlite.Agreements{S: store}, Clock: deps.Clock,
+		Settings: app.Settings{Namespace: ns, DefaultAction: cfg.DefaultAction, UnknownAgreement: cfg.UnknownAgreement},
+	}
 	edge := &app.Edge{Explainer: explainer, Upstream: up, Capture: agreements, Audit: audit, Events: sink, Metrics: reg}
 	gc := &app.GC{Packages: pkgs, Agreements: agreements, Cell: cell, Events: sink, Clock: deps.Clock, Namespace: ns, Interval: cfg.GCInterval}
 	handlers := map[string]http.Handler{
