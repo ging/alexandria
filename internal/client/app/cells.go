@@ -9,7 +9,9 @@ import (
 )
 
 // Cell holds the current snapshot.
-type Cell struct{ p atomic.Pointer[domain.Snapshot] }
+type Cell struct {
+	p atomic.Pointer[domain.Snapshot]
+}
 
 // Load returns the current snapshot, or nil before the first E1.
 func (c *Cell) Load() *domain.Snapshot { return c.p.Load() }
@@ -18,7 +20,9 @@ func (c *Cell) Load() *domain.Snapshot { return c.p.Load() }
 func (c *Cell) Store(s *domain.Snapshot) { c.p.Store(s) }
 
 // RulesCell holds the current rule set.
-type RulesCell struct{ p atomic.Pointer[domain.Ruleset] }
+type RulesCell struct {
+	p atomic.Pointer[domain.Ruleset]
+}
 
 // Load returns the current rule set, never nil once the client started.
 func (c *RulesCell) Load() *domain.Ruleset {

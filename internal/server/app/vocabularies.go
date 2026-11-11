@@ -227,7 +227,9 @@ func (r *VocabReader) ByIRI(ns, iri string) ([]byte, error) {
 }
 
 // stable returns the stable URL of a vocabulary.
-func (r *VocabReader) stable(ns, name string) string { return r.d.Base + "/pub/" + ns + "/vocab/" + name }
+func (r *VocabReader) stable(ns, name string) string {
+	return r.d.Base + "/pub/" + ns + "/vocab/" + name
+}
 
 // revisionURL returns the URL of revision n.
 func (r *VocabReader) revisionURL(ns, name string, n int) string {

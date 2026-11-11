@@ -16,12 +16,12 @@ import (
 
 // Evaluator compiles package schemas once and validates bodies without network.
 type Evaluator struct {
-	Events  app.EventSink
-	Clock   timex.Clock
+	Events    app.EventSink
+	Clock     timex.Clock
 	Namespace string
-	cache   sync.Map
-	loaders sync.Map
-	warned  sync.Map
+	cache     sync.Map
+	loaders   sync.Map
+	warned    sync.Map
 }
 
 var _ app.Evaluator = (*Evaluator)(nil)

@@ -109,7 +109,10 @@ func (s *Server) Resign(t *testing.T, raw []byte, mutate func(map[string]any)) [
 }
 
 // Subject returns the credentialSubject map of a decoded credential.
-func Subject(doc map[string]any) map[string]any { m, _ := doc["credentialSubject"].(map[string]any); return m }
+func Subject(doc map[string]any) map[string]any {
+	m, _ := doc["credentialSubject"].(map[string]any)
+	return m
+}
 
 // Recorder is an EventSink keeping every event.
 type Recorder struct {
@@ -263,7 +266,12 @@ func (p *MemPackages) Put(d ni.Digest, f pkgv.Files) error {
 }
 
 // Delete removes a package.
-func (p *MemPackages) Delete(d ni.Digest) error { p.mu.Lock(); delete(p.m, d); p.mu.Unlock(); return nil }
+func (p *MemPackages) Delete(d ni.Digest) error {
+	p.mu.Lock()
+	delete(p.m, d)
+	p.mu.Unlock()
+	return nil
+}
 
 // List returns the stored digests.
 func (p *MemPackages) List() ([]ni.Digest, error) {

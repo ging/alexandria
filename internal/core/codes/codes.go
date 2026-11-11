@@ -71,7 +71,7 @@ const (
 	ConfigSchema                    Code = "CONFIG_SCHEMA"
 	ConfigRulesSeedUnreadable       Code = "CONFIG_RULES_SEED_UNREADABLE"
 	RulesSchema                     Code = "RULES_SCHEMA"
-	RulesDuplicateId                Code = "RULES_DUPLICATE_ID"
+	RulesDuplicateID                Code = "RULES_DUPLICATE_ID"
 	RulesDuplicatePriority          Code = "RULES_DUPLICATE_PRIORITY"
 	RulesGateMessageMismatch        Code = "RULES_GATE_MESSAGE_MISMATCH"
 	RulesUpstreamMissing            Code = "RULES_UPSTREAM_MISSING"

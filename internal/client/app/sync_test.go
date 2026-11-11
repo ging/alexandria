@@ -62,7 +62,9 @@ func TestT_CLI_034_S2IssuerMismatch(t *testing.T) {
 
 func TestT_CLI_034_S2ContextMismatch(t *testing.T) {
 	s, c := f6(t)
-	forge(t, s, c, func(d map[string]any) { d["@context"] = []any{"https://www.w3.org/ns/credentials/v2", "https://w3id.org/alexandria-vhub/v1"} })
+	forge(t, s, c, func(d map[string]any) {
+		d["@context"] = []any{"https://www.w3.org/ns/credentials/v2", "https://w3id.org/alexandria-vhub/v1"}
+	})
 	failsWith(t, c, codes.SyncMalformed)
 }
 
@@ -162,7 +164,9 @@ func TestT_CLI_007_S11FileHashMismatch(t *testing.T) {
 	s := testkit.NewServer(t, "2026-08-01T00:00:00Z")
 	s.PublishF6(t)
 	c := testkit.NewClient(t, s)
-	c.Hub.FilesHook = func(f map[string][]byte) { f["schemas/policy.schema.json"] = append([]byte(" "), f["schemas/policy.schema.json"]...) }
+	c.Hub.FilesHook = func(f map[string][]byte) {
+		f["schemas/policy.schema.json"] = append([]byte(" "), f["schemas/policy.schema.json"]...)
+	}
 	failsWith(t, c, codes.SyncFileHashMismatch)
 }
 
