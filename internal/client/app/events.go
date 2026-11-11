@@ -1,5 +1,5 @@
-// Package app defines the event documents of the client: vhub.verdict (Appendix A.4) and the notices vhub.sync, vhub.state, vhub.agreement and vhub.audit.
-// Every non-ok gate evaluation and every info finding becomes one event (§4.11, REQ-CLI-021).
+// Package app defines the client events: vhub.verdict (Appendix A.4) and the notices vhub.sync, vhub.state, vhub.agreement, vhub.audit, vhub.rules and vhub.gc.
+// Every non-ok gate evaluation and every info finding becomes one vhub.verdict (§4.12, REQ-CLI-021, REQ-DOC-004).
 package app
 
 import (
@@ -11,13 +11,15 @@ import (
 	"github.com/ging/alexandria/internal/core/timex"
 )
 
-// Event types of §4.11.
+// Event types of §4.12.
 const (
 	EvVerdict   = "vhub.verdict"
 	EvSync      = "vhub.sync"
 	EvState     = "vhub.state"
 	EvAgreement = "vhub.agreement"
 	EvAudit     = "vhub.audit"
+	EvRules     = "vhub.rules"
+	EvGC        = "vhub.gc"
 )
 
 // Verdict is the vhub.verdict event of Appendix A.4.
@@ -25,9 +27,10 @@ type Verdict struct {
 	Type           string           `json:"type"`
 	ID             string           `json:"id"`
 	TS             string           `json:"ts"`
-	Space          string           `json:"space"`
+	Namespace      string           `json:"namespace"`
 	Listener       string           `json:"listener"`
-	Route          string           `json:"route"`
+	Rule           string           `json:"rule"`
+	RulesRevision  int              `json:"rules_revision"`
 	Message        string           `json:"message"`
 	Gate           string           `json:"gate"`
 	Mode           string           `json:"mode"`
@@ -43,17 +46,20 @@ type Verdict struct {
 
 // Notice is the shape of the other event types (not normative).
 type Notice struct {
-	Type      string `json:"type"`
-	ID        string `json:"id"`
-	TS        string `json:"ts"`
-	Space     string `json:"space"`
-	Code      string `json:"code,omitempty"`
-	Severity  string `json:"severity"`
-	Detail    string `json:"detail,omitempty"`
-	Version   string `json:"version,omitempty"`
-	Agreement string `json:"agreement,omitempty"`
-	From      string `json:"from,omitempty"`
-	To        string `json:"to,omitempty"`
+	Type      string   `json:"type"`
+	ID        string   `json:"id"`
+	TS        string   `json:"ts"`
+	Namespace string   `json:"namespace"`
+	Code      string   `json:"code,omitempty"`
+	Severity  string   `json:"severity"`
+	Detail    string   `json:"detail,omitempty"`
+	Version   string   `json:"version,omitempty"`
+	Versions  []string `json:"versions,omitempty"`
+	Agreement string   `json:"agreement,omitempty"`
+	From      string   `json:"from,omitempty"`
+	To        string   `json:"to,omitempty"`
+	Revision  int      `json:"revision,omitempty"`
+	Rules     []string `json:"rules,omitempty"`
 }
 
 // uuid returns a random RFC 4122 version-4 UUID.
@@ -65,20 +71,18 @@ func uuid() string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
-// NewNotice builds a notice event for adapters that report PoC-only conditions.
-func NewNotice(typ, space string, t timex.Instant, c codes.Code, detail string) Notice {
-	return notice(typ, space, t, c, detail)
+// NewNotice builds a notice event for adapters.
+func NewNotice(typ, ns string, t timex.Instant, c codes.Code, detail string) Notice {
+	return notice(typ, ns, t, c, detail)
 }
 
 // notice builds a notice of a type and code at t.
-func notice(typ, space string, t timex.Instant, c codes.Code, detail string) Notice {
-	var sev string
+func notice(typ, ns string, t timex.Instant, c codes.Code, detail string) Notice {
+	sev := string(codes.SevInfo)
 	if c != "" {
 		sev = string(codes.SeverityOf(c))
-	} else {
-		sev = string(codes.SevInfo)
 	}
-	return Notice{Type: typ, ID: uuid(), TS: t.String(), Space: space, Code: string(c), Severity: sev, Detail: detail}
+	return Notice{Type: typ, ID: uuid(), TS: t.String(), Namespace: ns, Code: string(c), Severity: sev, Detail: detail}
 }
 
 // codeStrings renders codes for events.

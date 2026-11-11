@@ -1,5 +1,5 @@
-// Package app declares the outbound ports of alexandria-client and the request/response types that cross the proxy boundary (F8 §8.5).
-// Edge never receives HubAPI or DIDResolver, which is how the hot path cannot call the hub (REQ-SYS-002, REQ-CLI-005, REQ-CLI-017).
+// Package app declares the outbound ports of alexandria-client and the request and response types that cross the proxy boundary (F8 §8.5).
+// Edge and Explainer never receive HubAPI or DIDResolver, which is how the hot path cannot call the hub (REQ-SYS-002, REQ-CLI-005, REQ-CLI-017, REQ-CLI-031).
 package app
 
 import (
@@ -15,38 +15,30 @@ import (
 	"github.com/ging/alexandria/internal/core/timex"
 )
 
-// Hub access errors distinguished by S1.
-var (
-	ErrUnreachable  = errors.New("hub unreachable")
-	ErrUnauthorized = errors.New("hub refused credentials")
-)
+// ErrNamespaceNotFound is returned by HubAPI.Listing when the hub answers 404 (S1).
+var ErrNamespaceNotFound = errors.New("namespace not found")
 
-// ListingResponse is the raw GET /v1/versions answer with its Date header.
+// ListingResponse is the raw listing answer with its Date header.
 type ListingResponse struct {
 	Body    []byte
 	Date    timex.Instant
 	HasDate bool
 }
 
-// HubAPI is the authenticated client of the hub, used only by Sync.
+// HubAPI is the unauthenticated client of the hub, used only by Sync.
 type HubAPI interface {
 	Listing() (ListingResponse, error)
 	Package(d ni.Digest) (pkgv.Files, error)
 }
 
-// DIDResolver resolves the hub did:web.
+// DIDResolver resolves the hub DID (did:web over the network, did:key locally).
 type DIDResolver interface {
 	Resolve(d did.DID) (did.Document, error)
 }
 
-// Evaluator evaluates a selected body against one package for one gate, without network.
+// Evaluator evaluates a message against one package for one gate, without network.
 type Evaluator interface {
 	Evaluate(m domain.Message, g domain.Gate, p *pkgv.Package) domain.EvalResult
-}
-
-// ReceiptVerifier checks manifest.receipt for a digest with the hub keys (shape: Q2, DP-8).
-type ReceiptVerifier interface {
-	Verify(d ni.Digest, receipt []byte, keys []did.PublicKey) error
 }
 
 // Continuity is the state that must survive restarts (REQ-CLI-005).
@@ -62,17 +54,29 @@ type ContinuityStore interface {
 	Save(c Continuity) error
 }
 
-// PackageStore keeps verified package files by manifest digest (REQ-CLI-017).
+// PackageStore keeps verified package files by manifest digest; only GC deletes.
 type PackageStore interface {
 	Get(d ni.Digest) (pkgv.Files, bool, error)
 	Put(d ni.Digest, f pkgv.Files) error
-	Retain(keep []ni.Digest) error
+	Delete(d ni.Digest) error
+	List() ([]ni.Digest, error)
+}
+
+// RuleStore persists the rule set (REQ-CLI-031); Load reports false when the store is empty.
+type RuleStore interface {
+	Load() (*domain.Ruleset, bool, error)
+	Save(rs *domain.Ruleset) error
+}
+
+// AgreementReader reads the registry; Explain only gets this view.
+type AgreementReader interface {
+	Get(id string) (domain.Entry, bool, error)
 }
 
 // AgreementRepo stores the agreement registry.
 type AgreementRepo interface {
+	AgreementReader
 	Put(e domain.Entry) error
-	Get(id string) (domain.Entry, bool, error)
 	All() ([]domain.Entry, error)
 }
 
@@ -83,7 +87,7 @@ type EventSink interface {
 
 // Metrics receives classification counts.
 type Metrics interface {
-	Classified(gate, version, result string)
+	Classified(rule, gate, version, result string)
 }
 
 // Request is a message received on a traffic listener; Target is set for dsp-egress.

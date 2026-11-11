@@ -25,3 +25,6 @@ func (c *FakeClock) Set(s string) { c.mu.Lock(); c.t = timex.MustInstant(s); c.m
 
 // Advance moves the clock forward by d.
 func (c *FakeClock) Advance(d timex.Duration) { c.mu.Lock(); c.t = c.t.Add(d); c.mu.Unlock() }
+
+// timexParse parses an RFC 3339 instant.
+func timexParse(s string) (timex.Instant, error) { return timex.ParseInstant(s) }

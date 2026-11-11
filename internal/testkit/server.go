@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ging/alexandria/internal/core/did"
 	"github.com/ging/alexandria/internal/core/lifecycle"
 	"github.com/ging/alexandria/internal/server/adapters/compiler_poc"
 	"github.com/ging/alexandria/internal/server/app"
@@ -57,6 +58,7 @@ type Server struct {
 	Signer   *KeySigner
 	Resolver *Resolver
 	Fetcher  *FakeFetcher
+	DID      did.DID
 }
 
 // NewServer builds a did:key hub whose clock starts at t0, with namespace demo and Sergio as its steward.
@@ -91,17 +93,37 @@ func NewServerOn(t *testing.T, t0 string, store app.Store) *Server {
 // NewBareServerWith builds a did:key hub with the given compiler.
 func NewBareServerWith(t0 string, c app.ProfileCompiler) *Server { return newServer(t0, c, nil) }
 
+// WebDID is the did:web identity of the FL9 fixtures.
+const WebDID = did.DID("did:web:hub.example.com")
+
+// NewWebServer builds an F6 hub identified by did:web:hub.example.com with its key #key-1 published (DP-5, FL9).
+func NewWebServer(t *testing.T, t0 string) *Server {
+	t.Helper()
+	signer := NewKeySigner(1, string(WebDID)+"#key-1")
+	r := NewResolver()
+	r.SetDocument(WebDID, did.PublicKey{Kid: signer.VerificationMethod(), Key: signer.PublicKey()})
+	s := build(t0, compiler_poc.Compiler{Defaults: lifecycle.Defaults()}, nil, signer, r, WebDID)
+	s.Setup(t)
+	return s
+}
+
 // newServer builds a did:key hub on store, or on the memory store when nil.
 func newServer(t0 string, c app.ProfileCompiler, store app.Store) *Server {
-	db, clock, signer := NewMemDB(), NewClock(t0), NewKeySigner(1, "")
+	signer := NewKeySigner(1, "")
+	return build(t0, c, store, signer, NewResolver(), signer.KeyDIDOf())
+}
+
+// build assembles a hub with the given identity.
+func build(t0 string, c app.ProfileCompiler, store app.Store, signer *KeySigner, resolver *Resolver, hubDID did.DID) *Server {
+	db, clock := NewMemDB(), NewClock(t0)
 	if store == nil {
 		store = db
 	}
-	s := &Server{DB: db, Clock: clock, Signer: signer, Resolver: NewResolver(), Fetcher: NewFakeFetcher()}
+	s := &Server{DB: db, Clock: clock, Signer: signer, Resolver: resolver, Fetcher: NewFakeFetcher(), DID: hubDID}
 	s.Hub = app.New(app.Deps{
 		Store: store, Blobs: MemBlobs{db}, Signer: signer, Resolver: s.Resolver, Fetcher: s.Fetcher,
 		Compiler: c, Clock: clock, Base: Base,
-		DID: signer.KeyDIDOf(), Context: Context, Defaults: lifecycle.Defaults(), VocabMaxSize: 1 << 16, AllowInsecureLocalhost: true,
+		DID: hubDID, Context: Context, Defaults: lifecycle.Defaults(), VocabMaxSize: 1 << 16, AllowInsecureLocalhost: true,
 	})
 	s.Hub.Keys.CheckSigningKey()
 	return s
