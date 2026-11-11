@@ -18,6 +18,7 @@ import (
 	"github.com/ging/alexandria/internal/client/adapters/evaluator_poc"
 	"github.com/ging/alexandria/internal/client/adapters/events"
 	"github.com/ging/alexandria/internal/client/adapters/http_hub"
+	"github.com/ging/alexandria/internal/client/adapters/http_ui"
 	"github.com/ging/alexandria/internal/client/adapters/metrics"
 	"github.com/ging/alexandria/internal/client/adapters/package_fs"
 	"github.com/ging/alexandria/internal/client/adapters/proxy_dsp"
@@ -124,6 +125,11 @@ func New(deps Deps) (*Module, error) {
 		Status: status, Rules: rules, Explainer: &explainer, Agreements: agreements, Audit: audit, Cell: cell, Metrics: reg,
 		Logger: logx.Component(logger, "http.admin"),
 	}.Handler()
+	adminRoot := http.NewServeMux()
+	adminRoot.Handle("/", adminMux)
+	if (http_ui.Handler{}).Register(adminRoot) {
+		logger.Info("console enabled", "listener", "admin", "path", "/ui/")
+	}
 	handlers := map[string]http.Handler{
 		"admin": telemetry.HTTPMiddleware(telemetry.HTTPOptions{
 			Logger:     logger,
@@ -131,7 +137,7 @@ func New(deps Deps) (*Module, error) {
 			Propagator: deps.Propagator,
 			Component:  "http.admin",
 			Listener:   "admin",
-		}, adminMux),
+		}, adminRoot),
 	}
 	proxyLog := logx.Component(logger, "proxy.dsp")
 	for _, l := range []domain.Listener{domain.DSPIngress, domain.MgmtIngress, domain.DSPEgress} {

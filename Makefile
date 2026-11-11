@@ -1,6 +1,7 @@
-.PHONY: all build fmt lint test conformance e2e demo trace \
+.PHONY: all build build-gui fmt lint test conformance e2e demo trace \
 	tutorial tutorial-exec tutorial\:exec \
 	docs-dev docs\:dev docs-build docs\:build \
+	gui-dev gui\:dev gui-build gui\:build \
 	tidy vuln cover check clean
 
 BIN_DIR ?= bin
@@ -14,6 +15,12 @@ build:
 	go build -o $(BIN_DIR)/alexandria-client ./cmd/alexandria-client
 	go build -o $(BIN_DIR)/fake-idp ./deploy/fake-idp
 	go build -o $(BIN_DIR)/fake-connector ./deploy/fake-connector
+
+# Embeds the console (gui/) in alexandria-server and alexandria-client under /ui/; requires pnpm.
+build-gui: build
+	cd gui && pnpm install --frozen-lockfile && pnpm build:embed
+	go build -tags gui -o $(BIN_DIR)/alexandria-server ./cmd/alexandria-server
+	go build -tags gui -o $(BIN_DIR)/alexandria-client ./cmd/alexandria-client
 
 fmt:
 	go tool gofumpt -w .
@@ -50,6 +57,12 @@ docs-dev docs\:dev:
 
 docs-build docs\:build:
 	cd docs && pnpm build
+
+gui-dev gui\:dev:
+	cd gui && pnpm install && pnpm dev
+
+gui-build gui\:build:
+	cd gui && pnpm install && pnpm build
 
 tidy:
 	go mod tidy

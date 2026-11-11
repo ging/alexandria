@@ -25,6 +25,7 @@ import (
 	"github.com/ging/alexandria/internal/server/adapters/did_resolver"
 	"github.com/ging/alexandria/internal/server/adapters/fetch_http"
 	"github.com/ging/alexandria/internal/server/adapters/http_pub"
+	"github.com/ging/alexandria/internal/server/adapters/http_ui"
 	"github.com/ging/alexandria/internal/server/adapters/http_v1"
 	"github.com/ging/alexandria/internal/server/adapters/httpx"
 	"github.com/ging/alexandria/internal/server/adapters/jwt_jwks"
@@ -116,6 +117,13 @@ func New(deps Deps) (*Module, error) {
 	mux := http.NewServeMux()
 	http_v1.Handler{Hub: hub, Tokens: tokens, Context: cfg.Context(), Base: cfg.Base, Logger: logx.Component(logger, "http.v1")}.Register(mux)
 	http_pub.Handler{Pub: hub.Publication, Problems: httpx.Problems{Context: cfg.Context(), Logger: logx.Component(logger, "http.pub")}}.Register(mux)
+	ui := http_ui.Handler{Audience: cfg.Auth.Audience}
+	if len(cfg.Auth.Issuers) > 0 {
+		ui.Issuer = cfg.Auth.Issuers[0].Iss
+	}
+	if ui.Register(mux) {
+		logger.Info("console enabled", "url", cfg.Base+"/ui/")
+	}
 	hub.Keys.CheckSigningKey()
 	wrapped := telemetry.HTTPMiddleware(telemetry.HTTPOptions{
 		Logger:     logger,

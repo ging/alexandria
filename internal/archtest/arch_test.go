@@ -32,7 +32,7 @@ type pkgFile struct {
 func productionFiles(t *testing.T) []pkgFile {
 	t.Helper()
 	var out []pkgFile
-	for _, top := range []string{"internal/core", "internal/dsl", "internal/server", "internal/client", "internal/clock", "internal/telemetry", "cmd/alexandria-server", "cmd/alexandria-client", "cmd/alexandriac"} {
+	for _, top := range []string{"internal/core", "internal/dsl", "internal/server", "internal/client", "internal/clock", "internal/telemetry", "internal/webui", "cmd/alexandria-server", "cmd/alexandria-client", "cmd/alexandriac"} {
 		_ = filepath.Walk(filepath.Join(root, top), func(p string, info os.FileInfo, err error) error {
 			if err != nil || info.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
 				return nil

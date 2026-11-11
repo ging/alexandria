@@ -65,6 +65,19 @@ tasks:
     dir: docs
     cmds: ["pnpm dev"]
 
+  build:gui:
+    desc: Build the console (gui/) and embed it in alexandria-server and alexandria-client under /ui/ (requires pnpm).
+    deps: [build]
+    cmds:
+      - cd gui && pnpm install --frozen-lockfile && pnpm build:embed
+      - go build -tags gui -o bin/alexandria-server ./cmd/alexandria-server
+      - go build -tags gui -o bin/alexandria-client ./cmd/alexandria-client
+
+  gui:dev:
+    desc: Start the console with the Vite dev server and API proxies (http://localhost:5273).
+    dir: gui
+    cmds: ["pnpm install", "pnpm dev"]
+
   docs:build:
     desc: Build static documentation for GitHub Pages.
     dir: docs
