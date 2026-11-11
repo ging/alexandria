@@ -1,5 +1,5 @@
-// Contract tests of the file signer: the key persists across restarts and only published keys sign.
-// Realise the signer side of REQ-HUB-015 and REQ-HUB-010.
+// Contract tests of the file signer: the key persists across restarts and its proofs verify with its did:key document.
+// Fixtures: a temporary key file (T-HUB-010, REQ-HUB-015).
 package signer_file
 
 import (
@@ -7,27 +7,33 @@ import (
 	"testing"
 
 	"github.com/ging/alexandria/internal/core/did"
-	"github.com/ging/alexandria/internal/core/sign"
+	"github.com/ging/alexandria/internal/core/vc"
 )
 
+// keyFile returns a fresh key path.
+func keyFile(t *testing.T) string { return filepath.Join(t.TempDir(), "hub.key") }
+
 func TestKeyPersistsAcrossLoads(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "hub.key")
-	a, err := Load(p, "did:web:h")
+	p := keyFile(t)
+	a, err := Load(p, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, _ := Load(p, "did:web:h")
-	if !a.pub.Key.Equal(b.pub.Key) {
+	b, _ := Load(p, "")
+	if !a.PublicKey().Equal(b.PublicKey()) {
 		t.Fatal("key regenerated")
 	}
 }
 
-func TestT_HUB_015_SignsOnlyWithPublishedKey(t *testing.T) {
-	s, _ := Load(filepath.Join(t.TempDir(), "hub.key"), "did:web:h")
-	sig, _ := s.Sign([]byte("m"))
-	doc := did.NewDocument("did:web:h", s.PublishedKeys())
-	key, ok := doc.AssertionKey(sig.Kid)
-	if !ok || sign.Verify([]byte("m"), sig, key) != nil {
-		t.Fatalf("kid %s not verifiable from the DID document", sig.Kid)
+func TestT_HUB_010_ProofVerifiesWithDIDKeyDocument(t *testing.T) {
+	s, _ := Load(keyFile(t), "")
+	signed, err := s.Sign([]byte(`{"@context":["https://www.w3.org/ns/credentials/v2","c"],"a":1}`), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, _ := did.ResolveKey(s.KeyDID())
+	k, ok := doc.AssertionKey(s.VerificationMethod())
+	if !ok || vc.Verify(signed, k.Key) != nil {
+		t.Fatal("proof not verifiable from the did:key document")
 	}
 }

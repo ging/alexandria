@@ -19,14 +19,14 @@ const (
 	NS      = "demo"
 	NSIRI   = Base + "/v1/namespaces/demo"
 	Context = Base + "/pub/_vhub/v1/context.jsonld"
-	IdP     = "https://idp.example.com"
+	IdPIss  = "https://idp.example.com"
 )
 
 // Principals of F6: Ana is admin, Sergio is the steward of demo, Eve has a token but no permission.
 var (
-	Ana    = &domain.Principal{Iss: IdP, Sub: "ana", IsAdmin: true}
-	Sergio = &domain.Principal{Iss: IdP, Sub: "sergio"}
-	Eve    = &domain.Principal{Iss: IdP, Sub: "eve"}
+	Ana    = &domain.Principal{Iss: IdPIss, Sub: "ana", IsAdmin: true}
+	Sergio = &domain.Principal{Iss: IdPIss, Sub: "sergio"}
+	Eve    = &domain.Principal{Iss: IdPIss, Sub: "eve"}
 )
 
 // Draft builds a Part 5.1 draft of version v whose policy schema admits the given actions.
@@ -67,13 +67,40 @@ func NewServer(t *testing.T, t0 string) *Server {
 	return s
 }
 
-// NewBareServer builds a did:key hub without namespaces and with its key checked.
+// NewBareServer builds a did:key hub with compiler_poc, without namespaces and with its key checked.
 func NewBareServer(t0 string) *Server {
+	return NewBareServerWith(t0, compiler_poc.Compiler{Defaults: lifecycle.Defaults()})
+}
+
+// NewServerWith builds an F6 hub with namespace demo and the given compiler.
+func NewServerWith(t *testing.T, t0 string, c app.ProfileCompiler) *Server {
+	t.Helper()
+	s := NewBareServerWith(t0, c)
+	s.Setup(t)
+	return s
+}
+
+// NewServerOn builds an F6 hub with compiler_poc on another store, keeping blobs in memory (contract tests of store adapters).
+func NewServerOn(t *testing.T, t0 string, store app.Store) *Server {
+	t.Helper()
+	s := newServer(t0, compiler_poc.Compiler{Defaults: lifecycle.Defaults()}, store)
+	s.Setup(t)
+	return s
+}
+
+// NewBareServerWith builds a did:key hub with the given compiler.
+func NewBareServerWith(t0 string, c app.ProfileCompiler) *Server { return newServer(t0, c, nil) }
+
+// newServer builds a did:key hub on store, or on the memory store when nil.
+func newServer(t0 string, c app.ProfileCompiler, store app.Store) *Server {
 	db, clock, signer := NewMemDB(), NewClock(t0), NewKeySigner(1, "")
+	if store == nil {
+		store = db
+	}
 	s := &Server{DB: db, Clock: clock, Signer: signer, Resolver: NewResolver(), Fetcher: NewFakeFetcher()}
 	s.Hub = app.New(app.Deps{
-		Store: db, Blobs: MemBlobs{db}, Signer: signer, Resolver: s.Resolver, Fetcher: s.Fetcher,
-		Compiler: compiler_poc.Compiler{Defaults: lifecycle.Defaults()}, Clock: clock, Base: Base,
+		Store: store, Blobs: MemBlobs{db}, Signer: signer, Resolver: s.Resolver, Fetcher: s.Fetcher,
+		Compiler: c, Clock: clock, Base: Base,
 		DID: signer.KeyDIDOf(), Context: Context, Defaults: lifecycle.Defaults(), VocabMaxSize: 1 << 16, AllowInsecureLocalhost: true,
 	})
 	s.Hub.Keys.CheckSigningKey()

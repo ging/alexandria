@@ -1,5 +1,5 @@
 // Package signer_file implements the file signer: one Ed25519 hub key read from a PKCS#8 PEM file, generated on first start (PoC only).
-// Implements the Signer port; it only signs with the key it publishes in the DID document (DP-4, REQ-HUB-010, REQ-HUB-015).
+// It signs eddsa-jcs-2022 proofs; the hub gates its use on the key being published in the DID document (DP-14, REQ-HUB-010, REQ-HUB-015).
 package signer_file
 
 import (
@@ -11,23 +11,24 @@ import (
 	"os"
 
 	"github.com/ging/alexandria/internal/core/did"
-	"github.com/ging/alexandria/internal/core/sign"
+	"github.com/ging/alexandria/internal/core/timex"
+	"github.com/ging/alexandria/internal/core/vc"
 	"github.com/ging/alexandria/internal/server/app"
 )
 
 // Signer holds the single hub key (R10).
 type Signer struct {
 	key ed25519.PrivateKey
-	pub did.PublicKey
+	vm  string
 }
 
-var _ app.Signer = (*Signer)(nil)
+var _ app.KeySigner = (*Signer)(nil)
 
-// Load reads the key at path, generating and saving a new one if the file does not exist.
-func Load(path string, d did.DID) (*Signer, error) {
+// Load reads the key at path, generating it if absent; vm defaults to the did:key method of the key.
+func Load(path, vm string) (*Signer, error) {
 	b, err := os.ReadFile(path) // #nosec G304 -- path chosen by the operator in server.json.
 	if errors.Is(err, os.ErrNotExist) {
-		return generate(path, d)
+		return generate(path, vm)
 	}
 	if err != nil {
 		return nil, err
@@ -44,11 +45,11 @@ func Load(path string, d did.DID) (*Signer, error) {
 	if !ok {
 		return nil, errors.New("signer_file: key is not Ed25519")
 	}
-	return newSigner(priv, d), nil
+	return newSigner(priv, vm), nil
 }
 
 // generate creates and stores a fresh key with owner-only permissions.
-func generate(path string, d did.DID) (*Signer, error) {
+func generate(path, vm string) (*Signer, error) {
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, err
@@ -60,18 +61,27 @@ func generate(path string, d did.DID) (*Signer, error) {
 	if err := os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), 0o600); err != nil {
 		return nil, err
 	}
-	return newSigner(priv, d), nil
+	return newSigner(priv, vm), nil
 }
 
-// newSigner derives the published key with kid <did>#key-1.
-func newSigner(priv ed25519.PrivateKey, d did.DID) *Signer {
-	return &Signer{key: priv, pub: did.PublicKey{Kid: string(d) + "#key-1", Key: priv.Public().(ed25519.PublicKey)}}
+// newSigner sets the verification method, defaulting to did:key.
+func newSigner(priv ed25519.PrivateKey, vm string) *Signer {
+	if vm == "" {
+		_, vm = did.KeyDID(priv.Public().(ed25519.PublicKey))
+	}
+	return &Signer{key: priv, vm: vm}
 }
 
-// PublishedKeys returns the key listed in the DID document.
-func (s *Signer) PublishedKeys() []did.PublicKey { return []did.PublicKey{s.pub} }
+// VerificationMethod returns the DID URL of the key.
+func (s *Signer) VerificationMethod() string { return s.vm }
 
-// Sign signs msg with the published key.
-func (s *Signer) Sign(msg []byte) (sign.Signature, error) {
-	return sign.Signature{Kid: s.pub.Kid, Alg: sign.AlgEdDSA, Sig: sign.Encode(ed25519.Sign(s.key, msg))}, nil
+// PublicKey returns the public key.
+func (s *Signer) PublicKey() ed25519.PublicKey { return s.key.Public().(ed25519.PublicKey) }
+
+// KeyDID returns the did:key of the key (DP-5 default hub DID).
+func (s *Signer) KeyDID() did.DID { d, _ := did.KeyDID(s.PublicKey()); return d }
+
+// Sign adds an eddsa-jcs-2022 proof created at the given instant.
+func (s *Signer) Sign(unsecured []byte, created timex.Instant) ([]byte, error) {
+	return vc.Sign(unsecured, vc.Options(s.vm, created), s.key)
 }
