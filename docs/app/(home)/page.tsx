@@ -5,7 +5,7 @@ import {
   BookOpen,
   Globe,
   FileCheck,
-  Wallet,
+  KeyRound,
   ShieldCheck,
   Layers,
   ArrowRight,
@@ -19,7 +19,7 @@ export default function HomePage() {
     {
       icon: BookOpen,
       category: 'Profile DSL & Compiler',
-      title: 'eunomia.profiles/v1 & vhubc',
+      title: 'eunomia.profiles/v1 & alexandriac',
       description:
         'Author ODRL policy profiles and SpaceProfiles in YAML. Validate across N1–N5 and deterministically generate RDF, JSON-LD, SHACL, JSON Schema, and Cedar artifacts.',
       link: '/docs/vhub/profiles-dsl',
@@ -27,41 +27,41 @@ export default function HomePage() {
     {
       icon: Globe,
       category: 'Vocabulary Hub (C-HUB)',
-      title: 'Governance & Signed Distribution',
+      title: 'alexandria-server Governance & /pub',
       description:
-        'Manage draft-to-release lifecycles, compute transition grace windows, sign eunomia.versions/v1 listings with Ed25519 over JCS, and serve immutable /pub artifacts.',
+        'Manage namespaces, stewards, hosted & proxy vocabularies, draft-to-release lifecycles, W3C VC 2.0 eddsa-jcs-2022 listings, and immutable /pub distribution.',
       link: '/docs/vhub/server',
     },
     {
       icon: ShieldCheck,
       category: 'Edge Sidecar (C-CLI)',
-      title: 'Zero-Latency DSP Proxy',
+      title: 'alexandria-client L7 DSP Proxy',
       description:
-        'Synchronize verified packages in the background (S1–S13), enforce policy gates on DSP traffic, attach RFC 9651 VHub-Verdict headers, and track agreements.',
+        'Synchronize verified packages in the background (S1–S13), enforce dynamic policy rules on DSP traffic, attach RFC 9651 VHub-Verdict headers, and track agreements.',
       link: '/docs/vhub/client',
     },
     {
-      icon: Wallet,
-      category: 'Trust & SSI Anchor',
-      title: 'Unified Wallet Port',
+      icon: KeyRound,
+      category: 'Cryptographic Trust',
+      title: 'VC 2.0, DID & OAuth 2.0 JWKS',
       description:
-        'Cryptographic keys never reside in the node. Pluggable adapters decouple domain logic from Fafnir and Eclipse EDC IdentityHub, supporting DCP and VC 1.0/2.0.',
-      link: '/docs/architecture/wallet-port',
+        'Verify Data Integrity eddsa-jcs-2022 proofs offline via did:key and did:web (V0–V4), and guard /v1 management APIs with RFC 9068 at+jwt access tokens (A1–A5).',
+      link: '/docs/architecture/credentials-and-trust',
     },
     {
       icon: FileCheck,
       category: 'Conformance & F6',
-      title: '61 REQ-* & 64 F5 Codes Verified',
+      title: '81 REQ-* & 77 F5 Codes Verified',
       description:
-        'Automated conformance suite covering 61 normative requirements, 63 negative N-<CODE> tests, real-binary Scenario F6 reproduction, and TRACEABILITY.md.',
+        'Automated conformance suite covering all 81 normative requirements, 76/77 negative N-<CODE> tests, real-binary 29-row Scenario F6 replay, and TRACEABILITY.md.',
       link: '/docs/development/conformance',
     },
     {
       icon: Layers,
       category: 'Hands-On Learning',
-      title: '5 Incremental Tutorials',
+      title: '5 Interactive Jupyter Tutorials',
       description:
-        'Step-by-step tutorials taking you from your first YAML profile in vhubc to vhub-server governance, vhub-client edge enforcement, F6 time travel, and wallets.',
+        'Incremental notebooks and web guides with interactive HTML widgets covering DSL compilation, Hub governance, DSP edge proxy, F6 time travel, and resilience.',
       link: '/docs/tutorials',
     },
   ];
@@ -74,18 +74,18 @@ export default function HomePage() {
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 mb-8 rounded-full border border-fd-border bg-fd-card/80 backdrop-blur-md text-xs font-medium text-fd-foreground shadow-xs">
             <Sparkles className="size-3.5 text-[#e6007e]" />
-            <span>Vocabulary Hub v0.2.1 · eunomia.profiles/v1 · Sovereign SSI</span>
+            <span>Specification v0.3.0 · W3C VC 2.0 eddsa-jcs-2022 · eunomia.profiles/v1</span>
           </div>
 
           {/* Headline */}
           <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight mb-6 leading-[1.15]">
             The Vocabulary Hub for{' '}
-            <span className="text-alexandria-gradient">Sovereign Dataspaces</span>
+            <span className="text-alexandria-gradient">Interoperable Dataspaces</span>
           </h1>
 
           {/* Subtitle */}
           <p className="max-w-3xl mx-auto text-base sm:text-lg text-fd-muted-foreground leading-relaxed mb-10">
-            Compile dataspace profiles from YAML, govern signed vocabulary lifecycles with vhub-server, enforce DSP compliance at the edge with vhub-client, and manage decentralized identities with Fafnir and IdentityHub.
+            Compile dataspace profiles from YAML with alexandriac, govern W3C VC 2.0 signed vocabulary lifecycles with alexandria-server, and enforce zero-hub-latency DSP compliance at the edge with alexandria-client.
           </p>
 
           {/* CTAs */}
@@ -103,7 +103,7 @@ export default function HomePage() {
               className="inline-flex items-center gap-2 rounded-xl border border-fd-border bg-fd-card px-6 py-3 text-sm font-semibold transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground shadow-xs"
             >
               <BookOpen className="size-4 text-[#ff3366]" />
-              <span>Incremental Tutorials</span>
+              <span>Interactive Tutorials</span>
             </Link>
 
             <Link
@@ -111,7 +111,7 @@ export default function HomePage() {
               className="inline-flex items-center gap-2 rounded-xl border border-fd-border bg-fd-card px-6 py-3 text-sm font-semibold transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground shadow-xs"
             >
               <FileCheck className="size-4 text-[#ff3366]" />
-              <span>vhub v0.2.1 & DSL Spec</span>
+              <span>Specification v0.3.0</span>
             </Link>
 
             <a
@@ -147,7 +147,7 @@ export default function HomePage() {
             Core Semantic & Architectural Pillars
           </h2>
           <p className="text-sm sm:text-base text-fd-muted-foreground">
-            Enabling frictionless semantic interoperability and verified compliance across heterogeneous dataspace connectors.
+            Enabling frictionless semantic interoperability and cryptographically verified compliance across Dataspace Protocol (DSP) connectors.
           </p>
         </div>
 
@@ -196,20 +196,20 @@ export default function HomePage() {
               <span className="size-3 rounded-full bg-green-500/80" />
               <span className="ml-2 text-xs font-mono text-fd-muted-foreground flex items-center gap-1.5">
                 <Terminal className="size-3" />
-                alexandria — vhub & dev:auto
+                alexandria — build, demo & jupyter tutorials
               </span>
             </div>
             <span className="text-[11px] font-mono text-fd-muted-foreground">bash</span>
           </div>
           <div className="p-5 font-mono text-xs sm:text-sm bg-black/90 text-neutral-200 overflow-x-auto leading-relaxed">
-            <div className="text-neutral-400"># 1. Build vhub binaries & run the end-to-end F6 lifecycle demo:</div>
+            <div className="text-neutral-400"># 1. Build all binaries & run the end-to-end F6 lifecycle demo:</div>
             <div className="text-[#ff3e73] mt-1 font-semibold">$ make build && make demo</div>
-            <div className="text-neutral-400 mt-2">✔ vhub-server (C-HUB):      Listening with eunomia.profiles/v1 DSL compiler</div>
-            <div className="text-neutral-400">✔ vhub-client (C-CLI):      Synced S1–S13 & enforcing DSP gates</div>
-            <div className="text-emerald-400">✨ F6 scenario completed:   19/19 rows verified (1.0.0 → 2.0.0 → Revoked)</div>
-            <div className="text-neutral-400 mt-4"># 2. Or start the full SSI stack with TLS, Zitadel IAM & Wallet link:</div>
-            <div className="text-[#ff3e73] mt-1 font-semibold">$ task dev:auto</div>
-            <div className="text-emerald-400 mt-2">✨ Alexandria Vocabulary Hub running at https://alexandria.127.0.0.1.nip.io:8443</div>
+            <div className="text-neutral-400 mt-2">✔ alexandria-server (C-HUB):  Listening on https://127.0.0.1:8443 (did:key)</div>
+            <div className="text-neutral-400">✔ alexandria-client (C-CLI):  Synced S1–S13 & enforcing DSP gates</div>
+            <div className="text-emerald-400">✨ F6 scenario completed:     29/29 rows verified (1.0.0 → 2.0.0 → Revoked)</div>
+            <div className="text-neutral-400 mt-4"># 2. Or launch the interactive JupyterLab notebook environment:</div>
+            <div className="text-[#ff3e73] mt-1 font-semibold">$ make tutorial</div>
+            <div className="text-emerald-400 mt-2">✨ JupyterLab running at http://127.0.0.1:8888/lab/tree/01_dsl_and_alexandriac_compiler.ipynb</div>
           </div>
         </div>
       </section>
@@ -219,10 +219,10 @@ export default function HomePage() {
         <div className="relative rounded-2xl overflow-hidden p-8 sm:p-12 text-center border border-fd-border bg-fd-card">
           <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-alexandria-gradient rounded-full blur-3xl opacity-10 pointer-events-none" />
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight mb-4">
-            Ready to Build and Govern Sovereign Dataspaces?
+            Ready to Govern Semantic Profiles Across Your Dataspace?
           </h2>
           <p className="max-w-2xl mx-auto text-sm sm:text-base text-fd-muted-foreground mb-8">
-            Follow our 5-part incremental tutorial series to compile YAML profiles, publish signed releases on vhub-server, validate DSP traffic at the edge, and manage decentralized wallets.
+            Follow our 5-part incremental tutorial series to compile YAML profiles, publish VC 2.0 signed releases on alexandria-server, validate DSP traffic at the edge, and replay breaking transitions.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-4">
             <Link
@@ -236,7 +236,7 @@ export default function HomePage() {
               href="/docs/vhub"
               className="inline-flex items-center gap-2 rounded-xl border border-fd-border bg-fd-card px-6 py-2.5 text-sm font-semibold hover:bg-fd-accent hover:text-fd-accent-foreground transition-colors shadow-xs"
             >
-              <span>Vocabulary Hub v0.2.1 Spec</span>
+              <span>Specification v0.3.0 Overview</span>
             </Link>
           </div>
         </div>
