@@ -12,18 +12,18 @@ import (
 // Registry accumulates metric values.
 type Registry struct {
 	mu           sync.Mutex
-	counts       map[[3]string]int64
+	counts       map[[4]string]int64
 	latencySum   float64
 	latencyCount int64
 }
 
 // New returns an empty registry.
-func New() *Registry { return &Registry{counts: map[[3]string]int64{}} }
+func New() *Registry { return &Registry{counts: map[[4]string]int64{}} }
 
 // Classified counts one gate classification.
-func (r *Registry) Classified(gate, version, result string) {
+func (r *Registry) Classified(rule, gate, version, result string) {
 	r.mu.Lock()
-	r.counts[[3]string{gate, version, result}]++
+	r.counts[[4]string{rule, gate, version, result}]++
 	r.mu.Unlock()
 }
 
@@ -43,14 +43,14 @@ func (r *Registry) Write(w io.Writer, listingAge int64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	_, _ = fmt.Fprintln(w, "# TYPE vhub_classifications counter")
-	_, _ = fmt.Fprintln(w, "# HELP vhub_classifications Gate classifications by gate, version and result.")
-	keys := make([][3]string, 0, len(r.counts))
+	_, _ = fmt.Fprintln(w, "# HELP vhub_classifications Gate classifications by rule, gate, version and result.")
+	keys := make([][4]string, 0, len(r.counts))
 	for k := range r.counts {
 		keys = append(keys, k)
 	}
 	sort.Slice(keys, func(i, j int) bool { return fmt.Sprint(keys[i]) < fmt.Sprint(keys[j]) })
 	for _, k := range keys {
-		_, _ = fmt.Fprintf(w, "vhub_classifications_total{gate=%q,version=%q,result=%q} %d\n", k[0], k[1], k[2], r.counts[k])
+		_, _ = fmt.Fprintf(w, "vhub_classifications_total{rule=%q,gate=%q,version=%q,result=%q} %d\n", k[0], k[1], k[2], k[3], r.counts[k])
 	}
 	_, _ = fmt.Fprintln(w, "# TYPE vhub_listing_age_seconds gauge")
 	if listingAge >= 0 {

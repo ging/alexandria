@@ -1,0 +1,284 @@
+{
+  "revision": 1,
+  "rules": [
+    {
+      "id": "catalog-request",
+      "priority": 10,
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/catalog/request"
+      },
+      "message": "CatalogRequestMessage",
+      "verify": {
+        "gates": [
+          "dsp_message"
+        ]
+      },
+      "mode": "observe",
+      "validate_response": {
+        "gate": "catalog_entry"
+      }
+    },
+    {
+      "id": "dataset-request",
+      "priority": 20,
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "GET",
+        "path": "/catalog/datasets/{id}"
+      },
+      "message": "DatasetRequestMessage",
+      "verify": {
+        "gates": [
+          "dsp_message"
+        ]
+      },
+      "mode": "observe",
+      "validate_response": {
+        "gate": "catalog_entry"
+      }
+    },
+    {
+      "id": "contract-request-initial",
+      "priority": 100,
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/negotiations/request"
+      },
+      "message": "ContractRequestMessage",
+      "verify": {
+        "gates": [
+          "dsp_message",
+          "policy_intake"
+        ]
+      },
+      "mode": "observe"
+    },
+    {
+      "id": "contract-request",
+      "priority": 110,
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/negotiations/{providerPid}/request",
+        "body": [
+          {
+            "pointer": "/@type",
+            "one_of": [
+              "ContractRequestMessage",
+              "dspace:ContractRequestMessage"
+            ]
+          }
+        ]
+      },
+      "message": "ContractRequestMessage",
+      "verify": {
+        "gates": [
+          "dsp_message",
+          "policy_intake"
+        ],
+        "select": ""
+      },
+      "mode": "enforce"
+    },
+    {
+      "id": "negotiation-event",
+      "priority": 120,
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/negotiations/{pid}/events"
+      },
+      "message": "ContractNegotiationEventMessage",
+      "verify": {
+        "gates": [
+          "dsp_message"
+        ]
+      },
+      "mode": "observe"
+    },
+    {
+      "id": "agreement-verification",
+      "priority": 130,
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/negotiations/{providerPid}/agreement/verification"
+      },
+      "message": "ContractAgreementVerificationMessage",
+      "verify": {
+        "gates": [
+          "dsp_message"
+        ]
+      },
+      "mode": "observe"
+    },
+    {
+      "id": "negotiation-termination",
+      "priority": 140,
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/negotiations/{pid}/termination"
+      },
+      "message": "ContractNegotiationTerminationMessage",
+      "verify": {
+        "gates": [
+          "dsp_message"
+        ]
+      },
+      "mode": "observe"
+    },
+    {
+      "id": "contract-offer-initial",
+      "priority": 150,
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/negotiations/offers"
+      },
+      "message": "ContractOfferMessage",
+      "verify": {
+        "gates": [
+          "dsp_message",
+          "policy_intake"
+        ]
+      },
+      "mode": "observe"
+    },
+    {
+      "id": "contract-offer",
+      "priority": 160,
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/negotiations/{consumerPid}/offers"
+      },
+      "message": "ContractOfferMessage",
+      "verify": {
+        "gates": [
+          "dsp_message",
+          "policy_intake"
+        ]
+      },
+      "mode": "observe"
+    },
+    {
+      "id": "contract-agreement-in",
+      "priority": 170,
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/negotiations/{consumerPid}/agreement"
+      },
+      "message": "ContractAgreementMessage",
+      "verify": {
+        "gates": [
+          "dsp_message",
+          "policy_intake"
+        ]
+      },
+      "mode": "observe"
+    },
+    {
+      "id": "contract-agreement-out",
+      "priority": 170,
+      "listener": "dsp-egress",
+      "match": {
+        "method": "POST",
+        "path": "/negotiations/{consumerPid}/agreement"
+      },
+      "message": "ContractAgreementMessage",
+      "verify": {
+        "gates": [
+          "dsp_message",
+          "policy_intake"
+        ]
+      },
+      "mode": "observe"
+    },
+    {
+      "id": "transfer-request",
+      "priority": 200,
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/transfers/request"
+      },
+      "message": "TransferRequestMessage",
+      "verify": {
+        "gates": [
+          "dsp_message",
+          "agreement_admission"
+        ]
+      },
+      "mode": "observe"
+    },
+    {
+      "id": "transfer-start",
+      "priority": 210,
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/transfers/{pid}/start"
+      },
+      "message": "TransferStartMessage",
+      "verify": {
+        "gates": [
+          "dsp_message"
+        ]
+      },
+      "mode": "observe"
+    },
+    {
+      "id": "transfer-completion",
+      "priority": 220,
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/transfers/{pid}/completion"
+      },
+      "message": "TransferCompletionMessage",
+      "verify": {
+        "gates": [
+          "dsp_message"
+        ]
+      },
+      "mode": "observe"
+    },
+    {
+      "id": "transfer-suspension",
+      "priority": 230,
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/transfers/{pid}/suspension"
+      },
+      "message": "TransferSuspensionMessage",
+      "verify": {
+        "gates": [
+          "dsp_message"
+        ]
+      },
+      "mode": "observe"
+    },
+    {
+      "id": "transfer-termination",
+      "priority": 240,
+      "listener": "dsp-ingress",
+      "match": {
+        "method": "POST",
+        "path": "/transfers/{pid}/termination"
+      },
+      "message": "TransferTerminationMessage",
+      "verify": {
+        "gates": [
+          "dsp_message"
+        ]
+      },
+      "mode": "observe"
+    }
+  ]
+}

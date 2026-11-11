@@ -1,25 +1,30 @@
-// Package config is the loader of the normative alexandria-client configuration (Appendix A.3) with the CFG-1..CFG-5 startup invariants in order.
-// JSON only in the PoC; YAML is not supported (agent decision). The first failing code is reported (§4.3, REQ-CLI-001, REQ-DOC-003).
+// Package config loads the normative alexandria-client configuration (Appendix A.3) from JSON or JSON-model YAML and checks CFG-1.
+// CFG-2 (the rules seed) is checked by Rules.Init with an empty store; the first failing code is reported (§4.3.1, REQ-CLI-001, REQ-DOC-003).
 package config
 
 import (
 	"encoding/json"
-	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 
-	"github.com/ging/alexandria/internal/client/domain"
+	"gopkg.in/yaml.v3"
+
 	"github.com/ging/alexandria/internal/core/codes"
 	"github.com/ging/alexandria/internal/core/schemas"
 	"github.com/ging/alexandria/internal/core/timex"
 )
 
+// DefaultContext is the default value of trust.context (§3.4).
+const DefaultContext = "https://w3id.org/alexandria-vhub/v1"
+
 // Trust is the trust section.
 type Trust struct {
-	HubDID      string `json:"hub_did"`
-	Hub         string `json:"hub"`
-	Credentials string `json:"credentials"`
-	DIDTTL      string `json:"did_ttl,omitempty"`
+	Hub       string `json:"hub"`
+	Namespace string `json:"namespace"`
+	HubDID    string `json:"hub_did"`
+	Context   string `json:"context,omitempty"`
+	DIDTTL    string `json:"did_ttl,omitempty"`
 }
 
 // Upstreams is the upstreams section.
@@ -35,40 +40,47 @@ type Listener struct {
 
 // Config is the client configuration document.
 type Config struct {
-	Space            string              `json:"space"`
-	Trust            Trust               `json:"trust"`
-	Upstreams        Upstreams           `json:"upstreams"`
-	Listeners        map[string]Listener `json:"listeners"`
-	Routes           []domain.Route      `json:"routes"`
-	DefaultAction    string              `json:"default_action,omitempty"`
-	UnknownAgreement string              `json:"unknown_agreement,omitempty"`
+	Trust     Trust               `json:"trust"`
+	Upstreams Upstreams           `json:"upstreams"`
+	Listeners map[string]Listener `json:"listeners"`
+	Rules     struct {
+		Seed string `json:"seed,omitempty"`
+	} `json:"rules"`
+	DefaultAction    string `json:"default_action,omitempty"`
+	UnknownAgreement string `json:"unknown_agreement,omitempty"`
 	Audit            struct {
 		Window int `json:"window,omitempty"`
 	} `json:"audit"`
+	Retention struct {
+		GCInterval string `json:"gc_interval,omitempty"`
+	} `json:"retention"`
 	Events struct {
 		Sink string `json:"sink"`
 	} `json:"events"`
-	// Token is the member bearer token read from trust.credentials (DP-3).
-	Token string `json:"-"`
-	// DIDTTL is trust.did_ttl parsed with its default.
-	DIDTTLValue timex.Duration `json:"-"`
+
+	DIDTTL     timex.Duration `json:"-"`
+	GCInterval timex.Duration `json:"-"`
 }
 
-// credentials is the PoC credentials file: {"token": "<member bearer token>"}.
-type credentials struct {
-	Token string `json:"token"`
-}
-
-// Load reads a configuration and checks CFG-1..CFG-5, returning the first failure.
+// Load reads a JSON or YAML configuration file.
 func Load(path string) (*Config, *codes.Error) {
-	b, err := os.ReadFile(path) // #nosec G304 -- path chosen by the operator on the command line or in the config.
+	b, err := os.ReadFile(path) // #nosec G304 -- path chosen by the operator on the command line.
 	if err != nil {
 		return nil, codes.New(codes.ConfigSchema, "%v", err)
+	}
+	if ext := strings.ToLower(filepath.Ext(path)); ext == ".yaml" || ext == ".yml" {
+		var v any
+		if err := yaml.Unmarshal(b, &v); err != nil {
+			return nil, codes.New(codes.ConfigSchema, "YAML: %v", err)
+		}
+		if b, err = json.Marshal(v); err != nil {
+			return nil, codes.New(codes.ConfigSchema, "YAML is not in the JSON model: %v", err)
+		}
 	}
 	return Parse(b)
 }
 
-// Parse checks CFG-1..CFG-5 on a configuration document.
+// Parse applies CFG-1 and the defaults of §4.3.1.
 func Parse(b []byte) (*Config, *codes.Error) {
 	if err := schemas.Validate(schemas.Config, b); err != nil {
 		return nil, codes.New(codes.ConfigSchema, "%v", err)
@@ -77,74 +89,35 @@ func Parse(b []byte) (*Config, *codes.Error) {
 	if err := json.Unmarshal(b, &c); err != nil {
 		return nil, codes.New(codes.ConfigSchema, "%v", err)
 	}
-	if e := domain.CheckOverlap(c.Routes); e != nil {
-		return nil, e
-	}
-	if e := domain.CheckGateMessage(c.Routes); e != nil {
-		return nil, e
-	}
-	tok, e := readCredentials(c.Trust.Credentials)
-	if e != nil {
-		return nil, e
-	}
-	c.Token = tok
-	if e := domain.CheckUpstream(c.Routes, c.Upstreams.Management != ""); e != nil {
-		return nil, e
-	}
 	c.applyDefaults()
+	var err error
+	if c.DIDTTL, err = timex.ParseDuration(c.Trust.DIDTTL); err != nil {
+		return nil, codes.New(codes.ConfigSchema, "did_ttl: %v", err)
+	}
+	if c.GCInterval, err = timex.ParseDuration(c.Retention.GCInterval); err != nil {
+		return nil, codes.New(codes.ConfigSchema, "gc_interval: %v", err)
+	}
 	return &c, nil
 }
 
-// readCredentials is CFG-4.
-func readCredentials(uri string) (string, *codes.Error) {
-	u, err := url.Parse(uri)
-	if err != nil || u.Scheme != "file" {
-		return "", codes.New(codes.ConfigCredentialsUnreadable, "%s is not a file: URI", uri)
-	}
-	p := u.Path
-	if p == "" {
-		p = u.Opaque
-	}
-	b, err := os.ReadFile(p) // #nosec G304 -- path chosen by the operator on the command line or in the config.
-	if err != nil {
-		return "", codes.New(codes.ConfigCredentialsUnreadable, "%v", err)
-	}
-	var c credentials
-	if json.Unmarshal(b, &c) != nil || strings.TrimSpace(c.Token) == "" {
-		return "", codes.New(codes.ConfigCredentialsUnreadable, "%s has no token", p)
-	}
-	return c.Token, nil
-}
-
-// applyDefaults fills the defaults of §4.3.
+// applyDefaults fills the defaults of §4.3.1.
 func (c *Config) applyDefaults() {
-	if c.DefaultAction == "" {
-		c.DefaultAction = "forward"
+	set := func(p *string, v string) {
+		if *p == "" {
+			*p = v
+		}
 	}
-	if c.UnknownAgreement == "" {
-		c.UnknownAgreement = "forward"
-	}
+	set(&c.Trust.Context, DefaultContext)
+	set(&c.Trust.DIDTTL, "PT6H")
+	set(&c.DefaultAction, "forward")
+	set(&c.UnknownAgreement, "forward")
+	set(&c.Retention.GCInterval, "P1D")
 	if c.Audit.Window == 0 {
 		c.Audit.Window = 100
 	}
-	c.DIDTTLValue = 6 * timex.Hour
-	if c.Trust.DIDTTL != "" {
-		if d, err := timex.ParseDuration(c.Trust.DIDTTL); err == nil {
-			c.DIDTTLValue = d
-		}
-	}
 }
 
-// Gates returns the most restrictive configured mode per gate, for /status.
-func (c *Config) Gates() map[domain.Gate]domain.Mode {
-	rank := map[domain.Mode]int{domain.Observe: 0, domain.Shadow: 1, domain.Enforce: 2}
-	out := map[domain.Gate]domain.Mode{}
-	for _, r := range c.Routes {
-		for _, g := range r.Gates {
-			if m, ok := out[g]; !ok || rank[r.EffectiveMode()] > rank[m] {
-				out[g] = r.EffectiveMode()
-			}
-		}
-	}
-	return out
+// NamespaceIRI is the expected namespace IRI {trust.hub}/v1/namespaces/{trust.namespace}.
+func (c *Config) NamespaceIRI() string {
+	return strings.TrimSuffix(c.Trust.Hub, "/") + "/v1/namespaces/" + c.Trust.Namespace
 }
