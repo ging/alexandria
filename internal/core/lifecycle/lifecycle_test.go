@@ -1,4 +1,4 @@
-// Tests for the date table of §3.3, the approval and revocation invariants, states (§3.5) and in-force sets (§4.6).
+// Tests for the date table of §3.3.2, the approval and revocation invariants, states (§3.3.3) and in-force sets (§4.6).
 // Named T-* tests realise REQ-HUB-005, REQ-HUB-006, REQ-HUB-007, REQ-HUB-009, REQ-HUB-014, REQ-CLI-009 and REQ-SYS-007.
 package lifecycle
 
@@ -76,64 +76,58 @@ func TestT_HUB_005_Row3_GraceOnCompatible(t *testing.T) {
 	}
 }
 
-func TestT_HUB_005_Row4_EmergencyOnCompatible(t *testing.T) {
-	a := approval("1.1.0", Compatible, "2026-09-10T10:00:00Z")
-	a.Emergency, a.Grace = ptr(true), ptr(10*timex.Day)
-	if _, err := Plan(a, f6()[:1]); codeOf(err) != codes.DatesEmergencyOnCompatible {
+func TestT_HUB_005_Row3_GraceOnInitial(t *testing.T) {
+	a := approval("1.0.0", Initial, "2026-09-01T10:00:00Z")
+	a.Grace = ptr(10 * timex.Day)
+	if _, err := Plan(a, nil); codeOf(err) != codes.DatesGraceOnCompatible {
 		t.Fatalf("got %v", err)
 	}
 }
 
-func TestT_HUB_005_Row5_BreakingDefaultGrace(t *testing.T) {
+func TestT_HUB_005_Row4_BreakingDefaultGrace(t *testing.T) {
 	r, err := Plan(approval("2.0.0", Breaking, "2026-10-01T10:00:00Z"), f6()[:1])
 	if err != nil || r.EnforcedFrom != at("2026-11-02T10:00:00Z") {
 		t.Fatalf("got %+v %v", r, err)
 	}
 }
 
-func TestT_HUB_005_Row6_BreakingExplicitGrace(t *testing.T) {
+func TestT_HUB_005_Row5_BreakingGraceAtMinimum(t *testing.T) {
 	a := approval("2.0.0", Breaking, "2026-10-01T10:00:00Z")
-	a.Grace = ptr(5 * timex.Day)
-	if r, err := Plan(a, f6()[:1]); err != nil || r.EnforcedFrom != at("2026-10-08T10:00:00Z") {
+	a.Grace = ptr(7 * timex.Day)
+	if r, err := Plan(a, f6()[:1]); err != nil || r.EnforcedFrom.Sub(r.NewContentFrom) != 7*timex.Day {
 		t.Fatalf("got %+v %v", r, err)
 	}
 }
 
-func TestT_HUB_005_Row7_ZeroGraceWithoutEmergency(t *testing.T) {
+func TestT_HUB_005_Row6_BreakingGraceTooShort(t *testing.T) {
 	a := approval("2.0.0", Breaking, "2026-10-01T10:00:00Z")
-	a.Grace = ptr(timex.Duration(0))
-	if _, err := Plan(a, f6()[:1]); codeOf(err) != codes.DatesZeroGraceWithoutEmergency {
+	a.Grace = ptr(3 * timex.Day)
+	if _, err := Plan(a, f6()[:1]); codeOf(err) != codes.DatesGraceTooShort {
 		t.Fatalf("got %v", err)
 	}
 }
 
-func TestT_HUB_005_Row8_EmergencyEnforcesAtNewContent(t *testing.T) {
+func TestT_HUB_005_Row6_OneSecondBelowMinimum(t *testing.T) {
 	a := approval("2.0.0", Breaking, "2026-10-01T10:00:00Z")
-	a.Emergency, a.Grace, a.Justification = ptr(true), ptr(timex.Duration(0)), "CVE"
-	if r, err := Plan(a, f6()[:1]); err != nil || r.EnforcedFrom != r.NewContentFrom || !r.Emergency {
-		t.Fatalf("got %+v %v", r, err)
-	}
-}
-
-func TestT_HUB_005_Row8_EmergencyRequiresJustification(t *testing.T) {
-	a := approval("2.0.0", Breaking, "2026-10-01T10:00:00Z")
-	a.Emergency = ptr(true)
-	if _, err := Plan(a, f6()[:1]); codeOf(err) != codes.DatesJustificationRequired {
+	a.Grace = ptr(7*timex.Day - timex.Second)
+	if _, err := Plan(a, f6()[:1]); codeOf(err) != codes.DatesGraceTooShort {
 		t.Fatalf("got %v", err)
 	}
 }
 
-func TestT_HUB_005_Row9_EmergencyWithGrace(t *testing.T) {
-	a := approval("2.0.0", Breaking, "2026-10-01T10:00:00Z")
-	a.Emergency, a.Grace, a.Justification = ptr(true), ptr(10*timex.Day), "x"
-	if _, err := Plan(a, f6()[:1]); codeOf(err) != codes.DatesEmergencyWithGrace {
-		t.Fatalf("got %v", err)
+func TestT_HUB_005_BreakingAlwaysHasMinimumGrace(t *testing.T) {
+	for _, g := range []*timex.Duration{nil, ptr(7 * timex.Day), ptr(40 * timex.Day)} {
+		a := approval("2.0.0", Breaking, "2026-10-01T10:00:00Z")
+		a.Grace = g
+		if r, err := Plan(a, f6()[:1]); err == nil && r.EnforcedFrom.Sub(r.NewContentFrom) < a.Params.MinGraceWindow {
+			t.Fatalf("grace %v gives a coexistence below the minimum", g)
+		}
 	}
 }
 
 func TestT_HUB_006_Date1NonMonotonic(t *testing.T) {
 	a := approval("3.0.0", Breaking, "2026-10-05T10:00:00Z")
-	a.Grace = ptr(5 * timex.Day)
+	a.Grace = ptr(7 * timex.Day)
 	x, _ := Plan(a, f6())
 	if err := CheckApproval(x, f6(), Defaults()); codeOf(err) != codes.DatesNonMonotonic {
 		t.Fatalf("got %v", err)
@@ -356,7 +350,7 @@ func TestInForceSetGrowsWithLease(t *testing.T) {
 
 func TestT_HUB_007_MergeKeepsDatesAndContinuityDetectsChanges(t *testing.T) {
 	prev := &Accepted{Sequence: 418, Raw: []byte("a"), Known: map[string]Record{"1.0.0": f6()[0], "2.0.0": f6()[1]}}
-	next := Listing{Sequence: 419, Versions: f6()}
+	next := ListingSubject{Sequence: 419, Versions: f6()}
 	next.Versions[1].EnforcedFrom = next.Versions[1].EnforcedFrom.Add(-timex.Day)
 	if _, err := CheckContinuity(prev, next, []byte("b")); codeOf(err) != codes.SyncDatesChanged {
 		t.Fatalf("got %v", err)
@@ -368,14 +362,14 @@ func TestContinuityRollbackConflictAndDrop(t *testing.T) {
 	revoked[0].RevokedFrom = ptr(at("2026-11-12T00:00:00Z"))
 	prev := &Accepted{Sequence: 418, Raw: []byte("a"), Known: map[string]Record{"1.0.0": revoked[0], "2.0.0": revoked[1]}}
 	cases := []struct {
-		next Listing
+		next ListingSubject
 		raw  string
 		want codes.Code
 	}{
-		{Listing{Sequence: 417, Versions: revoked}, "x", codes.SyncRollback},
-		{Listing{Sequence: 418, Versions: revoked}, "x", codes.SyncSequenceConflict},
-		{Listing{Sequence: 419, Versions: f6()[1:]}, "x", codes.SyncRevocationDropped},
-		{Listing{Sequence: 419, Versions: revoked}, "x", ""},
+		{ListingSubject{Sequence: 417, Versions: revoked}, "x", codes.SyncRollback},
+		{ListingSubject{Sequence: 418, Versions: revoked}, "x", codes.SyncSequenceConflict},
+		{ListingSubject{Sequence: 419, Versions: f6()[1:]}, "x", codes.SyncRevocationDropped},
+		{ListingSubject{Sequence: 419, Versions: revoked}, "x", ""},
 	}
 	for _, c := range cases {
 		if _, err := CheckContinuity(prev, c.next, []byte(c.raw)); codeOf(err) != c.want {
@@ -412,5 +406,101 @@ func TestClassOf(t *testing.T) {
 	}
 	if _, ok := ClassOf(one, &one); ok {
 		t.Fatal("non-increasing version accepted")
+	}
+}
+
+// stateAt returns the reference state of version v of the F6 records at t.
+func stateAt(v, t string) State {
+	rs := f6()
+	r, _ := Find(rs, semver.MustParse(v))
+	return StateAt(rs, r, at(t))
+}
+
+func TestStateRow1_Revoked(t *testing.T) {
+	rs := f6()
+	rs[0].RevokedFrom = ptr(at("2026-11-12T00:00:00Z"))
+	if s := StateAt(rs, rs[0], at("2026-11-12T00:00:00Z")); s != Revoked {
+		t.Fatalf("got %s", s)
+	}
+	if s := StateAt(rs, rs[0], at("2026-11-11T23:59:59Z")); s == Revoked {
+		t.Fatal("revoked one second early")
+	}
+}
+
+func TestStateRow2_Scheduled(t *testing.T) {
+	if s := stateAt("2.0.0", "2026-10-03T09:59:59Z"); s != Scheduled {
+		t.Fatalf("got %s", s)
+	}
+}
+
+func TestStateRow3_PublishedAtNewContent(t *testing.T) {
+	if s := stateAt("2.0.0", "2026-10-03T10:00:00Z"); s != Published {
+		t.Fatalf("got %s", s)
+	}
+}
+
+func TestStateRow4_DeprecatedDuringCoexistence(t *testing.T) {
+	if s := stateAt("1.0.0", "2026-10-03T10:00:00Z"); s != Deprecated {
+		t.Fatalf("got %s", s)
+	}
+	if s := stateAt("1.0.0", "2026-11-02T09:59:59Z"); s != Deprecated {
+		t.Fatalf("got %s one second before enforced_from", s)
+	}
+}
+
+func TestStateRow5_Superseded(t *testing.T) {
+	rs := []Record{f6()[0], {Version: semver.MustParse("1.1.0"), Class: Compatible, PublishedAt: at("2026-10-01T10:00:00Z"), NewContentFrom: at("2026-10-03T10:00:00Z"), EnforcedFrom: at("2026-10-03T10:00:00Z")}}
+	if s := StateAt(rs, rs[0], at("2026-10-03T10:00:00Z")); s != Superseded {
+		t.Fatalf("got %s", s)
+	}
+}
+
+func TestStateRow6_RetiredAtEnforcedFrom(t *testing.T) {
+	if s := stateAt("1.0.0", "2026-11-02T10:00:00Z"); s != Retired {
+		t.Fatalf("got %s", s)
+	}
+}
+
+func TestLeaseBarriersPlusMinusOneSecond(t *testing.T) {
+	l := Defaults().LeaseMargin
+	cases := map[string][]string{
+		"2026-10-03T09:59:49Z": {"1.0.0"},
+		"2026-10-03T09:59:50Z": {"2.0.0", "1.0.0"},
+		"2026-11-02T10:00:09Z": {"2.0.0", "1.0.0"},
+		"2026-11-02T10:00:10Z": {"2.0.0"},
+	}
+	for ts, want := range cases {
+		if got := versions(InForceSet(f6(), at(ts), l)); len(got) != len(want) || got[0] != want[0] {
+			t.Errorf("%s: got %v want %v", ts, got, want)
+		}
+	}
+}
+
+func TestParamsOneCodePerInvariant(t *testing.T) {
+	cases := map[codes.Code]func(*Params){
+		codes.LifecycleStalenessLtTTL: func(p *Params) { p.Freshness.MaxStaleness = 12 * timex.Hour },
+		codes.LifecycleMinGrace:       func(p *Params) { p.MinGraceWindow = timex.Day },
+		codes.LifecycleGraceTooShort:  func(p *Params) { p.GraceWindow = 5 * timex.Day },
+		codes.LifecycleSyncInterval:   func(p *Params) { p.SyncInterval = 13 * timex.Hour },
+		codes.LifecycleClockSkew:      func(p *Params) { p.ClockSkew = 0 },
+		codes.LifecycleLease:          func(p *Params) { p.ClockSkew, p.LeaseMargin = 10*timex.Second, 5*timex.Second },
+		codes.LifecyclePropagation:    func(p *Params) { p.PropagationWindow = 24 * timex.Hour; p.MinGraceWindow = timex.Day },
+		codes.LifecycleMaxVersions:    func(p *Params) { p.MaxConcurrentVersions = 1 },
+	}
+	for want, mutate := range cases {
+		p := Defaults()
+		mutate(&p)
+		errs := p.Validate()
+		if len(errs) != 1 || errs[0].Code != want {
+			t.Errorf("%s: got %v", want, errs)
+		}
+	}
+}
+
+func TestCheckRecordsBreakingBelowMinGrace(t *testing.T) {
+	rs := f6()
+	rs[1].EnforcedFrom = rs[1].NewContentFrom.Add(3 * timex.Day)
+	if err := CheckRecords(rs, func(semver.Version) Params { return Defaults() }); codeOf(err) != codes.SyncDatesInvalid {
+		t.Fatalf("got %v", err)
 	}
 }

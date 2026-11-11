@@ -19,7 +19,7 @@ const module = "github.com/ging/alexandria/"
 var root = filepath.Join("..", "..")
 
 // allowedExternal lists the only non-standard modules production code may import (DP-1).
-var allowedExternal = []string{"modernc.org/sqlite", "github.com/santhosh-tekuri/jsonschema/v6", "gopkg.in/yaml.v3", "github.com/piprate/json-gold"}
+var allowedExternal = []string{"modernc.org/sqlite", "github.com/santhosh-tekuri/jsonschema/v6", "github.com/mr-tron/base58", "github.com/dunglas/httpsfv", "github.com/go-jose/go-jose/v4", "github.com/prometheus/client_golang", "gopkg.in/yaml.v3", "github.com/piprate/json-gold"}
 
 // pkgFile is one production Go file with its package directory and imports.
 type pkgFile struct {

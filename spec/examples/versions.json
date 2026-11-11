@@ -1,0 +1,50 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/credentials/v2",
+    "https://w3id.org/alexandria-vhub/v1"
+  ],
+  "type": [
+    "VerifiableCredential",
+    "VersionListing"
+  ],
+  "issuer": "did:web:hub.example.com",
+  "validFrom": "2026-10-10T06:00:00Z",
+  "validUntil": "2026-10-11T06:00:00Z",
+  "credentialSubject": {
+    "id": "https://hub.example.com/v1/namespaces/demo/versions",
+    "namespace": "https://hub.example.com/v1/namespaces/demo",
+    "sequence": 418,
+    "versions": [
+      {
+        "id": "https://hub.example.com/v1/namespaces/demo/versions/1.0.0",
+        "namespace": "https://hub.example.com/v1/namespaces/demo",
+        "version": "1.0.0",
+        "manifest": "ni:///sha-256;Ge9BnNlWgXZ_GX2QlJ8Vr0EHe5rIqm8hJUVu4_Vst9o",
+        "class": "initial",
+        "published_at": "2026-09-01T10:00:00Z",
+        "new_content_from": "2026-09-03T10:00:00Z",
+        "enforced_from": "2026-09-03T10:00:00Z",
+        "revoked_from": null
+      },
+      {
+        "id": "https://hub.example.com/v1/namespaces/demo/versions/2.0.0",
+        "namespace": "https://hub.example.com/v1/namespaces/demo",
+        "version": "2.0.0",
+        "manifest": "ni:///sha-256;OHZ9qlxjiM_MsHfLKC1e0NXbt8OOx2B38NRbaB5Eh0A",
+        "class": "breaking",
+        "published_at": "2026-10-01T10:00:00Z",
+        "new_content_from": "2026-10-03T10:00:00Z",
+        "enforced_from": "2026-11-02T10:00:00Z",
+        "revoked_from": null
+      }
+    ]
+  },
+  "proof": {
+    "type": "DataIntegrityProof",
+    "cryptosuite": "eddsa-jcs-2022",
+    "created": "2026-10-10T06:00:00Z",
+    "verificationMethod": "did:web:hub.example.com#key-2026-1",
+    "proofPurpose": "assertionMethod",
+    "proofValue": "z3FXQjecWufY46yg5abdVZsXqLhxhueuSoZgNSARiKBk9czhSePTFehP8c3PGfb6a22gkfUKods5D2UAUL5n2Brbx"
+  }
+}

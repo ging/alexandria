@@ -1,5 +1,5 @@
-// Package problem implements Problem Details (RFC 9457) with the code, severity, path and line extensions of §3.6.
-// Shared shape of every error body in /v1, the management API and the admin API (REQ-HUB-017, REQ-HUB-019).
+// Package problem implements Problem Details (RFC 9457) with the code, severity, path, line and @context members of §3.4.
+// Shared shape of every error body in /v1, the management API and the admin API (REQ-HUB-019, REQ-HUB-029).
 package problem
 
 import (
@@ -13,6 +13,7 @@ const ContentType = "application/problem+json"
 
 // Problem is an RFC 9457 document; Findings carries one problem per finding when several exist.
 type Problem struct {
+	Context  string    `json:"@context,omitempty"`
 	Type     string    `json:"type"`
 	Title    string    `json:"title"`
 	Status   int       `json:"status"`
@@ -24,8 +25,17 @@ type Problem struct {
 	Findings []Problem `json:"findings,omitempty"`
 }
 
-// TypeURI returns urn:eunomia:vhub:problem:<CODE>.
-func TypeURI(c codes.Code) string { return "urn:eunomia:vhub:problem:" + string(c) }
+// TypeURI returns https://w3id.org/alexandria-vhub/problems#<CODE> (§2.5).
+func TypeURI(c codes.Code) string { return "https://w3id.org/alexandria-vhub/problems#" + string(c) }
+
+// WithContext returns the problem with its JSON-LD @context set to c, also on its findings.
+func (p Problem) WithContext(c string) Problem {
+	p.Context = c
+	for i := range p.Findings {
+		p.Findings[i].Context = ""
+	}
+	return p
+}
 
 // From builds a problem for a coded error with the given HTTP status.
 func From(e *codes.Error, status int) Problem {

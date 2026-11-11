@@ -13,9 +13,9 @@ import (
 // constRe extracts the catalog constants declared in codes.go.
 var constRe = regexp.MustCompile(`(?m)^\t[A-Za-z]+\s+Code\s+= "([A-Z0-9_]+)"$`)
 
-func TestCatalogHas64Codes(t *testing.T) {
-	if n := len(All()); n != 64 {
-		t.Fatalf("catalog has %d codes, F5 lists 64", n)
+func TestCatalogHas77Codes(t *testing.T) {
+	if n := len(All()); n != 77 {
+		t.Fatalf("catalog has %d codes, F5 lists 77", n)
 	}
 }
 
@@ -36,7 +36,7 @@ func TestConstantsMatchCatalog(t *testing.T) {
 }
 
 func TestNoCodeLiteralOutsideCatalog(t *testing.T) {
-	lit := regexp.MustCompile(`"((?:API|RELEASE|DATES|LIFECYCLE|CONFIG|SYNC|DID|CLIENT|NO|MESSAGE|CONTEXT|VERDICT|ROUTE|AGREEMENT|AUDIT|CLOCK)_[A-Z0-9_]+)"`)
+	lit := regexp.MustCompile(`"((?:API|NS|STEWARD|VOCAB|RELEASE|SIGNER|DATES|LIFECYCLE|CONFIG|RULES|RULE|SYNC|DID|CLIENT|NO|MESSAGE|CONTEXT|VERDICT|ROUTE|AGREEMENT|AUDIT|CLOCK)_[A-Z0-9_]+)"`)
 	root := filepath.Join("..", "..", "..")
 	_ = filepath.Walk(filepath.Join(root, "internal"), func(p string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "codes.go") {

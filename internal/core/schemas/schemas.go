@@ -1,5 +1,5 @@
-// Package schemas embeds the Appendix A schemas (listing, version record, client config, verdict event) and a no-network validator.
-// Used to check every document the binaries emit or read (REQ-DOC-001, REQ-DOC-002, REQ-DOC-003, REQ-DOC-004).
+// Package schemas embeds the six Appendix A schemas and the A.5 JSON-LD context, with a validator that never touches the network.
+// Used to check every document the binaries emit or read (REQ-DOC-001…REQ-DOC-006, REQ-HUB-030, REQ-HUB-031).
 package schemas
 
 import (
@@ -13,10 +13,10 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
-//go:embed *.schema.json
+//go:embed *.schema.json context.jsonld
 var files embed.FS
 
-// Kind names one of the four normative schemas.
+// Kind names one of the six normative schemas.
 type Kind string
 
 // Normative schema files of Appendix A.
@@ -25,7 +25,15 @@ const (
 	Version  Kind = "version.schema.json"
 	Config   Kind = "config.schema.json"
 	Verdict  Kind = "verdict-event.schema.json"
+	Manifest Kind = "manifest.schema.json"
+	Rules    Kind = "rules.schema.json"
 )
+
+// All lists the six normative schemas.
+var All = []Kind{Versions, Version, Config, Verdict, Manifest, Rules}
+
+// Context returns the Appendix A.5 JSON-LD context byte for byte.
+func Context() []byte { b, _ := files.ReadFile("context.jsonld"); return b }
 
 // Schema is a compiled JSON Schema 2020-12.
 type Schema struct{ s *jsonschema.Schema }
@@ -33,7 +41,7 @@ type Schema struct{ s *jsonschema.Schema }
 var compiled = map[Kind]*Schema{}
 
 func init() {
-	for _, k := range []Kind{Versions, Version, Config, Verdict} {
+	for _, k := range All {
 		b, err := files.ReadFile(string(k))
 		if err != nil {
 			panic(err)

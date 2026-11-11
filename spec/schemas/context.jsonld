@@ -1,0 +1,174 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "avh": "https://w3id.org/alexandria-vhub/v1#",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "id": "@id",
+    "type": "@type",
+    "Namespace": "avh:Namespace",
+    "Steward": "avh:Steward",
+    "Vocabulary": "avh:Vocabulary",
+    "Revision": "avh:Revision",
+    "VersionRecord": "avh:VersionRecord",
+    "VersionListing": "avh:VersionListing",
+    "PackageManifest": "avh:PackageManifest",
+    "Event": "avh:Event",
+    "slug": {
+      "@id": "avh:slug"
+    },
+    "title": {
+      "@id": "http://purl.org/dc/terms/title"
+    },
+    "description": {
+      "@id": "https://schema.org/description"
+    },
+    "created_at": {
+      "@id": "avh:createdAt",
+      "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
+    },
+    "namespace": {
+      "@id": "avh:namespace",
+      "@type": "@id"
+    },
+    "version": {
+      "@id": "avh:version"
+    },
+    "manifest": {
+      "@id": "avh:manifest",
+      "@type": "@id"
+    },
+    "class": {
+      "@id": "avh:changeClass"
+    },
+    "published_at": {
+      "@id": "avh:publishedAt",
+      "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
+    },
+    "new_content_from": {
+      "@id": "avh:newContentFrom",
+      "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
+    },
+    "enforced_from": {
+      "@id": "avh:enforcedFrom",
+      "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
+    },
+    "revoked_from": {
+      "@id": "avh:revokedFrom",
+      "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
+    },
+    "sequence": {
+      "@id": "avh:sequence",
+      "@type": "xsd:integer"
+    },
+    "versions": {
+      "@id": "avh:versions",
+      "@container": "@list"
+    },
+    "lifecycle": {
+      "@id": "avh:lifecycle",
+      "@type": "@json"
+    },
+    "profiles": {
+      "@id": "avh:profile",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "files": {
+      "@id": "avh:file",
+      "@container": "@set"
+    },
+    "path": {
+      "@id": "avh:path"
+    },
+    "media_type": {
+      "@id": "avh:mediaType"
+    },
+    "digest": {
+      "@id": "avh:digest",
+      "@type": "@id"
+    },
+    "role": {
+      "@id": "avh:role"
+    },
+    "slot": {
+      "@id": "avh:slot"
+    },
+    "applies_to": {
+      "@id": "avh:appliesTo",
+      "@container": "@set"
+    },
+    "url": {
+      "@id": "avh:url",
+      "@type": "@id"
+    },
+    "source": {
+      "@id": "avh:source",
+      "@type": "@id"
+    },
+    "kind": {
+      "@id": "avh:kind"
+    },
+    "upstream": {
+      "@id": "avh:upstream",
+      "@type": "@id"
+    },
+    "revisions": {
+      "@id": "avh:revision",
+      "@container": "@list"
+    },
+    "n": {
+      "@id": "avh:revisionNumber",
+      "@type": "xsd:integer"
+    },
+    "size": {
+      "@id": "avh:size",
+      "@type": "xsd:integer"
+    },
+    "created_by": {
+      "@id": "avh:createdBy"
+    },
+    "iss": {
+      "@id": "avh:issuer"
+    },
+    "sub": {
+      "@id": "avh:subject"
+    },
+    "label": {
+      "@id": "avh:label"
+    },
+    "assigned_at": {
+      "@id": "avh:assignedAt",
+      "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
+    },
+    "assigned_by": {
+      "@id": "avh:assignedBy"
+    },
+    "ts": {
+      "@id": "avh:timestamp",
+      "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
+    },
+    "principal": {
+      "@id": "avh:principal"
+    },
+    "subject": {
+      "@id": "avh:eventSubject"
+    },
+    "code": {
+      "@id": "avh:code"
+    },
+    "severity": {
+      "@id": "avh:severity"
+    },
+    "status": {
+      "@id": "avh:httpStatus",
+      "@type": "xsd:integer"
+    },
+    "detail": {
+      "@id": "avh:detail"
+    },
+    "line": {
+      "@id": "avh:line",
+      "@type": "xsd:integer"
+    }
+  }
+}

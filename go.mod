@@ -35,6 +35,11 @@ require (
 )
 
 require (
+	github.com/dunglas/httpsfv v1.1.2 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.9 // indirect
+)
+
+require (
 	4d63.com/gocheckcompilerdirectives v1.4.0 // indirect
 	4d63.com/gochecknoglobals v0.2.2 // indirect
 	cel.dev/expr v0.25.1 // indirect

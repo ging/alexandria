@@ -1,4 +1,4 @@
-// Package lifecycle defines the listing and version-record documents, the §3.4 membership rule and the S4–S6 continuity checks.
+// Package lifecycle defines the listing and version-record documents, the §3.8 membership rule and the S4–S6 continuity checks.
 // The hub builds listings with Build and the client checks them with CheckContinuity (REQ-HUB-008, REQ-HUB-009, REQ-CLI-004).
 package lifecycle
 
@@ -11,28 +11,12 @@ import (
 	"github.com/ging/alexandria/internal/core/timex"
 )
 
-// Document types of §3.4.
-const (
-	ListingType = "eunomia.versions/v1"
-	RecordType  = "eunomia.version/v1"
-)
-
-// Listing is the signed part of GET /v1/versions.
-type Listing struct {
-	Type      string        `json:"type"`
-	Space     string        `json:"space"`
-	Sequence  uint64        `json:"sequence"`
-	IssuedAt  timex.Instant `json:"issued_at"`
-	ExpiresAt timex.Instant `json:"expires_at"`
-	Versions  []Record      `json:"versions"`
-}
-
-// VersionDoc is the signed part of GET /v1/versions/{version}.
-type VersionDoc struct {
-	Type     string        `json:"type"`
-	Space    string        `json:"space"`
-	IssuedAt timex.Instant `json:"issued_at"`
-	Record   Record        `json:"record"`
+// ListingSubject is the credentialSubject of the versions listing (§3.8).
+type ListingSubject struct {
+	ID        string   `json:"id"`
+	Namespace string   `json:"namespace"`
+	Sequence  uint64   `json:"sequence"`
+	Versions  []Record `json:"versions"`
 }
 
 // Members applies the membership rule: Scheduled, Published or Deprecated at t, or revoked.
@@ -51,9 +35,9 @@ func Members(rs []Record, t timex.Instant) []Record {
 	return out
 }
 
-// Build assembles the listing issued at t with sequence seq.
-func Build(space string, rs []Record, t timex.Instant, ttl timex.Duration, seq uint64) Listing {
-	return Listing{Type: ListingType, Space: space, Sequence: seq, IssuedAt: t, ExpiresAt: t.Add(ttl), Versions: Members(rs, t)}
+// Build assembles the listing subject of namespace ns at t with sequence seq; validity comes from the credential.
+func Build(ns string, rs []Record, t timex.Instant, seq uint64) ListingSubject {
+	return ListingSubject{ID: ns + "/versions", Namespace: ns, Sequence: seq, Versions: Members(rs, t)}
 }
 
 // Accepted is the continuity state kept by the client: last sequence, its bytes digest and known records.
@@ -65,7 +49,7 @@ type Accepted struct {
 }
 
 // CheckContinuity applies S4, S5 and S6; identical reports a re-served listing with the same bytes.
-func CheckContinuity(prev *Accepted, next Listing, raw []byte) (identical bool, err *codes.Error) {
+func CheckContinuity(prev *Accepted, next ListingSubject, raw []byte) (identical bool, err *codes.Error) {
 	if prev == nil {
 		return false, nil
 	}
@@ -103,7 +87,7 @@ func CheckContinuity(prev *Accepted, next Listing, raw []byte) (identical bool, 
 }
 
 // Merge returns the known records updated with the records of a newly accepted listing.
-func Merge(known map[string]Record, l Listing) map[string]Record {
+func Merge(known map[string]Record, l ListingSubject) map[string]Record {
 	out := map[string]Record{}
 	for k, v := range known {
 		out[k] = v
@@ -124,7 +108,7 @@ func KnownSlice(known map[string]Record) []Record {
 }
 
 // NewRevocations returns the versions whose revoked_from appears for the first time in l.
-func NewRevocations(prev map[string]Record, l Listing) []semver.Version {
+func NewRevocations(prev map[string]Record, l ListingSubject) []semver.Version {
 	var out []semver.Version
 	for _, r := range l.Versions {
 		if r.RevokedFrom == nil {

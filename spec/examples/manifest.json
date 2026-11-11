@@ -1,0 +1,63 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/credentials/v2",
+    "https://w3id.org/alexandria-vhub/v1"
+  ],
+  "type": [
+    "VerifiableCredential",
+    "PackageManifest"
+  ],
+  "issuer": "did:web:hub.example.com",
+  "validFrom": "2026-10-01T10:00:00Z",
+  "credentialSubject": {
+    "id": "https://hub.example.com/v1/namespaces/demo/versions/2.0.0/manifest",
+    "namespace": "https://hub.example.com/v1/namespaces/demo",
+    "version": "2.0.0",
+    "lifecycle": {
+      "freshness": {
+        "ttl": "PT24H",
+        "max_staleness": "P7D"
+      },
+      "min_grace_window": "P7D",
+      "grace_window": "P30D",
+      "sync_interval": "PT6H",
+      "clock_skew": "PT5S",
+      "lease_margin": "PT10S",
+      "propagation_window": "P2D",
+      "max_concurrent_versions": 4,
+      "degraded": {
+        "policy_intake": "continue"
+      }
+    },
+    "profiles": [
+      "https://hub.example.com/pub/demo/profiles/odrl/2.0.0"
+    ],
+    "files": [
+      {
+        "path": "contexts/demo.jsonld",
+        "media_type": "application/ld+json",
+        "digest": "ni:///sha-256;TB8reftrIP-yU-Jlx-8nfXoUtDiM7cIT1qJhXwWFXM8",
+        "role": "context",
+        "url": "https://hub.example.com/pub/demo/2.0.0/contexts/demo.jsonld"
+      },
+      {
+        "path": "odrl/shapes.ttl",
+        "media_type": "text/turtle",
+        "digest": "ni:///sha-256;HSARpvmoa5kx87S6XQTBMJbdj124eRikmNxbDDxZ3cQ",
+        "role": "shacl",
+        "slot": "odrl",
+        "applies_to": [
+          "policy_intake"
+        ]
+      }
+    ]
+  },
+  "proof": {
+    "type": "DataIntegrityProof",
+    "cryptosuite": "eddsa-jcs-2022",
+    "created": "2026-10-01T10:00:00Z",
+    "verificationMethod": "did:web:hub.example.com#key-2026-1",
+    "proofPurpose": "assertionMethod",
+    "proofValue": "z3FXQjecWufY46yg5abdVZsXqLhxhueuSoZgNSARiKBk9czhSePTFehP8c3PGfb6a22gkfUKods5D2UAUL5n2Brbx"
+  }
+}
