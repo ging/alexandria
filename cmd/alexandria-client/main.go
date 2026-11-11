@@ -1,5 +1,5 @@
 // Composition root of alexandria-client: checks CFG-1 and CFG-2, wires internal/client.Module, and serves traffic and admin listeners.
-// Exits with status 2 and the failing code when the configuration is invalid (REQ-CLI-001, REQ-SYS-002, DP-5, DP-9).
+// Exits with status 2 and the failing code when the configuration is invalid (REQ-CLI-001, REQ-SYS-002, DP-5, DP-8).
 package main
 
 import (

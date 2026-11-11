@@ -16,6 +16,7 @@ build:
 	go build -o $(BIN_DIR)/alexandriac ./cmd/alexandriac
 	go build -o $(BIN_DIR)/alexandria-server ./cmd/alexandria-server
 	go build -o $(BIN_DIR)/alexandria-client ./cmd/alexandria-client
+	go build -o $(BIN_DIR)/fake-idp ./deploy/fake-idp
 	go build -o $(BIN_DIR)/fake-connector ./deploy/fake-connector
 
 run:

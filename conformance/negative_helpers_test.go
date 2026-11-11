@@ -30,7 +30,7 @@ var lifecycleDrafts = map[codes.Code]string{
 	codes.LifecycleMaxVersions:    `{"max_concurrent_versions":1}`,
 }
 
-// init adds one case per LIFECYCLE_* code and the AGREEMENT_REVOCATION_SCHEDULED case.
+// init adds one case per LIFECYCLE_* code.
 func init() {
 	for c, lc := range lifecycleDrafts {
 		cases[c] = func(t *testing.T) []string {
@@ -38,7 +38,6 @@ func init() {
 			return []string{codeOf(err)}
 		}
 	}
-	cases[codes.AgreementRevocationScheduled] = revocationScheduled
 }
 
 // testkitKey returns the did:web key of the hub signer under fragment.

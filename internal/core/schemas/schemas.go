@@ -1,5 +1,5 @@
 // Package schemas embeds the six Appendix A schemas and the A.5 JSON-LD context, with a validator that never touches the network.
-// Used to check every document the binaries emit or read (REQ-DOC-001…REQ-DOC-006, REQ-HUB-030, REQ-HUB-031).
+// Used to check every document the binaries emit or read (REQ-DOC-001, REQ-DOC-002, REQ-DOC-003, REQ-DOC-004, REQ-DOC-005, REQ-DOC-006, REQ-HUB-030, REQ-HUB-031).
 package schemas
 
 import (

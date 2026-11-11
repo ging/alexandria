@@ -457,9 +457,10 @@ var cases = map[codes.Code]func(t *testing.T) []string{
 		c.Send(cdomain.DSPIngress, "POST", testkit.AgreementPath, testkit.AgreementMessage("urn:A1", "ex:access", "https://other/profile"))
 		return c.Events.Codes()
 	},
-	codes.AuditWillWarn:     func(t *testing.T) []string { return audit(t) },
-	codes.AuditWillReject:   func(t *testing.T) []string { return audit(t) },
-	codes.ClockSkewExceeded: func(t *testing.T) []string { return clockSkew(t) },
+	codes.AgreementRevocationScheduled: func(t *testing.T) []string { return revocationScheduled(t) },
+	codes.AuditWillWarn:                func(t *testing.T) []string { return audit(t) },
+	codes.AuditWillReject:              func(t *testing.T) []string { return audit(t) },
+	codes.ClockSkewExceeded:            func(t *testing.T) []string { return clockSkew(t) },
 }
 
 // firstCode extracts the code printed by the client at startup.

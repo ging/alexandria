@@ -86,6 +86,18 @@ func TestT_CLI_024_S2AlteredByte(t *testing.T) {
 	failsWith(t, c, codes.SyncSignatureInvalid)
 }
 
+func TestT_SYS_009_UnverifiedCredentialsAreNeverUsed(t *testing.T) {
+	s := testkit.NewServer(t, "2026-08-01T00:00:00Z")
+	s.PublishF6(t)
+	s.Clock.Set("2026-10-10T12:00:00Z")
+	c := testkit.NewClient(t, s)
+	c.Hub.ListingHook = func(b []byte) []byte { return bytes.Replace(b, []byte(`"sequence":`), []byte(`"sequence":1`), 1) }
+	failsWith(t, c, codes.SyncSignatureInvalid)
+	if c.Cell.Load() != nil {
+		t.Fatal("client activated an unverified listing")
+	}
+}
+
 func TestT_CLI_004_S3Expired(t *testing.T) {
 	s, c := f6(t)
 	forge(t, s, c, func(d map[string]any) { d["validUntil"] = "2026-10-10T11:00:00Z" })

@@ -73,13 +73,14 @@ tasks:
     cmds: ["go tool cover -html=coverage.out"]
 
   build:
-    desc: Build all project binaries (alexandria, alexandriac, alexandria-server, alexandria-client, fake-connector) into bin/.
+    desc: Build all project binaries (alexandria, alexandriac, alexandria-server, alexandria-client, fake-idp, fake-connector) into bin/.
     cmds:
       - mkdir -p bin
       - go build -ldflags="-s -w -X main.version={{.VERSION}}" -o bin/{{.BIN}} {{.MAIN}}
       - go build -o bin/alexandriac ./cmd/alexandriac
       - go build -o bin/alexandria-server ./cmd/alexandria-server
       - go build -o bin/alexandria-client ./cmd/alexandria-client
+      - go build -o bin/fake-idp ./deploy/fake-idp
       - go build -o bin/fake-connector ./deploy/fake-connector
 
   conformance:

@@ -1,4 +1,4 @@
-// Package clock provides the system and file clock adapters of the timex.Clock port; the only place allowed to call time.Now (DP-9).
+// Package clock provides the system and file clock adapters of the timex.Clock port; the only place allowed to call time.Now (DP-8).
 // file_clock reads an RFC 3339 instant from a file so tests and the demo can replay F6 without waiting (REQ-SYS-001).
 package clock
 

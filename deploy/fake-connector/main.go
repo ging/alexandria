@@ -1,5 +1,5 @@
 // Fake DSP connector for the e2e test and the demo: answers 200 with JSON on every DSP route, records what it receives and serves agreements.
-// Not part of the product; it only stands in for an unmodified connector behind alexandria-client (Part 5.2).
+// Not part of the product; it only stands in for an unmodified connector behind alexandria-client (Part 5.2, DP-14).
 package main
 
 import (

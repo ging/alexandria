@@ -21,10 +21,24 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ging/alexandria/internal/core/did"
 )
+
+// syncWriter serializes concurrent writes from child process stdout/stderr goroutines.
+type syncWriter struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+// Write writes p under the mutex.
+func (s *syncWriter) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.w.Write(p)
+}
 
 // Env describes a running F6 environment.
 type Env struct {
@@ -33,6 +47,7 @@ type Env struct {
 	Ingress, Egress, Admin  string
 	HubDID                  did.DID
 	CAFile, EventsFile      string
+	Log                     io.Writer
 }
 
 // freePort returns a TCP port that is free right now.
@@ -103,6 +118,7 @@ func Launch(binDir, work string, log io.Writer) (Env, func(), error) {
 		ConnURL: fmt.Sprintf("http://127.0.0.1:%d", ports[2]), Ingress: fmt.Sprintf("http://127.0.0.1:%d", ports[3]),
 		Egress: fmt.Sprintf("127.0.0.1:%d", ports[4]), Admin: fmt.Sprintf("http://127.0.0.1:%d", ports[5]),
 		CAFile: filepath.Join(work, "hub.crt"), EventsFile: filepath.Join(work, "client", "events.jsonl"),
+		Log: &syncWriter{w: log},
 	}
 	if err := e.SetClock("2026-09-01T09:00:00Z"); err != nil {
 		return e, nil, err
@@ -133,7 +149,7 @@ func Launch(binDir, work string, log io.Writer) (Env, func(), error) {
 	}
 	start := func(name string, args ...string) error {
 		cmd := exec.Command(filepath.Join(binDir, name), args...) // #nosec G204 -- test binaries built by the suite.
-		cmd.Dir, cmd.Stdout, cmd.Stderr = work, log, log
+		cmd.Dir, cmd.Stdout, cmd.Stderr = work, e.Log, e.Log
 		if err := cmd.Start(); err != nil {
 			return err
 		}
@@ -180,8 +196,12 @@ func (e Env) StartClient(log io.Writer) (func(), error) {
 	if err := writeJSON(filepath.Join(e.Work, "client.json"), cfg); err != nil {
 		return nil, err
 	}
+	w := e.Log
+	if w == nil {
+		w = &syncWriter{w: log}
+	}
 	cmd := exec.Command(filepath.Join(e.BinDir, "alexandria-client"), "-config", "client.json", "-state-dir", "client", "-clock-file", e.ClockFile, "-hub-ca", e.CAFile) // #nosec G204 -- test binary.
-	cmd.Dir, cmd.Stdout, cmd.Stderr = e.Work, log, log
+	cmd.Dir, cmd.Stdout, cmd.Stderr = e.Work, w, w
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}

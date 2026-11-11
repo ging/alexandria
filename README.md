@@ -97,70 +97,61 @@ For in-depth explanations, configuration details, and architecture specification
 |:---|:---|
 | **Getting Started** | [Prerequisites & Local Quickstart](https://ging.github.io/alexandria/docs/getting-started/quickstart) |
 | **Incremental Tutorials** | [5-Step Hands-On Tutorial Path (`alexandriac`, `alexandria-server`, `alexandria-client`, F6 & Wallets)](https://ging.github.io/alexandria/docs/tutorials) |
-| **Vocabulary Hub & DSL** | [`vhub` v0.2.1 Specification, `eunomia.profiles/v1` DSL & F5 Catalog](https://ging.github.io/alexandria/docs/vhub) |
+| **Vocabulary Hub & DSL** | [`vhub` v0.3.0 Specification, `eunomia.profiles/v1` DSL & F5 Catalog](https://ging.github.io/alexandria/docs/vhub) |
 | **Configuration** | [`server.json`, Client `config.json` & Node `config.yaml` Reference](https://ging.github.io/alexandria/docs/getting-started/configuration) |
 | **Architecture** | [Hexagonal Design, `archtest` & Bounded Contexts](https://ging.github.io/alexandria/docs/architecture/bounded-contexts) |
 | **Wallet Port** | [Unified Wallet Port & Adapters (Fafnir / IdentityHub / DCP)](https://ging.github.io/alexandria/docs/architecture/wallet-port) |
-| **Conformance & Traceability** | [61 `REQ-*`, 64 `F5` Codes, Scenario F6 & `TRACEABILITY.md`](https://ging.github.io/alexandria/docs/development/conformance) |
+| **Conformance & Traceability** | [81 `REQ-*`, 77 `F5` Codes, Scenario F6 & `TRACEABILITY.md`](https://ging.github.io/alexandria/docs/development/conformance) |
 | **Authentication & IAM** | [Zitadel OIDC, PKCE & `alexandria-server` Role Authorization](https://ging.github.io/alexandria/docs/development/authentication) |
 | **REST API Reference** | [Complete HTTP Endpoints Catalog & Swagger UI (`/docs`)](https://ging.github.io/alexandria/docs/development/endpoints) |
-| **Architecture Decisions** | [Accepted ADRs (0001 - 0009, `DP-1..15`, `Q1..17`)](https://ging.github.io/alexandria/docs/adr) |
+| **Architecture Decisions** | [Accepted ADRs (0001 - 0009, `DP-1..14`, `Q1..22`)](https://ging.github.io/alexandria/docs/adr) |
 
 ---
 
-## Vocabulary Hub (`alexandria-server` & `alexandria-client`) — Especificación 0.2.1
+## Vocabulary Hub (`alexandria-server` & `alexandria-client`) — Specification 0.3.0
 
-Además del nodo integrado `cmd/alexandria`, el repositorio raíz contiene la implementación de referencia de **Vocabulary Hub (`alexandria-server`)** y su sidecar de validación en el borde (**`alexandria-client`**) conforme a la especificación *Sistema Vocabulary Hub v0.2.1* (F2–F8, Apéndices A y B).
+Alongside the integrated `cmd/alexandria` node, the root repository contains the reference implementation of **Vocabulary Hub (`alexandria-server`)** and its L7 edge validation proxy (**`alexandria-client`**) conforming to **Specification v0.3.0** (F2–F8, Appendices A–C, 81 `REQ-*`, and the 77-code closed F5 catalog).
 
-> **Aviso de entorno de laboratorio (`DP-14`):** La configuración por defecto en `config/` (`server.json`, `config.json`, `tokens.json`, `credentials.json`) y el conector simulado `deploy/fake-connector` asumen un entorno local de laboratorio (`PRE-01` a `PRE-05`, tokens estáticos `DP-3`, resolución `did:web` en localhost sin TLS con flag explícito `DP-5`, compilador `compiler_poc` `DP-6`, evaluador `evaluator_poc` `DP-7` y registro de transparencia simulado `DP-8`) y **no constituyen un despliegue de producción**. Los módulos `internal/server/module.go` e `internal/client/module.go` exponen los puertos para inyectar los adaptadores de identidad y firma de `internal/ssi-auth` e `internal/auth-proxy`.
+> **Laboratory Environment Notice (`DP-14`):** The configurations in `deploy/` (`server.json`, `client.json`, `rules.seed.json`), the local OAuth 2.0/OIDC issuer `deploy/fake-idp` (`DP-4`), the simulated DSP connector `deploy/fake-connector` (`Part 5.2`), local PEM signing keys, and transient lab TLS certificates (`-hub-ca`) are designed for laboratory and PoC demonstration (`PRE-01`–`PRE-07`, `DP-1`–`DP-14`) and **are not intended for production deployment**.
 
-### Ejecución rápida y Demo F6 en 3 comandos
+### Quick Verification & F6 Demo in 3 Commands
 
 ```bash
-# 1. Compilar binarios (bin/alexandria-server, bin/alexandria-client, bin/fake-connector)
+# 1. Build binaries (bin/alexandria-server, bin/alexandria-client, bin/fake-idp, bin/fake-connector)
 make build
 
-# 2. Ejecutar suite unitaria, arquitectura, conformidad (T-* y N-*) y trazabilidad
-make test conformance trace
+# 2. Run unit, architecture, conformance (81 T-* and 76 N-*), E2E F6, and traceability checks
+make test conformance e2e trace
 
-# 3. Ejecutar el escenario extremo a extremo F6 con reloj compartido e imprimir la tabla de veredictos
+# 3. Launch fake-idp + fake-connector + server + client, replay F6 with file_clock, and print the verdict table
 make demo
 ```
 
-### Lenguaje de perfiles (YAML → artefactos)
+### Profile Language (YAML → Artifacts)
 
-Los vocabularios se escriben en YAML (`eunomia.profiles/v1`) y los artefactos se generan al vuelo:
+Profiles can also be authored in YAML (`eunomia.profiles/v1`) and compiled offline:
 
 ```bash
 go run ./cmd/alexandriac compile -o out internal/dsl/testdata/colors.profile.yaml
 ```
 
-Con `"compiler": "dsl"` en `server.json`, el hub acepta borradores YAML. Detalles y revisión de la especificación en [`PROFILES_DSL.md`](PROFILES_DSL.md).
+With `"compiler": "dsl"` in `server.json`, the hub accepts YAML drafts (`PROFILES_DSL.md`).
 
-### Colecciones Postman
+### `Makefile` Targets
 
-`postman/collections/Vhub-server` (API `/v1`, `/pub`, DID document y errores del contrato) y `postman/collections/Vhub-client` (API de administración y tráfico DSP por `dsp-ingress`), con el entorno `postman/environments/vhub-local.environment.yaml` (puertos de `config/`):
-
-```bash
-postman collection run postman/collections/Vhub-server -e postman/environments/vhub-local.environment.yaml
-postman collection run postman/collections/Vhub-client -e postman/environments/vhub-local.environment.yaml
-```
-
-### Objetivos del `Makefile`
-
-| Comando | Descripción |
+| Command | Description |
 |:---|:---|
-| `make build` | Compila `bin/alexandria-server`, `bin/alexandria-client` y `bin/fake-connector`. |
-| `make test` | Ejecuta las pruebas unitarias, de contrato y de arquitectura (`internal/...`, `cmd/...`). |
-| `make conformance` | Ejecuta la batería de conformidad (`T-DOC-*`, `T-SYS-*`, casos negativos `N-<CÓDIGO>` de F5 y `TestE2E_F6`). |
-| `make e2e` | Ejecuta únicamente el test extremo a extremo `TestE2E_F6` levantando los tres binarios reales. |
-| `make demo` | Levanta `fake-connector`, `alexandria-server` y `alexandria-client`, recorre F6 e imprime la tabla de veredictos en `stdout`. |
-| `make trace` | Ejecuta `go run ./conformance/trace` y regenera [`TRACEABILITY.md`](TRACEABILITY.md) verificando los 61 `REQ-*` y el catálogo F5. |
+| `make build` | Builds `bin/alexandria`, `bin/alexandriac`, `bin/alexandria-server`, `bin/alexandria-client`, `bin/fake-idp`, and `bin/fake-connector`. |
+| `make test` | Runs unit, contract, and hexagonal architecture tests (`internal/...`, `cmd/...`). |
+| `make conformance` | Runs the conformance battery (`T-DOC-*`, `T-SYS-*`, `N-<CODE>` for all 76 reachable F5 codes, and `TestE2E_F6`). |
+| `make e2e` | Runs the end-to-end `TestE2E_F6` scenario across the four real binaries (`fake-idp`, `fake-connector`, `alexandria-server`, `alexandria-client`). |
+| `make demo` | Launches the four binaries with a shared `file_clock`, replays F6.1–F6.4, and prints the 29-row verdict table to `stdout`. |
+| `make trace` | Runs `go run ./conformance/trace` to regenerate [`TRACEABILITY.md`](TRACEABILITY.md) and verify 81/81 `REQ-*` and 76/77 F5 codes. |
 
-Documentos de trazabilidad y diseño en la raíz:
-- [`TRACEABILITY.md`](TRACEABILITY.md): Matriz generada automáticamente `REQ-* → Sección → Módulo(s) → Prueba(s) T-*` y cobertura `N-<CÓDIGO>`.
-- [`DECISIONS.md`](DECISIONS.md): Decisiones `DP-1` a `DP-15` y decisiones técnicas de integración en la raíz del repositorio.
-- [`OPEN_QUESTIONS.md`](OPEN_QUESTIONS.md): Estado de las cuestiones abiertas `Q1`–`Q17` de F7 y justificación del único código F5 no alcanzable en la PoC (`VERDICT_SHACL_WARNING` por `DP-7`).
+Root traceability and design documents:
+- [`TRACEABILITY.md`](TRACEABILITY.md): Auto-generated matrix `REQ-* → Section → Module(s) → Test(s) T-*` and `N-<CODE>` coverage.
+- [`DECISIONS.md`](DECISIONS.md): PoC decisions `DP-1`–`DP-14` and agent implementation decisions.
+- [`OPEN_QUESTIONS.md`](OPEN_QUESTIONS.md): Unreachable F5 code rationale (`VERDICT_SHACL_WARNING` under `DP-7`), F7.2 `Q18`–`Q22`, and spec observations (`G9`, `G10`).
 
 ---
 
@@ -169,30 +160,33 @@ Documentos de trazabilidad y diseño en la raíz:
 ```text
 alexandria/
 ├── cmd/
-│   ├── alexandria/         # Identity & Auth gateway composition root
-│   ├── alexandria-server/        # Vocabulary Hub server composition root (C-HUB)
-│   └── alexandria-client/        # Edge validation & sync sidecar composition root (C-CLI)
-├── config/                 # Configuration files (config.yaml, server.json, config.json, tokens.json, drafts/)
-├── conformance/            # Schemas (Appendix A), examples, negative corpus (N-*), F6 E2E & trace generator
-├── deploy/                 # Docker Compose, Helm charts & fake-connector for E2E/demo
-├── docs/                   # Documentation portal (Fumadocs + Next.js)
+│   ├── alexandria/           # Identity & Auth gateway composition root
+│   ├── alexandriac/          # Offline profile DSL compiler CLI
+│   ├── alexandria-server/    # Vocabulary Hub server composition root (C-HUB)
+│   └── alexandria-client/    # L7 edge validation & sync proxy composition root (C-CLI)
+├── conformance/              # Conformance battery, negative corpus (N-*), F6 E2E, demo & trace generator
+├── deploy/                   # server.json, client.json, rules.seed.json, fake-idp/ & fake-connector/
+├── docs/                     # Documentation portal (Fumadocs + Next.js)
 ├── internal/
-│   ├── archtest/           # Hexagonal architecture, DP-1 dependency & DP-9 clock enforcement tests
-│   ├── auth-proxy/         # Bounded context: Zitadel OIDC guard & session handling
-│   ├── client/             # Bounded context: alexandria-client (module.go, domain, app, config, adapters)
-│   ├── clock/              # System and file-backed timex.Clock implementations (DP-9)
-│   ├── core/               # Pure shared core: timex, semver, canon (JCS), ni, did, sign, lifecycle, pkgv, codes, problem, schemas
-│   ├── httpapi/            # Gin engine, route mounting pipeline & health probes
-│   ├── observability/      # Logging (slog), metrics & telemetry
-│   ├── server/             # Bounded context: alexandria-server (module.go, domain, app, config, adapters)
-│   ├── ssi-auth/           # Bounded context: DID resolution, wallet port & adapters (Fafnir / IdentityHub)
-│   ├── storage/            # Database repositories and migrations
-│   └── testkit/            # In-memory test doubles, fake clock & F6 fixtures
-├── DECISIONS.md            # DP-1..DP-15 and implementation decisions
-├── OPEN_QUESTIONS.md       # F7 Q1..Q17 status and unreachable F5 code rationale
-├── TRACEABILITY.md         # Auto-generated requirement, module, and negative-code traceability matrix
-├── Makefile                # Build, test, conformance, e2e, demo & trace targets
-└── Taskfile.yaml           # Automation and development workflows
+│   ├── archtest/             # Hexagonal architecture, DP-1 dependency & DP-8 clock enforcement tests
+│   ├── auth-proxy/           # Bounded context: Zitadel OIDC guard & session handling
+│   ├── client/               # Bounded context: alexandria-client (module.go, domain, app, config, adapters)
+│   ├── clock/                # System and file-backed timex.Clock implementations (DP-8)
+│   ├── core/                 # Pure shared core: timex, semver, canon (JCS), ni, did, vc, lifecycle, pkgv, codes, problem, schemas, jsonld
+│   ├── dsl/                  # Profile language compiler (eunomia.profiles/v1)
+│   ├── httpapi/              # Gin engine, route mounting pipeline & health probes
+│   ├── observability/        # Logging (slog), metrics & telemetry
+│   ├── server/               # Bounded context: alexandria-server (module.go, domain, app, config, adapters)
+│   ├── ssi-auth/             # Bounded context: DID resolution, wallet port & adapters (Fafnir / IdentityHub)
+│   ├── storage/              # Database repositories and migrations
+│   └── testkit/              # In-memory test doubles, fake IdP, fake clock & F6 fixtures
+├── spec/                     # Normative Appendix A schemas, A.5 context.jsonld, examples & requirements.tsv
+├── tutorial/                 # Interactive Jupyter Notebook tutorials
+├── DECISIONS.md              # DP-1..DP-14 and agent implementation decisions
+├── OPEN_QUESTIONS.md         # Unreachable F5 code rationale, Q18..Q22 & spec observations
+├── TRACEABILITY.md           # Auto-generated requirement, module, and negative-code traceability matrix
+├── Makefile                  # Build, test, conformance, e2e, demo & trace targets
+└── Taskfile.yaml             # Automation and development workflows
 ```
 
 ---

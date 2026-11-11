@@ -1,5 +1,5 @@
 // Package testkit provides a settable fake clock shared by server and client tests.
-// Lets tests place the system at any F6 instant without waiting (DP-9).
+// Lets tests place the system at any F6 instant without waiting (DP-8).
 package testkit
 
 import (

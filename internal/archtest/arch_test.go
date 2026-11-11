@@ -1,5 +1,5 @@
 // Architecture test: dependencies point inward (adapters → app → domain → core) and server/client stay apart.
-// Also enforces the DP-1 dependency allow-list and that only internal/clock reads the wall clock (DP-1, DP-9).
+// Also enforces the DP-1 dependency allow-list and that only internal/clock reads the wall clock (DP-1, DP-8).
 package archtest
 
 import (
@@ -155,7 +155,7 @@ func TestOnlyClockReadsWallTime(t *testing.T) {
 			continue
 		}
 		if strings.Contains(f.src, "time.Now(") || strings.Contains(f.src, "time.Since(") {
-			t.Errorf("%s reads the wall clock; use timex.Clock (DP-9)", f.path)
+			t.Errorf("%s reads the wall clock; use timex.Clock (DP-8)", f.path)
 		}
 	}
 }

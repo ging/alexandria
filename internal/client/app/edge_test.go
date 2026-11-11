@@ -259,6 +259,26 @@ func TestT_CLI_017_AgreedPackageRetainedAfterRetirement(t *testing.T) {
 	}
 }
 
+func TestT_SYS_004_InForceDatesComeOnlyFromListing(t *testing.T) {
+	_, c := f6(t)
+	vs := c.Status.Versions()
+	if len(vs) != 2 || vs[0].NewContentFrom.String() != "2026-09-03T10:00:00Z" || vs[1].EnforcedFrom.String() != "2026-11-02T10:00:00Z" {
+		t.Fatalf("unexpected dates in versions: %+v", vs)
+	}
+}
+
+func TestT_SYS_006_AgreedVersionObtainableOnHubAndClient(t *testing.T) {
+	s, c := a1(t)
+	at(t, s, c, "2026-11-05T12:00:00Z")
+	c.GC.Run()
+	if _, err := s.Hub.Listing.Record(testkit.NS, "1.0.0"); err != nil {
+		t.Fatalf("hub no longer serves 1.0.0 record: %v", err)
+	}
+	if r := transfer(c); r.Status != 200 {
+		t.Fatalf("client failed transfer of retained agreement: %d %s", r.Status, r.Body)
+	}
+}
+
 func TestT_CLI_033_GCDeletesUnlistedWithoutAgreement(t *testing.T) {
 	s, c := f6(t)
 	at(t, s, c, "2026-11-05T12:00:00Z")

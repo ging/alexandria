@@ -1,5 +1,5 @@
 // Package timex provides instants, ISO 8601 durations and the Clock port, all with second precision in UTC.
-// Shared by alexandria-server and alexandria-client so both compute identical dates (§2.5, REQ-SYS-001, DP-9).
+// Shared by alexandria-server and alexandria-client so both compute identical dates (§2.5, REQ-SYS-001, DP-8).
 package timex
 
 import (
