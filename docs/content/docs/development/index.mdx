@@ -1,41 +1,42 @@
 ---
-title: API & Development Overview
-description: Overview of REST APIs, interactive OpenAPI/Swagger UI, conformance testing, authentication, and developer workflows across Alexandria and vhub.
+title: API & Development
+description: HTTP surfaces of alexandria-server and alexandria-client, authentication, observability, the conformance suite and the development workflow.
 ---
 
 import { Card, Cards } from 'fumadocs-ui/components/card';
-import { Callout } from 'fumadocs-ui/components/callout';
 
 # API & Development
 
-Alexandria exposes cleanly separated HTTP surfaces across its components:
-1. **Identity & Wallet Gateway (`cmd/alexandria`):** Mounted under `/api/v1` (`auth` and `wallet`), guarded by Zitadel OIDC session cookies or Bearer tokens, plus interactive **Swagger UI** at `/docs` (`/openapi.json`, `/openapi.yaml`) and root W3C DID Document resolution at `/.well-known/did.json`.
-2. **Vocabulary Hub Server (`cmd/alexandria-server`):** Exposes the `/v1/*` Governance API (protected by role-based Bearer authentication), the public immutable `/pub/*` artifact distribution API, and `/.well-known/did.json`.
-3. **Edge Validation Sidecar (`cmd/alexandria-client`):** Exposes L7 DSP reverse/forward proxy listeners (`dsp-ingress`, `dsp-egress`, `mgmt-ingress`) and an isolated local Admin & Prometheus telemetry API (`admin` port: `/status`, `/versions`, `/agreements`, `/audit`, `/metrics`).
+Alexandria exposes three HTTP surfaces:
 
----
-
-## Developer Guides & References
+1. **`/v1` on `alexandria-server`** — the management API. JSON-LD, OAuth 2.0 bearer tokens, problem documents on error.
+2. **`/pub` on `alexandria-server`** — public, immutable publication.
+3. **The admin listener of `alexandria-client`** — status, rules, agreements, audit, health and metrics. The traffic listeners are transparent proxies and expose no API of their own.
 
 <Cards>
   <Card
-    title="REST API Endpoints"
+    title="Endpoints"
     href="./development/endpoints"
-    description="Complete HTTP endpoint catalog for Alexandria Wallet/Auth, alexandria-server (/v1 & /pub), alexandria-client Admin, and Swagger UI."
-  />
-  <Card
-    title="Conformance & Traceability"
-    href="./development/conformance"
-    description="61 normative requirements (REQ-*), 64 closed F5 codes (N-*), Scenario F6 E2E reproduction, and TRACEABILITY.md generation."
+    description="Every route of /v1, /pub and the client admin API, with who may call it."
   />
   <Card
     title="Authentication & Authorization"
     href="./development/authentication"
-    description="Node-terminated Zitadel OIDC + PKCE sessions in alexandria and role-based Bearer authentication in alexandria-server."
+    description="Token checks A1–A5, the authorization table, problem responses and the laboratory identity provider."
   />
   <Card
-    title="Testing, Archtest & CI/CD"
+    title="Observability"
+    href="./development/observability"
+    description="Structured logs, OpenTelemetry export, trace correlation, events and metrics."
+  />
+  <Card
+    title="Conformance & Traceability"
+    href="./development/conformance"
+    description="81 requirements, 76 of 77 catalog codes, the F6 scenario and the generated traceability matrix."
+  />
+  <Card
+    title="Testing & CI"
     href="./development/testing-and-ci"
-    description="Makefile and Taskfile workflows, unit and live integration suites, AST architectural gates (archtest), and GitHub Actions."
+    description="Make and Task targets, test conventions, architecture tests and the GitHub Actions pipeline."
   />
 </Cards>

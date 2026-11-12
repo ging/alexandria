@@ -1,253 +1,154 @@
 ---
-title: "2. Publishing & Governance on alexandria-server"
-description: Step-by-step tutorial on running alexandria-server, creating drafts, proposing candidates, approving signed releases, and dereferencing /pub artifacts.
+title: "2. Governing a Release"
+description: "Create a namespace, assign a steward, register vocabularies, and take a draft through validation, proposal and approval on alexandria-server; then inspect the signed credentials and published files."
 ---
 
 import { Steps } from 'fumadocs-ui/components/steps';
 import { Callout } from 'fumadocs-ui/components/callout';
 
-# Tutorial 2: Publishing & Governing Vocabularies on `alexandria-server`
+# 2. Governing a Release
 
-In this tutorial, you will launch a standalone **`alexandria-server`** instance configured with the `eunomia.profiles/v1` YAML compiler (`"compiler": "dsl"`) and walk through the complete governance lifecycle:
-1. Resolve the Hub's public W3C `did:web` Document (`/.well-known/did.json`).
-2. Create and update a vocabulary draft as an **`editor`** with optimistic concurrency (`ETag` / `If-Match`).
-3. Propose an immutable candidate (`:propose`), triggering `N1`–`N5` compilation and content-addressed storage.
-4. Approve the candidate as a **`releaser` / `authority`** (`:approve`) and inspect how role separation blocks unauthorized callers (`API_FORBIDDEN_ROLE`).
-5. Fetch the JCS-canonicalized, Ed25519-signed version listing (`GET /v1/versions`) and dereference immutable public artifacts (`GET /pub/...`).
+You will publish version `1.0.0` of a namespace. The laboratory of the [quickstart](../getting-started/quickstart) must be running.
 
----
+```bash
+HUB=https://127.0.0.1:8443
+ADMIN=$(./bin/fake-idp token --sub ana --admin --ttl 24h)
+STEWARD=$(./bin/fake-idp token --sub sergio --ttl 24h)
+```
+
+`curl -k` accepts the laboratory certificate.
 
 <Steps>
 
-### Step 1: Prepare a Clean Workspace and Start `alexandria-server`
+### 1. Create the namespace and its steward
 
-First, ensure `bin/alexandria-server` is compiled:
+Only the admin may do this:
 
 ```bash
-make build
+curl -k -X POST $HUB/v1/namespaces -H "Authorization: Bearer $ADMIN" \
+  -d '{"slug":"demo","title":"Demo data space"}'
+
+curl -k -X POST $HUB/v1/namespaces/demo/stewards -H "Authorization: Bearer $ADMIN" \
+  -d '{"iss":"http://127.0.0.1:9400","sub":"sergio","label":"Sergio"}'
 ```
 
-Create a temporary lab directory `/tmp/vhub-lab` with `tokens.json` and `server.json` configured to use the `"dsl"` YAML compiler:
+From here on every operation uses the steward token. The admin token would be answered `403`: being admin does not grant namespace operations.
+
+### 2. Register vocabularies
+
+A hosted vocabulary, with content you upload:
 
 ```bash
-mkdir -p /tmp/vhub-lab
+curl -k -X POST $HUB/v1/namespaces/demo/vocabularies -H "Authorization: Bearer $STEWARD" \
+  -d '{"name":"odrl-ext","kind":"hosted","media_type":"text/turtle"}'
 
-cat << 'EOF' > /tmp/vhub-lab/tokens.json
+cat > odrl-ext.ttl <<'TTL'
+@prefix ex: <https://example.com/ns#> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+ex:access a odrl:Action .
+TTL
+
+curl -k -X PUT $HUB/v1/namespaces/demo/vocabularies/odrl-ext/content \
+  -H "Authorization: Bearer $STEWARD" -H "Content-Type: text/turtle" \
+  --data-binary @odrl-ext.ttl
+```
+
+The answer is revision `r1` with its digest. Uploading the same bytes again returns `200` and creates nothing; different bytes create `r2`.
+
+A proxy vocabulary pins a copy of an upstream document:
+
+```bash
+curl -k -X POST $HUB/v1/namespaces/demo/vocabularies -H "Authorization: Bearer $STEWARD" \
+  -d '{"name":"dcat-ap-context","kind":"proxy","media_type":"application/ld+json",
+       "upstream":"http://127.0.0.1:8282/dcat-ap.jsonld"}'
+```
+
+Both are public at once:
+
+```bash
+curl -k -L $HUB/pub/demo/vocab/odrl-ext      # 303 to …/r/1, then the bytes
+```
+
+### 3. Create a draft
+
+With the default `poc` compiler a draft is a JSON document. This one defines a `policy` slot whose schema admits two actions:
+
+```bash
+cat > draft-1.0.0.json <<'JSON'
 {
-  "editor-token":   {"principal": "alice-steward",  "roles": ["editor"]},
-  "releaser-token": {"principal": "bob-authority",  "roles": ["releaser"]},
-  "member-token":   {"principal": "connector-edge", "roles": ["member"]}
-}
-EOF
-
-cat << 'EOF' > /tmp/vhub-lab/server.json
-{
-  "listen": "127.0.0.1:18080",
-  "public_base_url": "http://127.0.0.1:18080",
-  "did": "did:web:127.0.0.1%3A18080",
-  "sqlite_path": "/tmp/vhub-lab/hub.db",
-  "blob_dir": "/tmp/vhub-lab/blobs",
-  "signing_key_path": "/tmp/vhub-lab/hub.key",
-  "tokens_path": "/tmp/vhub-lab/tokens.json",
-  "compiler": "dsl"
-}
-EOF
-```
-
-Start `alexandria-server` in a terminal (or in the background):
-
-```bash
-./bin/alexandria-server -config /tmp/vhub-lab/server.json
-```
-
-You will see:
-```text
-alexandria-server listening on 127.0.0.1:18080 as did:web:127.0.0.1%3A18080 (PoC: not for production)
-```
-
-### Step 2: Inspect the Hub's W3C DID Document
-
-On first startup, `signer_file` automatically generates an Ed25519 keypair at `/tmp/vhub-lab/hub.key` and publishes the public verification method at `/.well-known/did.json` (`REQ-HUB-010`, `DP-4`):
-
-```bash
-curl -s http://127.0.0.1:18080/.well-known/did.json | jq .
-```
-
-Output:
-```json
-{
-  "@context": [
-    "https://www.w3.org/ns/did/v1",
-    "https://w3id.org/security/suites/jws-2020/v1"
-  ],
-  "id": "did:web:127.0.0.1%3A18080",
-  "verificationMethod": [
-    {
-      "id": "did:web:127.0.0.1%3A18080#key-1",
-      "type": "JsonWebKey2020",
-      "controller": "did:web:127.0.0.1%3A18080",
-      "publicKeyJwk": {
-        "kty": "OKP",
-        "crv": "Ed25519",
-        "x": "..."
-      }
-    }
-  ],
-  "assertionMethod": [
-    "did:web:127.0.0.1%3A18080#key-1"
-  ]
-}
-```
-
-### Step 3: Create and Validate a Draft (`editor` Role)
-
-Using `editor-token`, upload the F6 `v1.0.0.yaml` profile bundle as a new draft via `POST /v1/drafts`:
-
-```bash
-curl -i -s -X POST http://127.0.0.1:18080/v1/drafts \
-  -H "Authorization: Bearer editor-token" \
-  --data-binary @conformance/f6/drafts/v1.0.0.yaml
-```
-
-Response headers and body:
-```http
-HTTP/1.1 201 Created
-ETag: "rev-1"
-Location: /v1/drafts/draft-1
-
-{"id":"draft-1","rev":1,"etag":"\"rev-1\""}
-```
-
-<Callout type="info">
-**Optimistic Concurrency (`REQ-HUB-018`):** Updating a draft via `PUT /v1/drafts/draft-1` requires passing `If-Match: "rev-1"`. Omitting `If-Match` returns `428 Precondition Required` (`API_PRECONDITION_REQUIRED`), and passing a stale ETag returns `412 Precondition Failed` (`API_PRECONDITION_FAILED`).
-</Callout>
-
-You can explicitly validate the draft before proposing it:
-
-```bash
-curl -s -X POST http://127.0.0.1:18080/v1/drafts/draft-1:validate \
-  -H "Authorization: Bearer editor-token" | jq .
-```
-
-### Step 4: Propose a Release Candidate (`:propose`)
-
-Now freeze and compile `draft-1` into an immutable Release Candidate:
-
-```bash
-curl -s -X POST http://127.0.0.1:18080/v1/drafts/draft-1:propose \
-  -H "Authorization: Bearer editor-token" | jq .
-```
-
-Output:
-```json
-{
-  "id": "cand-1",
-  "draft_id": "draft-1",
-  "draft_rev": 1,
-  "space": "https://example.com/spaces/demo",
   "version": "1.0.0",
-  "state": "pending",
-  "manifest_digest": "ni:///sha-256;..."
-}
-```
-
-Once created, `cand-1` is completely decoupled from `draft-1` (`REQ-HUB-002`)—subsequent edits to `draft-1` never alter `cand-1`.
-
-### Step 5: Verify Role Separation and Approve the Release (`:approve`)
-
-First, verify that an `editor` **cannot** approve their own candidate (`REQ-HUB-003`, `REQ-HUB-017`):
-
-```bash
-curl -i -s -X POST http://127.0.0.1:18080/v1/candidates/cand-1:approve \
-  -H "Authorization: Bearer editor-token" \
-  -d '{}'
-```
-
-The Hub rejects the request with `403 Forbidden` and an RFC 9457 `application/problem+json` body carrying the normative code `API_FORBIDDEN_ROLE`:
-
-```json
-{
-  "type": "urn:vhub:problem:API_FORBIDDEN_ROLE",
-  "title": "API_FORBIDDEN_ROLE",
-  "status": 403,
-  "detail": "principal \"alice-steward\" lacks required role for approve",
-  "code": "API_FORBIDDEN_ROLE",
-  "severity": "error"
-}
-```
-
-Now approve the candidate using `releaser-token`:
-
-```bash
-curl -s -X POST http://127.0.0.1:18080/v1/candidates/cand-1:approve \
-  -H "Authorization: Bearer releaser-token" \
-  -d '{}' | jq .
-```
-
-Output (`201 Created`):
-```json
-{
-  "signed": {
-    "type": "eunomia.version/v1",
-    "space": "https://example.com/spaces/demo",
-    "issued_at": "2026-11-09T21:30:00Z",
-    "record": {
-      "version": "1.0.0",
-      "manifest": "ni:///sha-256;...",
-      "class": "initial",
-      "emergency": false,
-      "published_at": "2026-11-09T21:30:00Z",
-      "new_content_from": "2026-11-11T21:30:00Z",
-      "enforced_from": "2026-11-11T21:30:00Z",
-      "revoked_from": null
+  "profiles": ["https://127.0.0.1:8443/pub/demo/profiles/odrl/1.0.0"],
+  "slots": [{"slot": "policy", "obligation": "mandatory", "applies_to": ["policy_intake"]}],
+  "files": [{
+    "path": "schemas/policy.schema.json",
+    "media_type": "application/schema+json",
+    "role": "json-schema",
+    "slot": "policy",
+    "applies_to": ["policy_intake"],
+    "content": {
+      "type": "object",
+      "properties": {"action": {"enum": ["odrl:use", "ex:access"]}},
+      "required": ["action"]
     }
-  },
-  "signature": {
-    "kid": "did:web:127.0.0.1%3A18080#key-1",
-    "alg": "EdDSA",
-    "sig": "..."
-  }
+  }]
 }
+JSON
+
+curl -k -i -X POST $HUB/v1/namespaces/demo/drafts \
+  -H "Authorization: Bearer $STEWARD" --data-binary @draft-1.0.0.json
 ```
 
-### Step 6: Fetch the Signed Version Listing & Public Artifacts (`/pub`)
+Keep the last segment of the `Location` header as `DRAFT`. The `ETag` is needed to replace the draft later (`PUT` with `If-Match`).
 
-Members (`member-token`) and `alexandria-client` sidecars poll `GET /v1/versions` to obtain the signed listing:
+### 4. Validate and propose
 
 ```bash
-curl -s http://127.0.0.1:18080/v1/versions \
-  -H "Authorization: Bearer member-token" | jq .
+curl -k -X POST "$HUB/v1/namespaces/demo/drafts/$DRAFT:validate" -H "Authorization: Bearer $STEWARD"
+# {"valid": true, "class": "initial", "findings": []}
+
+curl -k -X POST "$HUB/v1/namespaces/demo/drafts/$DRAFT:propose" -H "Authorization: Bearer $STEWARD"
 ```
 
-And anyone can dereference the public, immutable artifacts under `/pub/` without authentication (`REQ-HUB-011`, `REQ-HUB-016`):
+The candidate carries its `class`, the `diff` against the current head, the `lifecycle` parameters and the `planned` record with the dates it would get. Keep the last segment of its `id` as `CANDIDATE`. The candidate is frozen: editing the draft afterwards does not change it.
+
+### 5. Approve
 
 ```bash
-# 1. Head redirect (303 See Other -> /pub/demo/1.0.0/manifest.json):
-curl -i http://127.0.0.1:18080/pub/demo
-
-# 2. Fetch the signed package manifest (Cache-Control: public, max-age=31536000, immutable):
-curl -s http://127.0.0.1:18080/pub/packages/1.0.0/manifest.json | jq .
-
-# 3. Fetch the generated space-lock.json:
-curl -s http://127.0.0.1:18080/pub/packages/1.0.0/space-lock.json | jq .
-
-# 4. Fetch the generated JSON Schema or OWL/SKOS Turtle directly:
-curl -s http://127.0.0.1:18080/pub/demo/1.0.0/profiles/odrl/f6/1.0.0/vocab.ttl
+curl -k -X POST "$HUB/v1/namespaces/demo/candidates/$CANDIDATE:approve" \
+  -H "Authorization: Bearer $STEWARD" -d '{}'
 ```
 
-### Step 7: Inspect the Immutable Governance Audit Log
+The answer is the signed `VersionRecord`. As an `initial` version, `new_content_from` and `enforced_from` are both the publication instant plus the propagation window (two days by default).
 
-Query `GET /v1/events` to inspect the append-only governance event log stored in SQLite:
+### 6. Read the credentials
 
 ```bash
-curl -s http://127.0.0.1:18080/v1/events \
-  -H "Authorization: Bearer editor-token" | jq .
+curl -k $HUB/v1/namespaces/demo/versions          # VersionListing
+curl -k $HUB/v1/namespaces/demo/versions/1.0.0    # VersionRecord
+```
+
+Each is a VC 2.0 document whose `proof` has `cryptosuite: eddsa-jcs-2022` and a `verificationMethod` under the hub DID. The listing has `sequence: 1` and a `validUntil` one `ttl` ahead; the hub re-issues it before it expires.
+
+### 7. Read the published package
+
+```bash
+MANIFEST=$(curl -sk $HUB/v1/namespaces/demo/versions/1.0.0 | jq -r .credentialSubject.manifest)
+curl -k "$HUB/pub/packages/${MANIFEST#ni:///sha-256;}/manifest.json"
+curl -k -i $HUB/pub/demo/1.0.0/schemas/policy.schema.json
+```
+
+The file is served with `Cache-Control: public, max-age=31536000, immutable` and an `ETag` equal to its SHA-256.
+
+### 8. Read the audit trail
+
+```bash
+curl -k $HUB/v1/namespaces/demo/events -H "Authorization: Bearer $STEWARD"
 ```
 
 </Steps>
 
----
+<Callout type="info">
+`GET /pub/demo` redirects to the head version. It answers `404` until some version is in force, which for a first release means after the propagation window.
+</Callout>
 
-## Next Tutorial
-
-Keep `alexandria-server` running (or see how to pair it with a connector) in **[Tutorial 3: Edge DSP Traffic Validation with `alexandria-client`](./03-edge-validation-sidecar)**!
+Next: [validate DSP traffic at the edge](./03-edge-validation-sidecar).

@@ -1,68 +1,46 @@
 ---
 title: Prerequisites
-description: System requirements, runtime dependencies, and local network port allocations for Alexandria and Vocabulary Hub.
+description: Tooling and default network ports for building and running Alexandria.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
 # Prerequisites
 
-Before running or developing with Alexandria, ensure your workstation meets the requirements for the workflow you want to run.
-
 ---
 
-## Required Tooling
+## Tooling
 
-### For `alexandria-server`, `alexandria-client`, and `alexandriac` (Zero External Dependencies)
-The Vocabulary Hub reference implementation (`vhub`) is self-contained in pure Go (using embedded `modernc.org/sqlite` without `cgo`):
-
-| Dependency | Minimum Version | Purpose |
+| Tool | Version | Needed for |
 |:---|:---:|:---|
-| **Go** | `1.22+` (`1.26+` recommended) | Compiles `alexandria-server`, `alexandria-client`, `alexandriac`, and runs conformance tests. |
-| **GNU Make** | `3.81+` | Runs `make build`, `make test`, `make conformance`, `make demo`, and `make trace`. |
-
-### For the Full `alexandria` Identity Stack (Docker + Zitadel + Wallets)
-To run the full multi-container identity environment (`cmd/alexandria` with PostgreSQL, Caddy TLS, Zitadel OIDC, Fafnir, or Eclipse EDC IdentityHub):
-
-| Dependency | Minimum Version | Purpose |
-|:---|:---:|:---|
-| **Docker & Compose** | `24+` / v2 | Manages PostgreSQL, Zitadel IAM, Caddy reverse proxy, Fafnir, IdentityHub, and Vault. |
-| **[Task](https://taskfile.dev)** | `3+` | Orchestrates certificate generation, container bootstrap, `.env` secrets, and hot-reload. |
-| **OpenSSL** | `3+` | Generates the local root Certificate Authority (CA) in `/.certs/`. |
-| **Node.js & pnpm** | `20+` / `10+` | Optional: builds and previews this Fumadocs documentation portal (`task docs:dev`). |
+| **Go** | as pinned in `go.mod` | Building the binaries and running every test suite. SQLite is embedded (`modernc.org/sqlite`, no `cgo`). |
+| **GNU Make** or **[Task](https://taskfile.dev)** | any recent | The `Makefile` and `Taskfile.yaml` expose the same targets. |
+| **Node.js and pnpm** | 20+ / 10+ | Optional. The console (`gui/`) and this documentation site (`docs/`). |
+| **Python 3** | 3.10+ | Optional. The Jupyter tutorials in `tutorial/`. |
 
 <Callout type="info">
-You can build and test the entire `vhub` suite (`alexandria-server`, `alexandria-client`, `alexandriac`, and the F6 end-to-end scenario) **without Docker or sudo** using `make build test conformance demo`.
+`make build test conformance e2e trace` needs only Go. No containers, databases or external services are required: the demo and the end-to-end test start the real binaries on free local ports.
 </Callout>
 
 ---
 
-## Port Allocation Map
+## Default Ports
 
-### 1. Vocabulary Hub (`alexandria-server` & `alexandria-client`) Default Ports
-When running `alexandria-server` (`config/server.json`) and `alexandria-client` (`config/config.json`) with default configurations:
+These are the values of the sample configurations in `config/` and `deploy/`.
 
-| Port | Component | Listener | Protocol | Description |
-|:---:|:---|:---|:---:|:---|
-| **`8080`** | `alexandria-server` | `listen` | HTTP | Serves `/v1/*` governance API, `/pub/*` artifacts, and `/.well-known/did.json`. |
-| **`8443`** | `alexandria-client` | `dsp-ingress` | HTTP | L7 reverse proxy intercepting inbound DSP messages toward the local Connector. |
-| **`3128`** | `alexandria-client` | `dsp-egress` | HTTP | L7 forward proxy intercepting outbound DSP messages from the local Connector. |
-| **`9900`** | `alexandria-client` | `admin` | HTTP | Local admin & observability API (`/status`, `/versions`, `/agreements`, `/metrics`). |
-| **`8282`** | Connector / `fake-connector` | `upstreams.dsp` | HTTP | Upstream dataspace connector receiving validated DSP traffic. |
+| Port | Process | Listener | Purpose |
+|:---:|:---|:---|:---|
+| **8443** | `alexandria-server` | `listen` (HTTPS) | `/v1` management API, `/pub` publication and, when embedded, the console at `/ui/`. |
+| **9400** | `fake-idp` | — | OIDC discovery, JWKS, `/authorize`, `/token`. |
+| **8282** | `fake-connector` | — | Upstream DSP connector of the client. |
+| **9080** | `alexandria-client` | `dsp-ingress` | Reverse proxy for inbound DSP messages. |
+| **9081** | `alexandria-client` | `dsp-egress` | Forward proxy for outbound DSP messages. |
+| **9090** | `alexandria-client` | `admin` | Admin API, metrics and, when embedded, the console at `/ui/`. |
+| **5273** | Vite | — | Console development server (`make gui-dev`). |
+| **3000** | Next.js | — | Documentation development server (`make docs-dev`). |
 
-*(Note: `make demo` and `make e2e` automatically allocate ephemeral free ports on `127.0.0.1` so they never conflict with running services.)*
+<Callout type="warn">
+Port `9090` is commonly taken by other tools. If the client admin listener fails to bind, change `listeners.admin.bind` in the client configuration.
+</Callout>
 
-### 2. Identity & SSI Gateway (`cmd/alexandria`) Ports
-When running the full Docker stack via `task dev:auto`:
-
-| Port | Service | Bound To | Protocol | Notes |
-|:---:|:---|:---:|:---:|:---|
-| **`8443`** | Caddy Reverse Proxy | Host | HTTPS | Primary TLS entrypoint (`https://alexandria.127.0.0.1.nip.io:8443`). |
-| **`1234`** | Alexandria Node Core | Internal | HTTP | Listens in the clear behind the Caddy TLS reverse proxy. |
-| **`1500`** | PostgreSQL 17 | Host | TCP | Relational persistence for node state and credentials. |
-| **`1600`** | Zitadel Console & API | Host | HTTP/gRPC | Direct container access for bootstrap automation and admin console. |
-| **`7003`** | Fafnir Wallet | Host | HTTP | Default wallet backend providing key custody and DID signing. |
-| **`8181` / `8182`** | Eclipse EDC IdentityHub | Host | HTTP | Enterprise wallet backend (`task identityhub:up`). |
-| **`8200`** | HashiCorp Vault | Host | HTTP | Optional backend for Fafnir key storage (`task vault:up`). |
-| **`2112`** | Prometheus Metrics / pprof | Internal | HTTP | Observability endpoints (`/metrics`, `/debug/pprof`). |
-| **`3000`** | Documentation Server | Host | HTTP | Local Fumadocs preview server (`task docs:dev`). |
+The hub generates its Ed25519 signing key and a self-signed laboratory TLS certificate on first start when the configured files are absent. The client must be told to trust that certificate (`connection.tls.ca` in the section layout, or the `-hub-ca` flag).

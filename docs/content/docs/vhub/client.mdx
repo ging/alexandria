@@ -1,109 +1,209 @@
 ---
-title: "alexandria-client Sidecar Reference (C-CLI)"
-description: "Deep-dive reference for alexandria-client: S1–S13 synchronization, HubTrust, operational state machine, L7 DSP proxy, gates, modes, and agreement tracking."
+title: "alexandria-client Reference (C-CLI)"
+description: "Reference for alexandria-client under specification v0.3.0: synchronization, hub trust, state machine, rule set, gates, classification, VHub-Verdict, agreements, events and the admin API."
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
-# `alexandria-client` Sidecar Reference (`C-CLI`)
+# `alexandria-client` Reference (`C-CLI`)
 
-**`alexandria-client`** (`cmd/alexandria-client`, `internal/client`) is the edge validation and synchronization sidecar (`C-CLI`). It sits directly in front of a Dataspace Connector, keeping a verified local copy of active vocabulary packages and enforcing semantic and lifecycle rules on Dataspace Protocol (DSP) traffic with zero network calls to the Hub on the request path.
+**`alexandria-client`** (`cmd/alexandria-client`, `internal/client`) is an L7 proxy placed in front of an unmodified DSP connector. It keeps a verified local copy of the packages of one namespace and decides on every message with local state only.
 
 ---
 
-## 1. Background Synchronization Pipeline (`S1`–`S13`)
+## 1. Listeners
 
-Every `sync_interval`, `internal/client/app/sync.go` executes a strict 13-step verification pipeline before updating the in-memory `app.Cell` snapshot:
+| Listener | Kind | Traffic |
+|:---|:---|:---|
+| `dsp-ingress` | Reverse proxy | Inbound DSP messages towards `upstreams.dsp`. |
+| `dsp-egress` | Forward proxy | Outbound DSP messages from the connector to remote peers. |
+| `mgmt-ingress` | Reverse proxy | The connector management API (`upstreams.management`). Optional. |
+| `admin` | API | Status, rules, agreements, audit, health and metrics. Never mounted on a traffic listener (`REQ-CLI-019`). |
 
-| Step | Verification Rule | Failure Code |
-|:---:|:---|:---|
-| **S1** | Fetch `GET /v1/versions` from `trust.hub` with Bearer token (`trust.credentials`). Estimate clock skew from the HTTP `Date` header (`CLOCK_SKEW_EXCEEDED` if `abs(skew) > clock_skew`). | `SYNC_UNREACHABLE`, `SYNC_UNAUTHORIZED` |
-| **S2** | Resolve `trust.hub_did` via `HubTrust` (`V1`–`V4` DID document checks, `did_ttl` caching, and single-refresh anti-DoS guard on unknown `kid`, `REQ-CLI-024`, `REQ-CLI-027`). Verify Ed25519 signature over `JCS(signed)`. | `SYNC_DID_UNRESOLVABLE`, `SYNC_SIGNATURE_INVALID` |
-| **S3** | Verify listing freshness: current local time `t < expires_at` and `space` matches configured `cfg.Space`. | `SYNC_EXPIRED` |
-| **S4** | **Anti-Rollback & Fork Detection:** `sequence` must be `>=` last accepted `sequence`. If equal, the canonical payload must be byte-identical. | `SYNC_ROLLBACK`, `SYNC_SEQUENCE_CONFLICT` |
-| **S5** | **Revocation Persistence:** Any version that carried a non-null `revoked_from` in a previously accepted listing must never drop `revoked_from` or disappear while still retained. | `SYNC_REVOCATION_DROPPED` |
-| **S6** | **Date Immutability:** `published_at`, `new_content_from`, and `enforced_from` of already-known versions must never change across listings. | `SYNC_DATES_CHANGED` |
-| **S7** | **Date Invariants:** Every entry in `versions[]` must satisfy `published_at < new_content_from <= enforced_from` and minimum `propagation_window`. | `SYNC_DATES_INVALID` |
-| **S8–S9** | For each new version in `versions[]`, download `manifest.json` and `space-lock.json`, verify `ni:///sha-256;...` digest against the listing's `manifest` field, and verify the manifest's Ed25519 JCS signature. | `SYNC_MANIFEST_DIGEST_MISMATCH`, `SYNC_MANIFEST_SIGNATURE_INVALID` |
-| **S10** | Verify the transparency log receipt (`manifest.receipt`) via `ReceiptVerifier`. | `SYNC_RECEIPT_INVALID` |
-| **S11–S13** | Download all package files listed in `manifest.files[]`, verify every file's SHA-256 digest (`S11`), ensure no extra/missing files exist in the package (`S12`), and verify version/space coherence between listing, `manifest.json`, and `space-lock.json` (`S13`). | `SYNC_FILE_HASH_MISMATCH`, `SYNC_FILE_SET_MISMATCH`, `SYNC_INCOHERENT` |
+Requests and responses are forwarded byte for byte; the only thing the client ever adds is the `VHub-Verdict` header (`REQ-SYS-003`, `REQ-CLI-014`).
+
+---
+
+## 2. Synchronization (`S1`–`S13`)
+
+The client synchronizes at start and at least every `sync_interval` of the head version (`REQ-CLI-003`). One pass:
+
+| Phase | Checks | Codes |
+|:---|:---|:---|
+| **Fetch** | `GET /v1/namespaces/{ns}/versions`. The `Date` header feeds the clock-skew estimate. | `SYNC_UNREACHABLE`, `SYNC_NAMESPACE_NOT_FOUND` |
+| **Shape and proof** | The listing validates against Appendix A.1, carries the expected `@context`, issuer and namespace, and its proof verifies against the hub DID. | `SYNC_MALFORMED`, `SYNC_DID_UNRESOLVABLE`, `SYNC_SIGNATURE_INVALID` |
+| **Freshness** | The local instant is before `validUntil`. | `SYNC_EXPIRED` |
+| **Continuity** | `sequence` never decreases; an equal sequence must be byte-identical; revocations never disappear; emitted dates never change. | `SYNC_ROLLBACK`, `SYNC_SEQUENCE_CONFLICT`, `SYNC_REVOCATION_DROPPED`, `SYNC_DATES_CHANGED` |
+| **Packages** | For each version not yet held: the manifest digest matches the listing, the manifest proof verifies, every file digest matches, no file is missing or extra, and version and namespace are coherent. | `SYNC_MANIFEST_DIGEST_MISMATCH`, `SYNC_MANIFEST_SIGNATURE_INVALID`, `SYNC_FILE_HASH_MISMATCH`, `SYNC_FILE_SET_MISMATCH`, `SYNC_INCOHERENT` |
+| **Dates** | Every record respects the propagation window, date ordering and, for breaking versions, the minimum grace. | `SYNC_DATES_INVALID` |
 
 <Callout type="info">
-**Atomic Persistence (`REQ-CLI-005`, `REQ-CLI-006`):** If *any* version in a listing fails `S8`–`S13`, the entire listing is discarded and the client retains its previous valid snapshot. Accepted state is persisted atomically (`tmp` + `rename`) under `-state-dir` so continuity and revocations survive restarts.
+**All or nothing.** If any version fails, the whole listing is discarded and the previous snapshot stays in use (`REQ-CLI-006`); a package is used whole or not at all (`REQ-CLI-007`). The accepted sequence, dates and DID cache survive restarts (`REQ-CLI-005`). A failed synchronization never changes the state by itself.
 </Callout>
 
----
+### Proof verification (`V0`–`V4`)
 
-## 2. Operational State Machine (`REQ-CLI-008`, `REQ-CLI-018`)
-
-`alexandria-client` transitions between four operational states based on synchronization status and listing age relative to `expires_at` (`TTL`) and `max_staleness`:
-
-```
-                      First valid listing accepted
-  ┌──────────────┐ ─────────────────────────────────► ┌──────────────┐
-  │  onboarding  │                                    │    normal    │
-  └──────────────┘                                    └──────┬───────┘
-  (Rejects in enforce:                                       │
-   CLIENT_NOT_READY;                                         │ t >= expires_at
-   forwards in shadow/observe)                               ▼
-                                                      ┌──────────────┐
-                                                      │   degraded   │
-                                                      └──────┬───────┘
-                                  (Consults lifecycle.       │
-                                   degraded[gate]:           │ t >= expires_at + max_staleness
-                                   continue vs reject)       ▼
-                                                      ┌──────────────┐
-                                                      │ fail_closed  │
-                                                      └──────────────┘
-                                                      (Rejects all enforce routes:
-                                                       CLIENT_FAIL_CLOSED, REQ-SYS-008)
-```
+Proofs are checked against the cached DID document of `trust.hub_did` (`REQ-CLI-024`): the proof options must be those the hub uses, the verification method must be an `assertionMethod` of the document, and the signature must verify. On a failure the document is resolved again — for `did:web` at most once a minute (`REQ-CLI-027`) — and the new resolution replaces the cache. `DID_KEY_ROTATED` and `DID_REFRESH_FAILED` report those events.
 
 ---
 
-## 3. L7 DSP Proxy, Gates, Modes & Verdict Header
+## 3. State Machine (§4.5)
 
-### Listeners & Byte-for-Byte Forwarding
-- **`dsp-ingress`:** Reverse proxy in front of the Connector's DSP protocol endpoint (`upstreams.dsp`).
-- **`mgmt-ingress`:** Optional reverse proxy in front of the Connector's Management API (`upstreams.management`).
-- **`dsp-egress`:** HTTP forward proxy for outbound DSP messages sent by the local Connector to remote peers.
-- Uses `http.Transport.RoundTrip` directly (`REQ-SYS-003`, `REQ-CLI-014`) so request/response bodies and headers are forwarded **byte-for-byte** without injecting `X-Forwarded-For` or rewriting `User-Agent`.
+The state is a pure function of the last accepted listing and the local instant:
 
-### Validation Gates
-1. **`dsp_message`:** Validates the outer DSP protocol envelope.
-2. **`policy_intake`:** Validates ODRL offers and agreements (selected via `body.select`, e.g., `$.offer` or `$.agreement`) against the active `OdrlProfile` schemas and checks `@context` membership (`CONTEXT_NOT_IN_PACKAGE`).
-3. **`catalog_entry`:** Validates DCAT datasets and catalog responses (`validate_response`).
-4. **`agreement_admission`:** Validates `TransferRequestMessage` calls against registered contract agreements (`AGREEMENT_UNKNOWN`, `AGREEMENT_VERSION_REVOKED`).
+| State | Condition | Effect on gates |
+|:---|:---|:---|
+| **`Onboarding`** | No listing accepted yet. | `CLIENT_NOT_READY` (violation). |
+| **`Active`** | Listing valid, at most one version in force. | Normal classification. |
+| **`Transition`** | Listing valid, several versions in force. | Normal classification; warnings are possible. |
+| **`Degraded`** | Listing expired, for less than `max_staleness`. | Per gate: `degraded[gate] = reject` gives `CLIENT_DEGRADED_REJECT`, otherwise classification continues. |
+| **`FailClosed`** | Listing expired for `max_staleness` or more. | `CLIENT_FAIL_CLOSED` (violation) on every gate (`REQ-SYS-008`). |
 
-### Route Modes & Classification Matrix (`REQ-CLI-012`)
+`GET /readyz` answers `200` in `Active`, `Transition` and `Degraded`, and `503` otherwise.
 
-Each route operates in one of three modes:
+---
 
-| Classification | `observe` Mode | `shadow` Mode | `enforce` Mode |
+## 4. Rule Set (Appendix A.6)
+
+A rule maps a request to the gates that validate it.
+
+```json
+{
+  "id": "contract-request",
+  "priority": 110,
+  "listener": "dsp-ingress",
+  "match": {
+    "method": "POST",
+    "path": "/negotiations/{providerPid}/request",
+    "body": [{"pointer": "/@type", "one_of": ["ContractRequestMessage", "dspace:ContractRequestMessage"]}]
+  },
+  "message": "ContractRequestMessage",
+  "verify": {"gates": ["dsp_message", "policy_intake"], "select": ""},
+  "mode": "enforce"
+}
+```
+
+| Field | Meaning |
+|:---|:---|
+| `priority` | Lower values are tried first. Unique per listener. |
+| `match.path` | URI template of whole segments; a variable matches one non-empty segment. |
+| `match.body` | Optional conditions on the JSON body, addressed by JSON Pointer. |
+| `message` | The DSP message type the rule expects. |
+| `verify.gates` | One to four gates. `verify.select` is a JSON Pointer to the node to validate (the whole body when empty). |
+| `mode` | `observe` (default), `shadow` or `enforce`. |
+| `validate_response` | Passive validation of catalog responses with the `catalog_entry` gate. |
+
+**Selection (`select_rule`, `REQ-CLI-030`).** Candidates are the rules of the listener whose method and path match, in priority order. The first whose body conditions hold is selected. If the body cannot be parsed, the first candidate is selected and the message is treated as unparseable. If no rule matches, `default_action` applies; `reject` gives `RULE_DEFAULT_REJECT`.
+
+**Invariants.** The whole set is validated on every change:
+
+| Rule | Check | Code |
+|:---:|:---|:---|
+| `RULE-1` | The set validates against the Appendix A.6 schema. | `RULES_SCHEMA` |
+| `RULE-2` | Rule ids are unique. | `RULES_DUPLICATE_ID` |
+| `RULE-3` | Priorities are unique per listener. | `RULES_DUPLICATE_PRIORITY` |
+| `RULE-4` | `agreement_admission` only on `TransferRequestMessage`; `validate_response` only on catalog and dataset requests. | `RULES_GATE_MESSAGE_MISMATCH` |
+| `RULE-5` | Rules on `mgmt-ingress` need `upstreams.management`. | `RULES_UPSTREAM_MISSING` |
+
+The rule set survives restarts. `rules.seed` is loaded only when the store is empty (`REQ-CLI-031`); the sample seed holds the 16 rules of the DSP 2025-1 binding (`DP-10`). Each message is decided with exactly one rule-set revision (`REQ-CLI-029`).
+
+---
+
+## 5. Gates and Classification (§4.7)
+
+| Gate | Validates |
+|:---|:---|
+| `dsp_message` | The DSP message envelope. |
+| `policy_intake` | The policy carried by an offer, request or agreement. |
+| `catalog_entry` | Catalog and dataset responses. |
+| `agreement_admission` | A transfer request against the captured agreement. |
+
+For one gate, after the state rows of section 3:
+
+1. A body that cannot be parsed, or a missing `verify.select` node, is a **violation** (`MESSAGE_UNPARSEABLE`).
+2. With no version in force at the local instant: **violation** (`NO_VERSION_IN_FORCE`).
+3. The message is evaluated against the **head** version. If it conforms: **ok**, possibly with informational codes (`VERDICT_RECOMMENDED_NONCONFORMANT`, `VERDICT_SHACL_WARNING`).
+4. Otherwise it is evaluated against the older versions still in force, newest first. If one accepts it: **warning** (`VERDICT_NOT_IN_HEAD`), with `matched` set to that version and `sunset` to the instant it stops being accepted.
+5. Otherwise: **violation** — `CONTEXT_NOT_IN_PACKAGE` when the message uses a JSON-LD context the package does not contain, else `VERDICT_VIOLATION`.
+
+Versions in force are computed with the lease margin `L` around each boundary (`REQ-CLI-009`). JSON-LD expansion resolves only URLs listed in the package manifest; nothing is fetched (`REQ-CLI-010`).
+
+<Callout type="info">
+The PoC evaluator (`DP-7`) executes `json-schema` artefacts. `shacl` and `context` artefacts are reported with an informational finding and do not change the classification.
+</Callout>
+
+### Actions
+
+| Classification | `observe` | `shadow` | `enforce` |
 |:---|:---|:---|:---|
-| **`ok`** (passes head version) | `forward` (silent, no event) | `forward` (no event) | `forward` (no header, no event) |
-| **`info`** (`VERDICT_RECOMMENDED_NONCONFORMANT`) | `forward` (silent) | `forward` + emits Verdict Event | `forward` + emits Verdict Event |
-| **`warning`** (`VERDICT_NOT_IN_HEAD` during Transition IGW) | `forward` (silent) | `forward` + emits Verdict Event | **`forward-notice`** (`200 OK` + `VHub-Verdict` header + Verdict Event) |
-| **`violation`** (`VERDICT_VIOLATION`, `CONTEXT_NOT_IN_PACKAGE`, etc.) | `forward` (silent) | `forward` + emits Verdict Event | **`reject`** (`400 Bad Request` + normative DSP error body + `VHub-Verdict` header + Verdict Event) |
+| `ok` | forward | forward | forward |
+| `warning` | forward | forward + event | **forward-notice**: forward with `VHub-Verdict` + event |
+| `violation` | forward | forward + event | **reject**: `400` with a DSP error body and `VHub-Verdict` + event |
 
-### `VHub-Verdict` Header Format (`DP-11`, RFC 9651)
-On `forward-notice` and `reject` actions, `alexandria-client` attaches the `VHub-Verdict` HTTP header formatted as an RFC 9651 Structured Field List of Tokens:
+In `observe` nothing is emitted. In the other modes an event is emitted for any non-`ok` classification and for `ok` with informational codes. When a rule has several gates, the most restrictive action among them is taken (`REQ-CLI-012`).
+
+### `VHub-Verdict`
+
+An RFC 9651 structured-field list with one item per `enforce` gate whose classification is not `ok`:
 
 ```http
-# Warning during Transition / Grace Window:
 VHub-Verdict: warning;gate=policy_intake;code="VERDICT_NOT_IN_HEAD";version="1.0.0";sunset=@1793613600
-
-# Rejection on Policy Violation:
 VHub-Verdict: violation;gate=policy_intake;code="VERDICT_VIOLATION"
 ```
 
+A rejection answers with the error message the DSP binding defines for that exchange, carrying the code and one reason per finding (`REQ-CLI-013`).
+
 ---
 
-## 4. Agreement Tracking & Package Retention (`REQ-CLI-015`..`017`)
+## 6. Agreements and Retention
 
-1. **Automatic Capture:** When a `ContractAgreementMessage` or `ContractAgreementVerificationMessage` passes validation and the upstream connector responds with `2xx`, `alexandria-client` extracts the `agreementId` and the matched vocabulary `version` and persists the binding to disk **before** returning the HTTP response (`REQ-CLI-015`).
-2. **Package Retention (`Retain`):** Even after version `1.0.0` reaches `Retired` and drops out of future listings, `PackageStore.Retain` keeps `1.0.0` on disk as long as any registered agreement references it (`REQ-CLI-017`).
-3. **Transfer Admission:** When a `TransferRequestMessage` arrives on a route with `agreement_admission`, `alexandria-client` looks up `agreementId`:
-   - If the version is not revoked (even if `Retired`), the transfer is **allowed**.
-   - If the version is revoked and current time `t >= revoked_from + L`, the transfer is **rejected** with `AGREEMENT_VERSION_REVOKED`.
-4. **Pre-Existing Agreements Import:** Operators can import agreements signed prior to deploying `alexandria-client` via `POST /agreements:import` on the Admin listener (`REQ-CLI-026`).
+- **Capture.** When an agreement message passes and the upstream answers `2xx`, the client records the agreement id, the parties' process ids, its role and the version that validated it, **before** returning the response (`REQ-CLI-015`).
+- **Admission.** On a `TransferRequestMessage` with the `agreement_admission` gate, the agreement is looked up. A known agreement is admitted unless its version is revoked and the revocation has taken effect (`AGREEMENT_VERSION_REVOKED`). An unknown agreement follows `unknown_agreement`: forwarded with an informational `AGREEMENT_UNKNOWN`, or rejected.
+- **Notice.** When a listing revokes a version, one `AGREEMENT_REVOCATION_SCHEDULED` event is emitted per agreement bound to it (`REQ-CLI-016`).
+- **Retention.** Packages of versions referenced by an agreement are kept even after the version leaves the listing (`REQ-CLI-017`, `REQ-SYS-006`). Every `retention.gc_interval` the collector deletes packages that are neither listed nor referenced (`REQ-CLI-033`).
+
+---
+
+## 7. Passive Audit (§4.11)
+
+Rules with `validate_response` keep the last `audit.window` catalog responses. When a new version is scheduled, the client replays them against it and stores a report predicting which would warn or be rejected (`AUDIT_WILL_WARN`, `AUDIT_WILL_REJECT`), available at `GET /audit/reports/latest` (`REQ-CLI-023`).
+
+---
+
+## 8. Events
+
+Events are appended to `events.sink` as JSON lines.
+
+| Type | Emitted when |
+|:---|:---|
+| `vhub.verdict` | A gate produces a reportable classification. Validates against Appendix A.4 (`REQ-DOC-004`). |
+| `vhub.sync` | A synchronization fails or a listing is accepted. |
+| `vhub.state` | The state changes, or the clock skew exceeds `clock_skew` (`CLOCK_SKEW_EXCEEDED`). |
+| `vhub.agreement` | An agreement is captured, or its version is scheduled for revocation. |
+| `vhub.audit` | A passive audit report is produced. |
+| `vhub.rules` | The rule set changes. |
+| `vhub.gc` | Packages are collected. |
+
+---
+
+## 9. Admin API
+
+Served only on the `admin` listener, without authentication. Errors are `application/problem+json`.
+
+| Endpoint | Purpose |
+|:---|:---|
+| `GET /status` | Namespace, state, local versions with their role (`head`, `in_force`, `scheduled`, `retained`), last accepted listing, hub DID, rule-set revision and clock-skew estimate (`REQ-CLI-020`). |
+| `GET /versions` | Known lifecycle records with their reference state and whether the package is held. |
+| `GET /rules` | The rule set; its revision is the `ETag`. |
+| `PUT /rules` | Replace the whole set. |
+| `POST /rules` | Add one rule. |
+| `GET`, `PUT`, `DELETE /rules/{id}` | Read, replace or delete one rule. |
+| `POST /rules:explain` | Decide on a described request exactly as the hot path would, with no effect (`REQ-CLI-032`). |
+| `GET /agreements/{id}` | A captured agreement and whether it is usable. |
+| `GET /audit/reports/latest` | The latest passive audit report. |
+| `GET /healthz`, `GET /readyz` | Liveness and readiness. |
+| `GET /metrics` | OpenMetrics: `vhub_classifications_total`, `vhub_listing_age_seconds`, `vhub_request_latency_seconds`. |
+
+Every change to the rules requires `If-Match` with the current revision: `428` without it, `412` when stale (`REQ-CLI-028`). Rules may be sent as JSON or YAML.
+
+`POST /rules:explain` takes `listener`, `method`, `path` and `body`, and returns the selected rule, the state, the per-gate classification with findings, the action and the `VHub-Verdict` value.

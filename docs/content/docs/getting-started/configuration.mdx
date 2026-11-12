@@ -1,6 +1,6 @@
 ---
 title: Configuration Reference
-description: Complete configuration reference for alexandria-server (server.json), alexandria-client (config.json), and the Alexandria node (config.yaml).
+description: Configuration of alexandria-server and alexandria-client in the section layout (YAML) and the flat specification layout (JSON), plus lifecycle parameters and command-line flags.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -8,193 +8,246 @@ import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 
 # Configuration Reference
 
-This guide documents all configuration files used across the Alexandria repository:
-1. **`config/server.json` & `config/tokens.json`:** Configuration for `alexandria-server` (`C-HUB`).
-2. **`config/config.json` & `config/routes.default.json`:** Configuration for `alexandria-client` (`C-CLI`), validated against Appendix A.3 (`conformance/schemas/config.schema.json`).
-3. **`config/config.yaml` & `config/config-ih.yaml`:** Configuration for `cmd/alexandria` (Identity, Zitadel OIDC, and Fafnir/IdentityHub wallets).
+Both binaries read one configuration document, in **YAML** (`.yaml`, `.yml`) or **JSON** (`.json`), in either of two equivalent layouts (`DP-11`):
+
+- the **section layout** used in `config/` (`common_config`, `auth_config`, `did_config`, `observability`, plus `vhub_config` or `client_config`), and
+- the **flat layout** of the specification (Appendix B for the server, Appendix A.3 for the client) used in `deploy/`.
+
+The document is validated at startup: the server against `deploy/server.schema.json`, the client against `spec/schemas/config.schema.json`. Paths written as `file:…` are resolved relative to the directory of the configuration file.
 
 ---
 
-## 1. `alexandria-server` Configuration (`config/server.json`)
+## 1. `alexandria-server`
 
-`alexandria-server` validates its configuration file against `config/server.schema.json` on startup (`DP-12`). Pass `-config <path>` to specify a custom path.
+<Tabs items={['Section layout (config/server.yaml)', 'Flat layout (deploy/server.json)']}>
+<Tab value="Section layout (config/server.yaml)">
 
-```json
-{
-  "listen": "127.0.0.1:8080",
-  "public_base_url": "http://localhost:8080",
-  "did": "did:web:localhost%3A8080",
-  "sqlite_path": "../var/hub/hub.db",
-  "blob_dir": "../var/hub/blobs",
-  "signing_key_path": "../var/hub/hub.key",
-  "tokens_path": "tokens.json",
-  "compiler": "dsl",
-  "vendor_dir": "vendor"
-}
-```
-
-### Field Reference (`server.schema.json`)
-
-| Field | Type | Required | Description |
-|:---|:---|:---:|:---|
-| `listen` | `string` (`host:port`) | Yes | TCP address where `alexandria-server` binds (`/v1`, `/pub`, `/.well-known/did.json`). |
-| `public_base_url` | `string` (`http(s)://...`) | Yes | External base URL used when constructing public artifact links. |
-| `did` | `string` (`did:web:...`) | Yes | The Hub's W3C `did:web` identifier (e.g., `did:web:localhost%3A8080`). |
-| `sqlite_path` | `string` | Yes | Path to the SQLite database file (created automatically with immutability triggers). |
-| `blob_dir` | `string` | Yes | Content-addressed directory (`<blob_dir>/sha256/<hex>`) for compiled package blobs. |
-| `signing_key_path` | `string` | Yes | Path to the Ed25519 PKCS#8 PEM signing key (auto-generated on first boot if absent). |
-| `tokens_path` | `string` | Yes | Path to the static Bearer token map (`config/tokens.json`). |
-| `compiler` | `"poc"` \| `"dsl"` | No | Draft compiler mode: `"dsl"` compiles `eunomia.profiles/v1` YAML bundles; `"poc"` compiles simplified JSON drafts (default: `"poc"`). |
-| `vendor_dir` | `string` | No | Directory holding local copies of vendored profiles (`<slot>/<version>/vendor.json`) for `compiler: "dsl"`. |
-| `clock_file` | `string` | No | Path to an RFC 3339 timestamp file for deterministic testing (`DP-9`; can also be set via `-clock-file`). |
-| `lifecycle` | `object` | No | Default lifecycle durations (`freshness.ttl`, `freshness.max_staleness`, `grace_window`, `sync_interval`, `clock_skew`, `lease_margin`, `propagation_window`, `max_concurrent_versions`, `degraded`). |
-
-### Static Authentication (`config/tokens.json`)
-
-Maps Bearer tokens to a `principal` name and an array of governance `roles` (`editor`, `reviewer`, `authority` / `releaser`, `member`, `operator`):
-
-```json
-{
-  "editor-token":   {"principal": "steward",     "roles": ["editor"]},
-  "releaser-token": {"principal": "releaser",    "roles": ["releaser"]},
-  "member-token":   {"principal": "alexandria-client", "roles": ["member"]}
-}
-```
-
----
-
-## 2. `alexandria-client` Configuration (`config/config.json`)
-
-On startup, `alexandria-client` validates `config/config.json` against five strict invariants (`CFG-1` to `CFG-5`, `REQ-CLI-001`) and exits with code `2` if any check fails:
-- **`CFG-1` (`CONFIG_SCHEMA`):** Conforms to the normative Appendix A.3 JSON Schema (`conformance/schemas/config.schema.json`).
-- **`CFG-2` (`CONFIG_ROUTE_OVERLAP`):** No two routes on the same listener have overlapping HTTP method and path patterns (e.g., `:a` vs `:b` in the same segment).
-- **`CFG-3` (`CONFIG_GATE_MESSAGE_MISMATCH`):** Gates assigned to a route are compatible with its DSP `message` type (e.g., `agreement_admission` is only valid on `TransferRequestMessage`).
-- **`CFG-4` (`CONFIG_CREDENTIALS_UNREADABLE`):** The token file referenced by `trust.credentials` exists and is readable.
-- **`CFG-5` (`CONFIG_UPSTREAM_MISSING`):** Every listener used by a route has its corresponding upstream URL configured (`upstreams.dsp` or `upstreams.management`).
-
-### Example `config/config.json`
-
-```json
-{
-  "space": "https://example.com/spaces/demo",
-  "trust": {
-    "hub_did": "did:web:localhost%3A8080",
-    "hub": "https://localhost:8080",
-    "credentials": "file:config/credentials.json",
-    "did_ttl": "PT1H"
-  },
-  "upstreams": {
-    "dsp": "http://127.0.0.1:8282/protocol"
-  },
-  "listeners": {
-    "dsp-ingress": { "bind": "127.0.0.1:8443" },
-    "dsp-egress":  { "bind": "127.0.0.1:3128" },
-    "admin":       { "bind": "127.0.0.1:9900" }
-  },
-  "routes": [
-    {
-      "listener": "dsp-ingress",
-      "match": { "method": "POST", "path": "/negotiations/request" },
-      "message": "ContractRequestMessage",
-      "gates": ["dsp_message", "policy_intake"],
-      "mode": "enforce",
-      "body": { "select": "$.offer.permission[0]" }
-    },
-    {
-      "listener": "dsp-ingress",
-      "match": { "method": "POST", "path": "/transfers/request" },
-      "message": "TransferRequestMessage",
-      "gates": ["dsp_message", "agreement_admission"],
-      "mode": "enforce"
-    }
-  ],
-  "default_action": "forward",
-  "unknown_agreement": "forward",
-  "events": {
-    "sink": "file:var/client/events.jsonl"
-  }
-}
-```
-
-<Callout type="info">
-**Default DSP Routes (`DP-10`):** If `routes` is omitted or empty, `alexandria-client` automatically loads the 16 standard DSP 2025-1 routes (`config/routes.default.json`) in `observe` mode.
-</Callout>
-
----
-
-## 3. Identity & Auth Node Configuration (`config/config.yaml`)
-
-`cmd/alexandria` implements the **One Configuration Document** pattern ([ADR 0002](../adr/0002-one-configuration-document)), reading `config/config.yaml` (or `config/config-ih.yaml` for IdentityHub) and allowing any key to be overridden via `ALEXANDRIA_<SECTION>_<KEY>` environment variables.
-
-### `common_config`
 ```yaml
 common_config:
   hosts:
     http:
       protocol: "https"
-      url: "alexandria.127.0.0.1.nip.io"
-      port: "8443"            # External Caddy TLS port
-      internal_port: "1234"   # Internal cleartext HTTP port
-  db:
-    db_type: Postgres
-    url: "127.0.0.1"
-    port: "1500"
-    user: "alexandria"
-    password: "alexandria"
-    name: "alexandria"
-  api:
-    version: "v1"
-    openapi_path: "./static/specs/openapi/merged_openapi.json"
-  connection:
-    is_local: true
-    is_prod: false
-    is_vault_real: false
-    has_tls_proxy: true
-```
-
-### `wallet_config`
-```yaml
-wallet_config:
-  wallet: Fafnir              # Fafnir | IdentityHub
-  api:
-    http:
-      protocol: "http"
       url: "127.0.0.1"
-      port: "7003"            # 7003 for Fafnir, 8181 for IdentityHub
-  startup_link_timeout: "10s"
-```
+      port: "8443"
+      internal_port: "8443"
+  db:
+    db_type: "SQLite"
+    database: "file:../var/hub/hub.db"
+    blobs: "file:../var/hub/blobs"
+  connection:
+    tls:
+      cert: "file:../var/tls/hub.crt"
+      key: "file:../var/tls/hub.key"
 
-### `auth_config` & `observability`
-```yaml
 auth_config:
   enabled: true
-  issuer: "https://auth.127.0.0.1.nip.io:8443"
-  client_id: ""               # Injected via .env by task auth:bootstrap
-  client_secret: ""           # Injected via .env by task auth:bootstrap
-  redirect_url: "https://alexandria.127.0.0.1.nip.io:8443/api/v1/auth/callback"
-  app_url: "https://alexandria.127.0.0.1.nip.io:8443/"
-  introspect: "fallback"      # never | fallback | always
-  session:
-    name: "alexandria_session"
-    secure: true
-    same_site: "lax"
-    ttl: "12h"
+  issuer: "http://127.0.0.1:9400"
+  audience: "alexandria-vhub"
+  algorithms: ["RS256", "ES256", "EdDSA"]
+  roles_claim: "roles"
+  admin_role: "vhub-admin"
+  jwks_refresh: "PT10M"
+
+did_config:
+  type: "key"
+  signing_key: "file:../var/hub/hub.key"
 
 observability:
   log_level: "info"
   log_format: "auto"
-  metrics: true
-  pprof: false
-  port: "2112"
+  # otlp_endpoint: "http://127.0.0.1:4318"
+
+vhub_config:
+  rdf_context: "self-hosted"
+  compiler: "poc"
+  clock_skew: "PT5S"
+  vocab:
+    max_size: 10485760
+    proxy_timeout: "PT30S"
+    allow_insecure_localhost: true
 ```
 
-### Common Environment Variable Overrides
-```bash
-# Switch to Eclipse EDC IdentityHub on port 8181:
-ALEXANDRIA_WALLET_CONFIG_WALLET=IdentityHub \
-ALEXANDRIA_WALLET_CONFIG_API_HTTP_PORT=8181 \
-task dev
+</Tab>
+<Tab value="Flat layout (deploy/server.json)">
 
-# Disable OIDC authentication for automated testing:
-ALEXANDRIA_AUTH_CONFIG_ENABLED=false task test
+```json
+{
+  "listen": "127.0.0.1:8443",
+  "base": "https://127.0.0.1:8443",
+  "signing": {"key": "file:../var/hub/hub.key"},
+  "rdf": {"context": "self-hosted"},
+  "auth": {
+    "issuers": [{"iss": "http://127.0.0.1:9400", "discovery_url": "http://127.0.0.1:9400/.well-known/openid-configuration"}],
+    "audience": "alexandria-vhub",
+    "admin_claim": {"claim": "roles", "value": "vhub-admin"}
+  },
+  "vocab": {"max_size": 10485760, "allow_insecure_localhost": true},
+  "storage": {"database": "file:../var/hub/hub.db", "blobs": "file:../var/hub/blobs"},
+  "tls": {"cert": "file:../var/tls/hub.crt", "key": "file:../var/tls/hub.key"}
+}
 ```
+
+</Tab>
+</Tabs>
+
+### Fields (flat names)
+
+| Field | Required | Description |
+|:---|:---:|:---|
+| `listen` | Yes | Address the hub binds. |
+| `base` | Yes | Public base URL. It is the prefix of every IRI the hub emits (`{base}/v1/namespaces/…`, `{base}/pub/…`). |
+| `did` | No | Hub DID. Defaults to the `did:key` derived from the signing key; a `did:web` is also supported (`DP-5`). |
+| `signing.key` | Yes | Ed25519 key in PKCS#8 PEM. Generated on first start if absent (PoC). |
+| `signing.verification_method` | No | Verification method of the proofs; defaults to the `did:key` method of the key. |
+| `rdf.context` | No | `self-hosted` serves the Appendix A.5 context at `/pub/_vhub/v1/context.jsonld` and uses that URL as `@context`; `referenced` uses `https://w3id.org/alexandria-vhub/v1`. |
+| `auth.issuers[]` | Yes | Accepted token issuers, each with `iss` and `discovery_url`. |
+| `auth.audience` | Yes | Audience every access token must contain. |
+| `auth.algorithms` | No | Allowed asymmetric signature algorithms. |
+| `auth.admin_claim` | No | Claim and value that mark the hub admin (default `roles` containing `vhub-admin`). |
+| `auth.jwks_cache` | No | How long a JWKS is cached (ISO 8601 duration). |
+| `vocab.max_size` | No | Maximum size in bytes of a vocabulary revision. |
+| `vocab.proxy_timeout` | No | Timeout for fetching a proxy vocabulary upstream. |
+| `vocab.proxy_allow` | No | Host allow-list for proxy upstreams (SSRF protection). |
+| `vocab.allow_insecure_localhost` | No | Accept `http://localhost` upstreams. Laboratory only. |
+| `did_resolver.allow_insecure_localhost` | No | Accept `http://` for a localhost `did:web`. Laboratory only. |
+| `storage.database`, `storage.blobs` | Yes | SQLite database and content-addressed blob directory. |
+| `tls.cert`, `tls.key` | No | Serve HTTPS. A self-signed laboratory certificate is generated when the files are absent. Omit both to serve plain HTTP behind a TLS proxy. |
+| `compiler` | No | Draft compiler: `poc` (JSON drafts, default) or `dsl` (`eunomia.profiles/v1` YAML). |
+| `vendor_dir` | No | Local copies of vendored profiles for the `dsl` compiler. |
+| `clock_skew` | No | Tolerance applied to token and credential times. |
+| `clock_file` | No | Read the current instant from a file (PoC and tests). |
+| `lifecycle` | No | Hub-wide defaults of the lifecycle parameters below. |
+| `observability.*` | No | `log_level`, `log_format`, `otlp_endpoint`, `otlp_insecure`, `service_name`, `environment`. |
+
+---
+
+## 2. `alexandria-client`
+
+<Tabs items={['Section layout (config/client.yaml)', 'Flat layout (deploy/client.json)']}>
+<Tab value="Section layout (config/client.yaml)">
+
+```yaml
+common_config:
+  connection:
+    tls:
+      ca: "file:../var/tls/hub.crt"
+
+did_config:
+  type: "key"
+  hub_did: "did:key:z6Mk…"
+  did_ttl: "PT6H"
+
+observability:
+  log_level: "info"
+  log_format: "auto"
+  audit_window: 100
+  events_sink: "file:var/client/events.jsonl"
+
+client_config:
+  trust:
+    hub: "https://127.0.0.1:8443"
+    namespace: "demo"
+    context: "https://127.0.0.1:8443/pub/_vhub/v1/context.jsonld"
+  upstreams:
+    dsp: "http://127.0.0.1:8282/dsp"
+  listeners:
+    dsp-ingress:
+      bind: "127.0.0.1:9080"
+    dsp-egress:
+      bind: "127.0.0.1:9081"
+    admin:
+      bind: "127.0.0.1:9090"
+  rules:
+    seed: "file:deploy/rules.seed.json"
+  default_action: "forward"
+  unknown_agreement: "forward"
+  retention:
+    gc_interval: "P1D"
+```
+
+</Tab>
+<Tab value="Flat layout (deploy/client.json)">
+
+```json
+{
+  "trust": {
+    "hub": "https://127.0.0.1:8443",
+    "namespace": "demo",
+    "hub_did": "did:key:z6Mk…",
+    "context": "https://127.0.0.1:8443/pub/_vhub/v1/context.jsonld"
+  },
+  "upstreams": {"dsp": "http://127.0.0.1:8282/dsp"},
+  "listeners": {
+    "dsp-ingress": {"bind": "127.0.0.1:9080"},
+    "dsp-egress": {"bind": "127.0.0.1:9081"},
+    "admin": {"bind": "127.0.0.1:9090"}
+  },
+  "rules": {"seed": "file:deploy/rules.seed.json"},
+  "default_action": "forward",
+  "unknown_agreement": "forward",
+  "events": {"sink": "file:var/client/events.jsonl"}
+}
+```
+
+</Tab>
+</Tabs>
+
+### Fields (flat names)
+
+| Field | Required | Default | Description |
+|:---|:---:|:---|:---|
+| `trust.hub` | Yes | — | Base URL of the hub. |
+| `trust.namespace` | Yes | — | Namespace slug the client follows. |
+| `trust.hub_did` | Yes | — | DID whose `assertionMethod` keys are trusted to sign listings and manifests. |
+| `trust.context` | No | `https://w3id.org/alexandria-vhub/v1` | Expected JSON-LD context of the credentials. Set it to the hub's self-hosted URL when the hub uses `rdf.context: self-hosted`. |
+| `trust.did_ttl` | No | `PT6H` | How long the hub DID document is cached. |
+| `upstreams.dsp` | Yes | — | DSP endpoint of the connector. |
+| `upstreams.management` | No | — | Management API of the connector; required by rules on `mgmt-ingress`. |
+| `listeners.admin.bind` | Yes | — | Admin API listener. |
+| `listeners.dsp-ingress.bind` | No | — | Reverse proxy for inbound DSP traffic. |
+| `listeners.dsp-egress.bind` | No | — | Forward proxy for outbound DSP traffic. |
+| `listeners.mgmt-ingress.bind` | No | — | Reverse proxy for the connector management API. |
+| `rules.seed` | No | — | Initial rule set, loaded only when the persistent rule store is empty. |
+| `default_action` | No | `forward` | What to do with a request no rule matches: `forward` or `reject`. |
+| `unknown_agreement` | No | `forward` | What to do with a transfer whose agreement was never captured. |
+| `audit.window` | No | `100` | Number of catalog responses kept for the passive audit. |
+| `retention.gc_interval` | No | `P1D` | Interval of the package garbage collector. |
+| `events.sink` | Yes | — | Where events are written, for example `file:var/client/events.jsonl`. |
+
+<Callout type="warn">
+The client refuses to start on an invalid document (`CONFIG_SCHEMA`), an unreadable rule seed (`CONFIG_RULES_SEED_UNREADABLE`) or an inconsistent rule set (`RULES_*`), exiting with a non-zero status and the code (`REQ-CLI-001`).
+</Callout>
+
+---
+
+## 3. Lifecycle Parameters
+
+Lifecycle parameters travel inside every signed package manifest, so all clients of a version apply the same values. The hub defaults are:
+
+| Parameter | Default | Meaning |
+|:---|:---:|:---|
+| `freshness.ttl` | `PT24H` | Validity of a listing. The hub re-issues it at least every `ttl / 2`. |
+| `freshness.max_staleness` | `P7D` | How long a client may keep working on an expired listing before failing closed. |
+| `propagation_window` | `P2D` | Delay between publication and `new_content_from`. |
+| `grace_window` | `P30D` | Default coexistence of a breaking version with its predecessor. |
+| `min_grace_window` | `P7D` | Minimum grace window a steward may request. |
+| `sync_interval` | `PT6H` | Maximum interval between client synchronizations. |
+| `clock_skew` | `PT5S` | Tolerated clock difference between hub and client. |
+| `lease_margin` | `PT10S` | Margin the client adds around in-force boundaries. |
+| `max_concurrent_versions` | `4` | Maximum number of versions in force at once. |
+| `degraded` | `{}` | Per-gate behaviour (`continue` or `reject`) while the client is `Degraded`. |
+
+Inconsistent values are rejected with `LIFECYCLE_*` codes when a draft is validated.
+
+---
+
+## 4. Command-Line Flags
+
+| Binary | Flag | Description |
+|:---|:---|:---|
+| both | `-config <path>` | Configuration file (default `config/server.yaml` or `config/client.yaml`). |
+| both | `-clock-file <path>` | Read the current instant from a file (PoC and tests). |
+| both | `-log-level`, `-log-format` | Override `observability.log_level` and `log_format`. |
+| client | `-state-dir <path>` | Directory of the persistent state (database and packages). |
+| client | `-hub-ca <path>` | PEM root certificate of a laboratory hub. |
+| client | `-did.allow_insecure_localhost` | Allow `http://` for a localhost `did:web`. |

@@ -1,74 +1,91 @@
 ---
 title: Quickstart
-description: Fast-track guides to run the Vocabulary Hub F6 demo in 3 commands or launch the full Alexandria Identity & Wallet stack.
+description: Build Alexandria, replay the F6 scenario in one command, then start the laboratory services by hand.
 ---
 
 import { Steps } from 'fumadocs-ui/components/steps';
 import { Callout } from 'fumadocs-ui/components/callout';
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 
-# Quickstart Guide
-
-Alexandria offers two quickstart paths depending on whether you want to explore the **Vocabulary Hub & Edge Validation Sidecar (`vhub`)** or the **Full Identity, OIDC & External Wallet Stack (`cmd/alexandria`)**.
+# Quickstart
 
 ---
 
-## Path A: Vocabulary Hub & Edge Sidecar in 3 Commands (`Makefile`)
-
-You can compile the Vocabulary Hub binaries, run the full conformance battery, and execute the end-to-end **Scenario F6** (which launches real `alexandria-server`, `alexandria-client`, and `fake-connector` processes and replays a two-month vocabulary lifecycle in seconds) with zero container dependencies:
+## Path A: Build, Test and Run the F6 Demo
 
 <Steps>
 
-### 1. Build the Binaries and DSL Compiler
-
-Compile `bin/alexandria-server`, `bin/alexandria-client`, `bin/fake-connector`, and `bin/alexandriac`:
+### 1. Build the binaries
 
 ```bash
 make build
-go build -o bin/alexandriac ./cmd/alexandriac
 ```
 
-### 2. Compile a YAML Profile with `alexandriac`
+Produces `bin/alexandria-server`, `bin/alexandria-client`, `bin/alexandriac`, `bin/fake-idp` and `bin/fake-connector`.
 
-Validate and compile the sample `colors.profile.yaml` (`eunomia.profiles/v1`) into RDF/Turtle, JSON-LD `@context`, SHACL shapes, JSON Schema, Cedar policy mappings, and HTML documentation:
+### 2. Run the suites
 
 ```bash
-./bin/alexandriac validate internal/dsl/testdata/colors.profile.yaml
-./bin/alexandriac compile -o /tmp/colors-out internal/dsl/testdata/colors.profile.yaml
+make test conformance e2e trace
 ```
 
-### 3. Run the End-to-End F6 Demo
+Unit and architecture tests, the conformance battery, the end-to-end F6 scenario across the real binaries, and the traceability check (81 of 81 requirements, 76 of 77 catalog codes).
 
-Run `make demo` to spin up `alexandria-server`, `alexandria-client`, and `fake-connector` with a shared injectable clock, publish releases `1.0.0` and `2.0.0` from YAML bundles, and print the live verdict table:
+### 3. Replay F6
 
 ```bash
 make demo
 ```
 
-You will see the complete chronological table of DSP messages (`m1 odrl:use`, `m2 ex:access`, `m3 odrl:read`, `A1 agreement`, `A1 transfer`, and `revoke 1.0.0`) transitioning across `ok (forward)`, `warning (forward-notice)`, and `violation (reject)`:
+Starts `fake-idp`, `fake-connector`, the server and the client with a shared file clock, replays two and a half months of lifecycle in seconds and prints the verdict table: the same messages moving through `ok`, `warning` with a `VHub-Verdict` notice, and `violation` as versions are published, enforced and revoked.
 
-```text
-INSTANT                MESSAGE                      CLASS      ACTION          HTTP   VERDICT / CODE
-------------------------------------------------------------------------------------------------------------------------
-2026-10-02T12:00:00Z   m1 odrl:use                  ok         forward         200  -
-2026-10-02T12:00:00Z   m2 ex:access                 ok         forward         200  -
-2026-10-02T12:00:00Z   m3 odrl:read                 violation  reject          400  violation;gate=policy_intake;code="VERDICT_VIOLATION" VERDICT_VIOLATION
-2026-10-03T09:59:55Z   m1 odrl:use                  ok         forward         200  -
-2026-10-03T09:59:55Z   m2 ex:access                 warning    forward-notice  200  warning;gate=policy_intake;code="VERDICT_NOT_IN_HEAD";version="1.0.0";sunset=@1793613600
-2026-10-03T09:59:55Z   m3 odrl:read                 ok         forward         200  -
-...
-2026-11-12T00:00:10Z   A1 transfer                  violation  reject          400  violation;gate=agreement_admission;code="AGREEMENT_VERSION_REVOKED" AGREEMENT_VERSION_REVOKED
-------------------------------------------------------------------------------------------------------------------------
-F6 scenario completed: 19/19 rows verified.
-```
+</Steps>
 
-### 4. Run Unit, Conformance & Traceability Suites
+---
 
-Verify all 61 normative requirements (`REQ-*`) and 63 negative catalog codes (`N-*`):
+## Path B: Start the Laboratory by Hand
+
+<Steps>
+
+### 1. Start the services
+
+Each command in its own terminal, from the repository root:
 
 ```bash
-make test conformance trace
+./bin/fake-idp serve
+./bin/fake-connector
+./bin/alexandria-server -config config/server.yaml
+./bin/alexandria-client -config config/client.yaml
 ```
+
+On first start the server creates its signing key and a laboratory TLS certificate under `var/`, and logs its `hub_did`. Copy that DID into `did_config.hub_did` of `config/client.yaml` before starting the client: the client only accepts credentials issued by the DID it is configured to trust.
+
+### 2. Get tokens
+
+```bash
+ADMIN=$(./bin/fake-idp token --sub ana --admin --ttl 24h)
+STEWARD=$(./bin/fake-idp token --sub sergio --ttl 24h)
+```
+
+### 3. Create a namespace and a steward
+
+```bash
+curl -k -X POST https://127.0.0.1:8443/v1/namespaces \
+  -H "Authorization: Bearer $ADMIN" \
+  -d '{"slug":"demo","title":"Demo data space"}'
+
+curl -k -X POST https://127.0.0.1:8443/v1/namespaces/demo/stewards \
+  -H "Authorization: Bearer $ADMIN" \
+  -d '{"iss":"http://127.0.0.1:9400","sub":"sergio","label":"Sergio"}'
+```
+
+### 4. Check both sides
+
+```bash
+curl -k https://127.0.0.1:8443/v1/namespaces
+curl http://127.0.0.1:9090/status
+```
+
+The client reports `Onboarding` until the namespace publishes its first version.
 
 </Steps>
 
@@ -77,117 +94,25 @@ Prefer a browser? `make build-gui` embeds the **[Alexandria Console](../vhub/con
 </Callout>
 
 <Callout type="info">
-Want to run `alexandria-server` and `alexandria-client` step by step by hand? Jump to the **[Incremental Tutorials](../tutorials)** section!
+Continue with the **[tutorials](../tutorials)** to publish a release and send DSP traffic through the proxy.
 </Callout>
 
 ---
 
-## Path B: Full Identity, OIDC & Wallet Stack (`Taskfile`)
-
-For developing with `cmd/alexandria`, Zitadel OIDC, Caddy TLS, PostgreSQL, and external wallets (**Fafnir** or **Eclipse EDC IdentityHub**), use `task dev:auto`:
-
-```bash
-# 1. On a fresh machine, trust the local CA once (requires sudo):
-task tls:trust
-
-# 2. Start the full stack with automatic orchestration:
-task dev:auto
-```
-
-`task dev:auto` automatically:
-1. Generates and verifies the root Certificate Authority (CA) in `/.certs/`.
-2. Frees internal port `1234` if held by a stale process.
-3. Starts Docker containers (`postgres`, `caddy`, `zitadel`, `fafnir-wallet`).
-4. Runs `scripts/zitadel-bootstrap.sh` to provision OIDC clients and populate `.env`.
-5. Runs `scripts/fafnir-bootstrap.sh` to provision the default Ed25519 key and DID.
-6. Starts `cmd/alexandria` with live reload via `air`.
-
----
-
-## Alternative Wallet Configurations
-
-<Tabs items={['Eclipse EDC IdentityHub', 'Fafnir with HashiCorp Vault']}>
-
-<Tab value="Eclipse EDC IdentityHub">
-
-Alexandria supports **Eclipse EDC IdentityHub** (including participant management, JWK/PEM keypairs, VC 1.0/2.0 normalization, and DCP credential requests):
-
-```bash
-# 1. Start the IdentityHub container on ports 8181 and 8182:
-task identityhub:up
-
-# 2. Launch Alexandria pointing to IdentityHub (or use config/config-ih.yaml):
-ALEXANDRIA_WALLET_CONFIG_WALLET=IdentityHub \
-ALEXANDRIA_WALLET_CONFIG_API_HTTP_PORT=8181 \
-task dev
-```
-
-To stop IdentityHub: `task identityhub:down`.
-
-</Tab>
-
-<Tab value="Fafnir with HashiCorp Vault">
-
-By default, Fafnir stores keys on a Docker volume. To run Fafnir backed by **HashiCorp Vault**:
-
-```bash
-# 1. Start Vault and seed root tokens:
-task vault:up
-
-# 2. Provision the wallet identity inside Vault:
-task wallet:bootstrap
-
-# 3. Start Alexandria:
-task dev
-```
-
-Vault UI is available at `http://127.0.0.1:8200` with root token `alexandria-dev-root`. To return Fafnir to file storage: `task vault:down`.
-
-</Tab>
-
-</Tabs>
-
----
-
-## Verifying the Identity & API Stack
-
-Once `task dev:auto` is running, verify the endpoints:
-
-### 1. Interactive Swagger / OpenAPI UI
-Open the built-in Swagger UI in your browser:
-```text
-https://alexandria.127.0.0.1.nip.io:8443/docs
-```
-Raw specifications are served at `/openapi.json` and `/openapi.yaml`.
-
-### 2. Web Portal & Authentication Login
-Navigate to:
-```text
-https://alexandria.127.0.0.1.nip.io:8443/api/v1/auth/login
-```
-Log in using:
-- **Username:** `admin@alexandria.auth.127.0.0.1.nip.io`
-- **Password:** `Password1!`
-
-### 3. DID Document & Health Probes
-```bash
-curl -k https://alexandria.127.0.0.1.nip.io:8443/.well-known/did.json
-curl -k https://alexandria.127.0.0.1.nip.io:8443/healthz
-curl -k https://alexandria.127.0.0.1.nip.io:8443/readyz
-```
-
----
-
-## Operational Cheat Sheet
+## Command Cheat Sheet
 
 | Action | Command |
 |:---|:---|
-| **Build `vhub` binaries** | `make build` |
-| **Run F6 interactive demo** | `make demo` |
-| **Run conformance & traceability** | `make conformance trace` |
-| **Start full SSI stack (`alexandria`)** | `task dev:auto` |
-| **Start local Fumadocs server** | `task docs:dev` |
-| **View Caddy / Zitadel / Wallet logs** | `task tls:logs` / `task auth:logs` / `task wallet:logs` |
-| **Open Postgres Shell** | `task db:psql` |
-| **Open Zitadel Console** | `task auth:console` |
-| **Reset Database / Auth / Wallet** | `task db:reset` / `task auth:reset` / `task wallet:reset` |
+| Build the binaries | `make build` |
+| Build with the embedded console | `make build-gui` |
+| Unit, contract and architecture tests | `make test` |
+| Conformance battery | `make conformance` |
+| End-to-end F6 scenario | `make e2e` |
+| F6 demo table | `make demo` |
+| Traceability matrix | `make trace` |
+| Format, lint, test, conformance and trace | `make check` |
+| Console development server | `make gui-dev` |
+| Jupyter tutorials | `make tutorial` |
+| Documentation site | `make docs-dev` |
+
+Every target has a `task` equivalent (`task build`, `task build:gui`, `task gui:dev`, …).

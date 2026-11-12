@@ -1,107 +1,66 @@
 ---
-title: Testing, Archtest & CI/CD
-description: Testing strategies, Makefile and Taskfile workflows, AST architectural enforcement, and GitHub Actions pipelines.
+title: Testing & CI
+description: Build and test targets, test conventions, architecture tests and the GitHub Actions pipeline of Alexandria.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
-# Testing, Archtest & CI/CD
-
-Alexandria uses strict, multi-layered quality gates across unit tests, architectural AST tests, normative conformance tests, and live container integration suites.
+# Testing & CI
 
 ---
 
-## 1. Vocabulary Hub Test Suite (`Makefile`)
+## 1. Targets
 
-All `vhub` (`alexandria-server`, `alexandria-client`, `alexandriac`, `internal/core`, `internal/dsl`) tests run without external containers:
+`Makefile` and `Taskfile.yaml` expose the same workflow.
 
-```bash
-# 1. Build alexandria-server, alexandria-client, and fake-connector into ./bin:
-make build
-
-# 2. Run all unit, contract, and hexagonal architecture tests:
-make test
-
-# 3. Run the full conformance suite (T-DOC-*, T-SYS-*, 63 N-<CODE> tests, and TestE2E_F6):
-make conformance
-
-# 4. Run only the real-binary Scenario F6 end-to-end test:
-make e2e
-
-# 5. Run the interactive F6 demo and print the 19-row verdict table:
-make demo
-
-# 6. Verify 100% requirement & catalog coverage and regenerate TRACEABILITY.md:
-make trace
-```
-
-### Architectural Gate (`internal/archtest`)
-Included automatically in `make test` and `task test`, `internal/archtest/arch_test.go` verifies:
-- **Hexagonal Layer Isolation:** `domain` packages never import `app` or `adapters`; `app` packages never import `adapters`; `internal/server` and `internal/client` never import each other; `internal/dsl` never imports `server`, `client`, `clock`, or `testkit`.
-- **Dependency Allowlist (`DP-1`):** Ensures no unauthorized third-party packages enter the `vhub` dependency tree.
-- **Deterministic Clock Enforcement (`DP-9`):** Scans the Go AST of all `vhub` production packages to guarantee `time.Now()` is never called outside `internal/clock`.
+| Make | Task | What it does |
+|:---|:---|:---|
+| `make build` | `task build` | Builds the five binaries into `bin/`. |
+| `make build-gui` | `task build:gui` | Builds the console and embeds it in the server and the client (`-tags gui`). |
+| `make fmt` | `task fmt` | `gofumpt -w .` |
+| `make lint` | `task lint` | `golangci-lint run` |
+| `make test` | `task test` | All tests with the race detector and a coverage profile. |
+| `make cover` | `task cover` | Opens the coverage report. |
+| `make conformance` | `task conformance` | The conformance battery. |
+| `make e2e` | `task e2e` | The end-to-end F6 scenario. |
+| `make demo` | `task demo` | The F6 demo table. |
+| `make trace` | `task trace` | Regenerates and verifies the traceability matrix. |
+| `make check` | — | `fmt`, `lint`, `test`, `conformance`, `trace`. |
+| `make vuln` | `task vuln` | `govulncheck`. |
+| `make gui-dev` | `task gui:dev` | Console development server. |
+| `make docs-dev` | `task docs:dev` | Documentation development server. |
+| `make tutorial` | `task tutorial` | JupyterLab with the notebooks. |
 
 ---
 
-## 2. Identity & Wallet Test Suite (`Taskfile.yaml`)
+## 2. Test Conventions
 
-### Unit Tests & Coverage
-Executes unit tests across the entire repository with race detection and `-tags=jwx_es256k`, generating `coverage.out`:
+- **Granular tests.** One behaviour per test; fixtures, stubs and helpers sit at the top of the file, each with a one-line comment.
+- **Requirement tests** are named `TestT_<AREA>_<NNN>_<Behaviour>` and are picked up by the traceability generator.
+- **Negative cases** are named after their code (`N-<CODE>`).
+- **No wall clock.** Tests inject a clock; only `internal/clock` may read the system time.
+- **In-process doubles** from `internal/testkit` (in-memory stores, a fake identity provider, a fake upstream) let most tests run without processes or ports.
+- **Comments.** Every file starts with a two-line header; every function and type has one line.
 
-```bash
-task test
-task cover
-```
-
-### Live Wallet Integration Tests (`//go:build integration`)
-Integration tests verify `internal/ssi-auth/fafnir` and `internal/ssi-auth/identityhub` against live Docker containers (and skip gracefully via `t.Skip` if the target container is unreachable):
-
-```bash
-# Run all integration tests:
-task test:integration
-
-# Test Fafnir wallet adapter specifically:
-task test:integration:fafnir
-
-# Test Eclipse EDC IdentityHub adapter specifically:
-task test:integration:identityhub
-
-# Run both unit and integration suites:
-task test:all
-```
-
-*(When running `go test` manually for integration suites, always pass `-tags="integration,jwx_es256k"`.)*
+<Callout type="info">
+The default build has no console: tests and CI need only Go. `internal/webui` is tested against an in-memory build, and a separate test checks that nothing is mounted without the `gui` tag.
+</Callout>
 
 ---
 
-## 3. Code Quality & Linters
+## 3. Architecture Tests
 
-Before opening a pull request, run the full verification pipeline:
-
-```bash
-task check
-```
-
-`task check` executes:
-1. **`task fmt`:** Formats all Go files with `gofumpt`.
-2. **`task lint`:** Runs static analysis with `golangci-lint`.
-3. **`task test`:** Runs the unit test suite with the race detector.
-
-Additional verification commands:
-```bash
-# Verify go.mod / go.sum are clean:
-task tidy
-
-# Scan dependencies for known CVEs with govulncheck:
-task vuln
-```
+`internal/archtest` fails the build when a dependency rule is broken: layers pointing outward, the two contexts importing each other, a module outside the `DP-1` allow-list, a wall-clock read outside `internal/clock`, or a capability appearing on the hot path. See the [architecture overview](../architecture).
 
 ---
 
-## 4. Continuous Integration (GitHub Actions)
+## 4. Continuous Integration
 
-1. **`ci.yaml`:**
-   - Runs on every push to `main` and all Pull Requests.
-   - Verifies `go mod tidy` cleanliness, `gofumpt` formatting, `go vet`, `golangci-lint`, race-enabled unit tests, `govulncheck`, and binary compilation.
-2. **`deploy-docs.yaml`:**
-   - Builds the static Next.js / Fumadocs portal (`task docs:build`) and deploys it to GitHub Pages at `https://ging.github.io/alexandria/`.
+`.github/workflows/ci.yaml` runs on pushes to `main` and on pull requests:
+
+| Job | Steps |
+|:---|:---|
+| `check` | `go mod tidy` leaves no diff · `gofumpt -l .` is empty · `go vet ./...` · `golangci-lint run` · `go test -race ./...` · `go run ./conformance/trace` · `govulncheck`. |
+| `build` | `make build`. |
+
+`.github/workflows/deploy-docs.yaml` builds this site and publishes it to GitHub Pages.

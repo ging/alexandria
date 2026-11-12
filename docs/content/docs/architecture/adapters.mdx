@@ -1,66 +1,54 @@
 ---
-title: Wallet Adapters
-description: Comparing and configuring the Fafnir and Eclipse EDC IdentityHub wallet adapters in Alexandria.
+title: Adapters
+description: Driving and driven adapters of alexandria-server and alexandria-client and the ports they implement.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
-
-# Wallet Adapters
-
-Alexandria provides two production-grade driven adapters implementing the `wallet.Wallet` port under `internal/ssi-auth/`.
+# Adapters
 
 ---
 
-## Feature Comparison
+## Server (`internal/server/adapters`)
 
-| Capability | Fafnir (`internal/ssi-auth/fafnir`) | Eclipse EDC IdentityHub (`internal/ssi-auth/identityhub`) |
-|:---|:---:|:---:|
-| **DID Methods** | `did:jwk`, `did:web` | `did:web` (multi-participant) |
-| **Key Formats** | PEM (RSA, ECDSA, Ed25519) | JWK (`publicKeyJwk`), PEM (`publicKeyPem`), & Vault aliases |
-| **Key Rotation & Revocation** | Stubbed (`ErrUnsupported`) | Full support (`RotateKey` with overlap duration, `RevokeKey`) |
-| **DID Service Endpoints** | Stubbed (`ErrUnsupported`) | Full support (`AddServiceEndpoint`, `RemoveServiceEndpoint`) |
-| **Credential Formats** | W3C VC (OID4VCI / OID4VP) | VC 1.0 (JWT) & VC 2.0 (JOSE), normalized via `normalize.go` |
-| **Credential Issuance Protocol** | OID4VCI & OID4VP | Dataspace Credential Protocol (**DCP**) & direct storage |
-| **Participant Contexts** | Single-tenant | Full multi-participant lifecycle (`CreateParticipant`, tokens, states) |
-| **Default Port** | `7003` | `8181` (Identity API) / `8182` (DID / Credentials) |
-
----
-
-## 1. Fafnir (`internal/ssi-auth/fafnir`)
-
-**Fafnir** is a lightweight sovereign wallet focused on rapid local development and OID4VCI/OID4VP credential flows:
-- Configured by default in `config/config.yaml` on port `7003`.
-- Bootstrapped automatically via `task wallet:bootstrap` (`scripts/fafnir-bootstrap.sh`).
-- Can store keys on a local Docker volume or inside **HashiCorp Vault** (`task vault:up`).
-
-```yaml
-wallet_config:
-  wallet: Fafnir
-  api:
-    http:
-      protocol: "http"
-      url: "127.0.0.1"
-      port: "7003"
-```
+| Adapter | Kind | Role |
+|:---|:---|:---|
+| `http_v1` | Driving | The `/v1` management API: bearer authentication, routing and compact JSON-LD projections. |
+| `http_pub` | Driving | The `/pub` tree, routed by path shape, plus the embedded context and vocabulary. |
+| `http_ui` | Driving | The embedded console under `/ui/` (with the `gui` build tag). |
+| `httpx` | Shared | Problem documents with `@context`, status mapping and the `Date` header driven by the hub clock. |
+| `scheduler` | Driving | Periodic listing re-issuance and signing-key checks. |
+| `jwt_jwks` | Driven | Token validation `A1`–`A5` with JWKS discovered through OIDC. |
+| `sqlite` | Driven | The `Store` port; immutable tables protected by triggers. |
+| `blob_fs` | Driven | Content-addressed blobs on disk. |
+| `signer_file` | Driven | The Ed25519 hub key in a PEM file. |
+| `did_resolver` | Driven | `did:key` and `did:web` resolution. |
+| `fetch_http` | Driven | Proxy vocabulary upstreams, with timeouts, redirect limits and the host allow-list. |
+| `compiler_poc` | Driven | Draft compiler for the JSON draft format (`DP-6`). |
+| `compiler_dsl` | Driven | Draft compiler for the YAML profile language. |
 
 ---
 
-## 2. Eclipse EDC IdentityHub (`internal/ssi-auth/identityhub`)
+## Client (`internal/client/adapters`)
 
-**Eclipse EDC IdentityHub** is the enterprise dataspace identity manager used across Eclipse Dataspace Components (EDC), Tractus-X, and Catena-X ecosystems:
-- Communicates with the IdentityHub Management & Identity APIs (`edc_client.go`).
-- Automatically base64url-encodes participant context IDs where required by the EDC REST specification.
-- Normalizes heterogeneous credential representations (compact JWTs, JSON-LD credentials, and VC 2.0 JOSE envelopes) in `internal/ssi-auth/identityhub/normalize.go`.
-- Comes with a dedicated configuration file `config/config-ih.yaml` and a comprehensive Postman collection under `postman/collections/Alexandria/Ssi-auth/IdentityHub/`.
+| Adapter | Kind | Role |
+|:---|:---|:---|
+| `proxy_dsp` | Driving | The traffic listeners. Uses the HTTP transport directly so forwarded bytes and headers are untouched. |
+| `status_http` | Driving | The admin API. |
+| `http_ui` | Driving | The embedded console under `/ui/` on the admin listener. |
+| `sync_timer` | Driving | Triggers synchronization, garbage collection and the state watcher. |
+| `http_hub` | Driven | `HubAPI` over HTTPS. |
+| `did_resolver` | Driven | Hub DID document resolution. |
+| `evaluator_poc` | Driven | Offline JSON-LD context check and JSON Schema evaluation (`DP-7`). |
+| `store_sqlite` | Driven | Continuity, rules and agreements. |
+| `package_fs` | Driven | Verified packages in atomic directories. |
+| `events` | Driven | The event sink. |
+| `metrics` | Driven | The OpenMetrics registry. |
 
-### Running with IdentityHub
+---
 
-```bash
-# 1. Start the IdentityHub container:
-task identityhub:up
+## Replacing an Adapter
 
-# 2. Run Alexandria using IdentityHub:
-ALEXANDRIA_WALLET_CONFIG_WALLET=IdentityHub \
-ALEXANDRIA_WALLET_CONFIG_API_HTTP_PORT=8181 \
-task dev
-```
+Because use cases depend only on ports, swapping an implementation is a change in `module.go`:
+
+- `compiler: poc` or `dsl` selects the draft compiler.
+- `-clock-file` replaces the system clock with a file clock for deterministic replays.
+- Tests wire in-memory doubles from `internal/testkit` behind the same ports.

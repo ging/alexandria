@@ -1,72 +1,85 @@
 ---
 title: Bounded Contexts
-description: In-process module lifecycle, contracts, and boundary enforcement across Alexandria and Vocabulary Hub.
+description: "The server and client bounded contexts of Alexandria: their domain, use cases and ports."
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
 # Bounded Contexts
 
-Alexandria organizes features into distinct bounded contexts located in `internal/`. Each context is self-contained and exposes a clean composition contract (`module.go`).
+Each side is a self-contained module with the same internal shape: `domain/`, `app/`, `adapters/` and a `module.go` that wires them. The standalone binaries and the in-process tests build the module the same way.
 
 ---
 
-## Module Contract
+## Server (`internal/server`)
 
-Every bounded context implements a consistent lifecycle interface:
+### Domain
 
-```go
-type Module interface {
-    Name() string
-    Start(ctx context.Context) error
-    Close() error
-}
-```
+`Namespace`, `Steward`, `Principal`, `Vocabulary` and `Revision`, `Draft`, `Candidate`, `Event`, and the authorization decision of §3.5 as a pure function of the operation, the principal and steward membership.
 
-Each module exposes:
-- **`Deps` struct:** Explicit external dependencies and optional port overrides (e.g., `Clock`, `Signer`, `Auth`, `DIDResolver`, `Wallet`, `Router`).
-- **`New(deps Deps) (*Module, error)`:** Assembles internal domain services, repositories, and default adapters.
-- **`Start(ctx context.Context)`:** Spawns background workers (e.g., listing re-issuance scheduler in `server`, sync timer in `client`, wallet linking in `ssi-auth`) and registers HTTP routes.
-- **`Close()`:** Gracefully cancels background workers, flushes buffers, and closes database connections.
+### Use cases (`app`)
 
----
+| Use case | Responsibility |
+|:---|:---|
+| `Namespaces` | Create and read namespaces; assign, list and remove stewards. |
+| `Vocabularies` / vocabulary reader | Register vocabularies, store content, refresh proxies; a separate read path with no upstream fetcher. |
+| `Authoring` | Drafts: create, replace under `If-Match`, validate, propose. |
+| `Release` | Approve or reject a candidate; plan dates, check invariants, publish and sign. |
+| `Revocation` | Revoke a version under `REV-1`–`REV-4` and issue a listing. |
+| `Listing` | Issue and serve the signed listing and records. |
+| `Publication` | Resolve `/pub` routes. |
+| `Query` | Events and candidates. |
 
-## Catalog of Bounded Contexts
+### Ports
 
-### 1. `server` (`internal/server`)
-Implements the **Vocabulary Hub Server (`C-HUB`)**:
-- **Application Use Cases (`internal/server/app`):** `Authoring` (drafts & candidate compilation), `Release` (approval & 9-row date calculation), `Revocation`, `Listing` (JCS signing & DID key publication), `Publication` (`/pub` immutable serving & head redirects), and `Query`.
-- **Driven Adapters (`internal/server/adapters`):** `sqlite` (with immutability triggers), `blob_fs` (SHA-256 content-addressed storage), `compiler_dsl` (`eunomia.profiles/v1` YAML compiler), `compiler_poc` (JSON draft compiler), `signer_file` (Ed25519 PKCS#8 PEM with controlled key rotation), `scitt_fake`, `auth_static`, and `scheduler`.
-- **Driving Adapters:** `http_v1` (`/v1/*`), `http_pub` (`/pub/*`), and `http_did` (`/.well-known/did.json`).
-
-### 2. `client` (`internal/client`)
-Implements the **Edge Validation & Sync Sidecar (`C-CLI`)**:
-- **Application Use Cases (`internal/client/app`):** `Sync` (`S1`–`S13` verification pipeline), `HubTrust` (`did:web` resolution & caching), `Edge` (hot-path route matching & gate evaluation), `Agreements` (capture, retention & admission), `Audit` (passive catalog audit), and `Status`.
-- **Domain (`internal/client/domain`):** Pure state machine (`onboarding`, `normal`, `degraded`, `fail_closed`), route table & 16 default DSP routes, `Classify` engine, and RFC 9651 `VHub-Verdict` serializer.
-- **Adapters (`internal/client/adapters`):** `proxy_dsp` (byte-for-byte L7 proxy), `status_http` (isolated admin & Prometheus metrics listener), `store_fs` (atomic `tmp`+`rename` persistence), `evaluator_poc`, `http_hub`, `did_web`, `receipt_scitt_fake`, `events`, and `sync_timer`.
-
-### 3. `dsl` (`internal/dsl`)
-Implements the **`eunomia.profiles/v1` Language Compiler**:
-- Parses and validates `OdrlProfile` and `SpaceProfile` YAML streams across levels `N1`–`N5`.
-- Generates deterministic `vocab.ttl`, `context.jsonld`, `shapes.ttl`, `schema.json`, `cedar-mapping.json`, `cedar.schema`, `prof.ttl`, `spec.html`, `space/shacl-union.ttl`, and `space/space-lock.json`.
-
-### 4. `ssi-auth` (`internal/ssi-auth`)
-Manages decentralized identity, cryptographic keys, verifiable credentials, and participant contexts:
-- Exposes `/.well-known/did.json` and `/api/v1/wallet/*`.
-- Defines the unified `wallet.Wallet` port (`internal/ssi-auth/wallet/ports.go`).
-- Implements driven adapters for **Fafnir** (`internal/ssi-auth/fafnir`) and **Eclipse EDC IdentityHub** (`internal/ssi-auth/identityhub`).
-
-### 5. `auth-proxy` (`internal/auth-proxy`)
-Secures the HTTP boundary of `cmd/alexandria`:
-- Terminates OpenID Connect (OIDC) authorization code flows with PKCE against **Zitadel**.
-- Issues and verifies encrypted `HttpOnly` session cookies (`alexandria_session`).
-- Performs local JWKS verification and fallback OAuth2 token introspection.
-
-### 6. `openapi` (`internal/openapi`)
-Serves embedded OpenAPI 3.0 specifications (`/openapi.json`, `/openapi.yaml`) and the interactive **Swagger UI** (`/docs`, `/api/v1/openapi/docs`).
+| Port | Purpose |
+|:---|:---|
+| `NamespaceRepo`, `StewardRepo`, `VocabRepo`, `DraftRepo`, `CandidateRepo`, `ReleaseStore`, `ListingStore`, `EventLog` | Persistence, combined in `Store`. |
+| `BlobStore` | Content-addressed bytes. |
+| `KeySigner` | Signs with the hub key. |
+| `DIDResolver` | Resolves the hub's own DID document. |
+| `UpstreamFetcher` | Downloads a proxy vocabulary. |
+| `ProfileCompiler` | Validates a draft and compiles its package. |
 
 ---
 
-## Bridging `ssi-auth` & `auth-proxy` into `vhub`
+## Client (`internal/client`)
 
-Because `internal/server/module.go` and `internal/client/module.go` accept optional port interfaces in `Deps` (`Signer`, `Auth`, `DIDResolver`), you can wire `internal/ssi-auth` and `internal/auth-proxy` directly into `alexandria-server` and `alexandria-client` when moving from a laboratory setup (`DP-3`, `DP-4`, `DP-5`) to a production dataspace deployment.
+### Domain
+
+Rules and rule selection, the state machine, classification, the action tables, the admission table, the snapshot of in-force versions, retention, and the `VHub-Verdict` header. All are pure functions: `Decide` receives everything a decision depends on.
+
+### Use cases (`app`)
+
+| Use case | Responsibility |
+|:---|:---|
+| `Sync` | The `S1`–`S13` pipeline and the atomic acceptance of a listing. |
+| `HubTrust` | The cached hub DID document and proof verification `V0`–`V4`. |
+| `Edge` | The hot path: decide, forward or reject, capture agreements, feed the audit, emit events. |
+| `Explainer` | The same decision without effects. |
+| `Rules` | Rule-set CRUD with optimistic concurrency. |
+| `Agreements` | The agreement registry and revocation notices. |
+| `Audit` | The passive audit buffer and report. |
+| `Status` | Status documents, the clock-skew estimate and state-change events. |
+| `GC` | Package collection. |
+
+### Ports
+
+| Port | Purpose |
+|:---|:---|
+| `HubAPI` | Listing, manifests and package files. |
+| `DIDResolver` | Hub DID document. |
+| `Evaluator` | Evaluates a message against the artefacts of one package. |
+| `ContinuityStore`, `PackageStore`, `RuleStore`, `AgreementRepo` / `AgreementReader` | Persistent state. |
+| `EventSink`, `Metrics` | Observability. |
+| `Upstream` | The connector behind the proxy. |
+
+<Callout type="info">
+The published snapshot is immutable and swapped atomically, so a request always sees one consistent listing, one set of packages and one rule-set revision.
+</Callout>
+
+---
+
+## Profile Language (`internal/dsl`)
+
+The `eunomia.profiles/v1` compiler is independent of both contexts. `alexandriac` uses it directly, and the server reaches it through the `compiler_dsl` adapter when `compiler: dsl` is configured.

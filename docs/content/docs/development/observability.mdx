@@ -1,0 +1,96 @@
+---
+title: Observability
+description: Structured logging, OpenTelemetry export and trace correlation, client events and metrics in Alexandria.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Observability
+
+---
+
+## 1. Structured Logs
+
+Every binary (`alexandria-server`, `alexandria-client`, `alexandriac`, `fake-idp`, `fake-connector`) logs through `internal/telemetry`. Records follow the OpenTelemetry Log Data Model:
+
+```json
+{
+  "timestamp": "2026-11-11T15:59:18.967034Z",
+  "severity_text": "INFO",
+  "severity_number": 9,
+  "body": "server listening",
+  "service.name": "alexandria-server",
+  "service.version": "0.1.0-poc",
+  "listen": "127.0.0.1:8443",
+  "base": "https://127.0.0.1:8443"
+}
+```
+
+- `timestamp` comes from the injected clock, so logs are consistent with a file clock during replays.
+- HTTP access records add `http.request.method`, `url.path`, `http.response.status_code`, `duration_ms`, `trace_id` and `span_id`.
+- Failures carry the catalog code, so a log line can be matched to the [code catalog](../vhub/error-catalog).
+
+Inner layers log only through the standard `log/slog` and `internal/core/logx`; the telemetry package is wired at the composition root, which keeps the dependency rules intact.
+
+| Setting | Values |
+|:---|:---|
+| `observability.log_level` / `-log-level` | `debug`, `info`, `warn`, `error`, or `none` to silence. |
+| `observability.log_format` / `-log-format` | `auto` (text on a terminal, JSON otherwise), `json`, `text`. |
+
+---
+
+## 2. OpenTelemetry Export and Tracing
+
+Set `observability.otlp_endpoint` (or the standard `OTEL_EXPORTER_OTLP_ENDPOINT` variable) to export logs and traces over OTLP/HTTP to a collector. `otlp_insecure`, `service_name` and `environment` refine the export.
+
+An HTTP middleware creates a server span per request and honours the W3C `traceparent` header. On the client proxy the trace context is read from the incoming request without modifying the forwarded bytes (`REQ-SYS-003`).
+
+---
+
+## 3. Hub Events
+
+The hub's append-only event log is its audit trail: `GET /v1/events` for the admin and `GET /v1/namespaces/{ns}/events` for stewards. See the [server reference](../vhub/server).
+
+---
+
+## 4. Client Events
+
+The client appends events to `events.sink` as JSON lines: `vhub.verdict`, `vhub.sync`, `vhub.state`, `vhub.agreement`, `vhub.audit`, `vhub.rules` and `vhub.gc`. A verdict event:
+
+```json
+{
+  "type": "vhub.verdict",
+  "ts": "2026-10-10T12:00:00.120Z",
+  "listener": "dsp-ingress",
+  "rule": "contract-request",
+  "rules_revision": 1,
+  "message": "ContractRequestMessage",
+  "gate": "policy_intake",
+  "mode": "enforce",
+  "state": "Transition",
+  "classification": "warning",
+  "action": "forward-notice",
+  "evaluated": ["2.0.0", "1.0.0"],
+  "matched": "1.0.0",
+  "sunset": "2026-11-02T10:00:00Z",
+  "codes": ["VERDICT_NOT_IN_HEAD"]
+}
+```
+
+<Callout type="info">
+Rules in `observe` mode emit nothing. Use `shadow` to measure the effect of a rule before switching it to `enforce`.
+</Callout>
+
+---
+
+## 5. Client Metrics and Probes
+
+`GET /metrics` on the admin listener exposes OpenMetrics:
+
+| Metric | Type | Meaning |
+|:---|:---|:---|
+| `vhub_classifications_total{rule,gate,version,result}` | counter | Gate classifications. |
+| `vhub_listing_age_seconds` | gauge | Age of the accepted listing. |
+| `vhub_request_latency_seconds` | summary | Latency of proxied requests (`_sum`, `_count`). |
+
+`GET /healthz` reports liveness and `GET /readyz` readiness (ready in `Active`, `Transition` and `Degraded`).

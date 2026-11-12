@@ -1,5 +1,5 @@
 {
-  "title": "Architecture Decisions (ADRs)",
+  "title": "Decisions (ADRs)",
   "pages": [
     "index",
     "0001-bounded-contexts-as-in-process-modules",
@@ -10,6 +10,7 @@
     "0006-one-image-three-deployment-shapes",
     "0007-unified-wallet-port-and-identityhub-adapter",
     "0008-enriched-domain-models-mutation-queries-and-structured-errors",
-    "0009-vhub-poc-decisions-and-open-questions"
+    "0009-vhub-poc-decisions-and-open-questions",
+    "0010-vhub-v030-decisions-and-open-questions"
   ]
 }

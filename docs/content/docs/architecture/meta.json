@@ -1,9 +1,8 @@
 {
-  "title": "Architecture & Wallets",
+  "title": "Architecture",
   "pages": [
     "index",
     "bounded-contexts",
-    "wallet-port",
     "adapters"
   ]
 }

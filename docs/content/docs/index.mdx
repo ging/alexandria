@@ -1,6 +1,6 @@
 ---
 title: Introduction
-description: Official documentation, incremental tutorials, and specification reference for the Alexandria Vocabulary Hub ecosystem.
+description: Documentation of Alexandria, the reference implementation of the Vocabulary Hub specification v0.3.0 for dataspaces.
 ---
 
 import { Card, Cards } from 'fumadocs-ui/components/card';
@@ -8,22 +8,32 @@ import { Callout } from 'fumadocs-ui/components/callout';
 
 # Alexandria Documentation
 
-Welcome to the **Alexandria** documentation portal. Alexandria is a **Vocabulary Hub and Sovereign Identity Ecosystem** engineered to deliver semantic interoperability, profile compilation, runtime term dereferencing, edge DSP traffic validation, and delegated cryptographic trust for modern dataspaces.
+**Alexandria** is the reference implementation of the **Vocabulary Hub specification v0.3.0**: a hub that governs and publishes the vocabularies and policy profiles of a dataspace, and an edge proxy that validates Dataspace Protocol (DSP) traffic against them without contacting the hub on the request path.
 
 <Callout type="info">
-Alexandria combines two complementary planes in a single Go repository:
-1. **Vocabulary Hub & Edge Sidecar (`alexandria-server`, `alexandria-client`, `alexandriac`):** Complete reference implementation of the *Vocabulary Hub v0.2.1* specification and the `eunomia.profiles/v1` YAML profile language.
-2. **Identity, SSI & Auth Gateway (`cmd/alexandria`):** Decentralized Identity (`did:web` / `did:jwk`), unified external wallet management (**Fafnir** and **Eclipse EDC IdentityHub**), DCP credential flows, and node-terminated **Zitadel** OIDC authentication.
+The repository is a single Go module with three binaries and a web console:
+
+- **`alexandria-server`** (`C-HUB`) — namespaces and stewards, vocabulary registry, release lifecycle, signed credentials and immutable publication.
+- **`alexandria-client`** (`C-CLI`) — L7 edge proxy in front of an unmodified DSP connector, with verified synchronization and a dynamic rule set.
+- **`alexandriac`** — offline compiler of the `eunomia.profiles/v1` profile language.
+- **Console** (`gui/`) — browser application for both binaries, optionally embedded in them under `/ui/`.
+</Callout>
+
+<Callout type="warn">
+**Laboratory notice (`DP-14`).** The sample configurations, the `fake-idp` identity provider, the `fake-connector`, local signing keys and self-signed TLS certificates are for laboratory and proof-of-concept use. They are not a production deployment.
 </Callout>
 
 ---
 
-## Core Capabilities
+## What the System Does
 
-1. **Profile Language & Deterministic Compiler (`alexandriac`):** Author ODRL policy profiles (`OdrlProfile`) and dataspace governance bindings (`SpaceProfile`) in YAML (`eunomia.profiles/v1`). Automatically validate across 5 normative levels (`N1`–`N5`) and generate `vocab.ttl`, `context.jsonld`, `shapes.ttl`, `schema.json`, `cedar.schema`, `prof.ttl`, `spec.html`, and `space-lock.json`.
-2. **Vocabulary Hub Server (`alexandria-server`):** Authoring, candidate proposal, multi-role release approval (`editor`, `releaser`, `member`), lifecycle window calculation (`published_at`, `new_content_from`, `enforced_from`, `revoked_from`), JCS + Ed25519 cryptographic signing, SQLite immutability triggers, and content-addressed `/pub` distribution.
-3. **Edge Validation & Sync Sidecar (`alexandria-client`):** Zero-hub-latency L7 Dataspace Protocol (DSP) reverse and forward proxy. Continuously synchronizes and verifies signed listings (`S1`–`S13`), enforces policy and schema gates (`observe`, `shadow`, `enforce`), attaches RFC 9651 `VHub-Verdict` headers, and tracks active contract agreements across version transitions and revocations.
-4. **Sovereign Identity & Unified Wallet Port (`alexandria`):** Cryptographic keys never reside in the application node. Key custody, DID lifecycle, service endpoints, participant contexts, OID4VCI/OID4VP, and DCP requests are delegated via `wallet.Wallet` to **Fafnir** or **Eclipse EDC IdentityHub**, guarded by **Zitadel** OIDC + PKCE.
+1. **Governs releases.** Stewards author a draft, the hub validates it (`N1`–`N5`), freezes it as a candidate and, on approval, computes the lifecycle dates (`published_at`, `new_content_from`, `enforced_from`) and publishes a package.
+2. **Signs everything clients rely on.** Version listings, version records and package manifests are W3C Verifiable Credentials 2.0 secured with `eddsa-jcs-2022`.
+3. **Publishes immutably.** Artefacts under `/pub` are content-addressed and cacheable forever; only head redirects change.
+4. **Validates at the edge.** The client synchronizes and verifies packages in the background (`S1`–`S13`), then classifies each DSP message as `ok`, `warning` or `violation` and acts according to the rule mode (`observe`, `shadow`, `enforce`).
+5. **Migrates without breakage.** A breaking release opens a grace window in which both versions are accepted; messages valid only under the old version are forwarded with a `VHub-Verdict` notice until the new one is enforced.
+
+The implementation covers 81 normative requirements (`REQ-SYS`, `REQ-HUB`, `REQ-CLI`, `REQ-DOC`) and the closed catalog of 77 error and verdict codes.
 
 ---
 
@@ -33,31 +43,31 @@ Alexandria combines two complementary planes in a single Go repository:
   <Card
     title="Getting Started"
     href="./getting-started"
-    description="System overview, prerequisites, 60-second quickstarts for both vhub and the full SSI stack, and configuration reference."
+    description="Components, prerequisites, a quickstart for the demo and the lab, and the configuration reference."
   />
   <Card
-    title="Incremental Tutorials"
+    title="Tutorials"
     href="./tutorials"
-    description="Step-by-step hands-on learning path: from compiling your first YAML profile to running the full F6 lifecycle and managing wallets."
+    description="Hands-on path: compile a profile, govern a release, run the edge proxy, replay the F6 scenario and explore failure cases."
   />
   <Card
-    title="Vocabulary Hub & DSL (vhub)"
+    title="Vocabulary Hub (vhub)"
     href="./vhub"
-    description="Deep-dive into the eunomia.profiles/v1 DSL, alexandria-server governance, alexandria-client edge proxy, and the F5 error catalog."
+    description="Reference for the profile language, alexandria-server, alexandria-client, the console and the code catalog."
   />
   <Card
-    title="Architecture & Wallets"
+    title="Architecture"
     href="./architecture"
-    description="Hexagonal architecture, bounded contexts, archtest enforcement, unified wallet port, and Fafnir vs IdentityHub."
+    description="Hexagonal layout, the two bounded contexts, the shared core and the adapters."
   />
   <Card
-    title="API Reference & Conformance"
+    title="API & Development"
     href="./development"
-    description="Complete REST API catalog, interactive Swagger UI, conformance test suite (61 REQ-*, 64 F5 codes), and CI/CD."
+    description="Endpoints, authentication, observability, conformance suite, testing and CI."
   />
   <Card
-    title="Architecture Decisions (ADRs)"
+    title="Decisions"
     href="./adr"
-    description="Accepted ADRs (0001 through 0008), PoC design decisions (DP-1 to DP-15), and open specification questions (Q1 to Q17)."
+    description="PoC decisions DP-1 to DP-14, open questions and the historical ADRs."
   />
 </Cards>

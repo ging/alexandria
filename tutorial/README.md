@@ -1,6 +1,6 @@
-# Interactive Jupyter Notebook Tutorials — Alexandria (`alexandria`, `alexandria-server`, `alexandria-client`, `alexandriac`)
+# Interactive Jupyter Notebook Tutorials — Alexandria (`alexandria-server`, `alexandria-client`, `alexandriac`)
 
-This directory contains **6 incremental Jupyter Notebooks** (`.ipynb`) that walk end to end through all flows of **Alexandria** (`alexandria`, `alexandria-server`, `alexandria-client`, and `alexandriac`) by sending **real HTTP requests** against the locally compiled Go binaries.
+This directory contains **5 incremental Jupyter Notebooks** (`.ipynb`) that walk end to end through all flows of **Alexandria** (`alexandria-server`, `alexandria-client`, and `alexandriac`) by sending **real HTTP requests** against the locally compiled Go binaries.
 
 Every notebook comes with **pre-captured execution outputs** (`stdout`, interactive HTML widgets, HTTP status codes, `VHub-Verdict` headers, JCS + Ed25519 signed manifests, and JSONL events), so you can browse them directly or re-run them cell by cell.
 
@@ -15,7 +15,6 @@ Every notebook comes with **pre-captured execution outputs** (`stdout`, interact
 | **03** | [`03_alexandria_client_sync_and_dsp_proxy.ipynb`](./03_alexandria_client_sync_and_dsp_proxy.ipynb) | Sidecar **`alexandria-client`**: verified synchronization protocol **`S1`–`S13`**, Admin API (`GET /status`, `GET /versions`, `GET /metrics`), L7 hot-path validation of DSP messages (`ContractRequestMessage`, `ContractOfferMessage`), comparison of `enforce`, `shadow`, and `observe` modes, blocking external `@context` URIs (`CONTEXT_NOT_IN_PACKAGE`), and `vhub.verdict` event emission. |
 | **04** | [`04_f6_lifecycle_transitions_agreements_and_revocation.ipynb`](./04_f6_lifecycle_transitions_agreements_and_revocation.ipynb) | **Full Normative Scenario F6** with deterministic time travel (`clock_file`, `DP-9`) from September to November 2026: `1.0.0 -> 2.0.0` transition, propagation window (`Announced`), grace window (`Transition`) with RFC 9651 `VHub-Verdict: warning;...;sunset=@1793613600`, `urn:uuid:A1` agreement capture on `dsp-egress`, `lease_margin`, agreement continuity after retirement (`Retired`), and transfer blocking after revocation (`AGREEMENT_REVOCATION_SCHEDULED` -> `AGREEMENT_VERSION_REVOKED`). |
 | **05** | [`05_resilience_security_and_negative_cases.ipynb`](./05_resilience_security_and_negative_cases.ipynb) | Closed error catalog **F5 (`N-<CODE>`)**: 9-row approval table invariants (`DATES_GRACE_ON_COMPATIBLE`, `DATES_EMERGENCY_ON_COMPATIBLE`, `DATES_ZERO_GRACE_WITHOUT_EMERGENCY`, `DATES_JUSTIFICATION_REQUIRED`, `DATES_EMERGENCY_WITH_GRACE`), revocation invariants (`REV-1` to `REV-4`), and client operational state machine (`Active -> Degraded -> FailClosed` with `CLIENT_FAIL_CLOSED`) during prolonged Hub outages. |
-| **06** | [`06_alexandria_wallets_fafnir_and_identityhub.ipynb`](./06_alexandria_wallets_fafnir_and_identityhub.ipynb) | Self-Sovereign Identity Gateway **`cmd/alexandria`** (`/api/v1/wallet/*`): wallet linking (`/is-linked`, `/link`, `/info`), asymmetric key lifecycle (`/keys`, `:rotate`), DID and Service Endpoint management (`/did/:id/endpoints`, `:publish`), structured error handling with IdentityHub `originalResponse` (`409 Conflict`), participants (`/participants`), verifiable credentials (`/credential`, `/vcs?type=...`), and DCP protocol (`/dcp/request`). |
 
 ---
 
@@ -42,7 +41,7 @@ task tutorial
 ```
 
 ### 2. Execute and Verify All Notebooks Headlessly in the Terminal
-Executes all 35 code cells across the 6 notebooks against the real Go binaries and updates the outputs in each `.ipynb` file in place:
+Executes every code cell of the notebooks against the real Go binaries and updates the outputs in each `.ipynb` file in place:
 
 ```bash
 make tutorial-exec

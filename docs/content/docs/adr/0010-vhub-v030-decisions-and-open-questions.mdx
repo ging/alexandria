@@ -1,0 +1,92 @@
+---
+title: "0010. Vocabulary Hub v0.3.0 Decisions (DP-1..14) & Open Questions"
+description: "PoC decisions DP-1 to DP-14, implementation decisions, open questions Q18 to Q22 and specification observations for the Vocabulary Hub v0.3.0 implementation."
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# 0010. Vocabulary Hub v0.3.0 Decisions (`DP-1`..`DP-14`) & Open Questions
+
+<Callout type="info">
+**Status:** Accepted &nbsp;|&nbsp; **Date:** 2026-11-11 &nbsp;|&nbsp; Supersedes [0009](./0009-vhub-poc-decisions-and-open-questions)
+</Callout>
+
+## Context
+
+The repository moved from specification v0.2.1 to **v0.3.0**. The new version introduces namespaces and stewards, OAuth 2.0 access tokens validated through JWKS, a vocabulary registry, W3C Verifiable Credentials with `eddsa-jcs-2022` proofs in place of the previous signature envelope, JSON-LD responses and a dynamic client rule set. The earlier identity and wallet prototype was removed.
+
+This record summarizes the decisions under which v0.3.0 was implemented. The authoritative texts are [`DECISIONS.md`](https://github.com/ging/alexandria/blob/main/DECISIONS.md) and [`OPEN_QUESTIONS.md`](https://github.com/ging/alexandria/blob/main/OPEN_QUESTIONS.md).
+
+---
+
+## 1. PoC Decisions
+
+| ID | Topic | Decision |
+|:---|:---|:---|
+| **DP-1** | Stack and layers | One Go module; layers `adapters → app → domain → core`; server and client isolated; a closed allow-list of external modules. All enforced by `internal/archtest`. |
+| **DP-2** | Persistence | SQLite without `cgo` on both sides; content-addressed blobs and atomic package directories on disk; immutable tables guarded by triggers. |
+| **DP-3** | Credentials | An in-repository VC 2.0 + Data Integrity `eddsa-jcs-2022` implementation, verified against the W3C test vector and an independent verification path. |
+| **DP-4** | Identity provider | `fake-idp` serves discovery and JWKS and mints ES256 `at+jwt` tokens; the hub validates them with the real `jwt_jwks` adapter (`A1`–`A5`). |
+| **DP-5** | Hub DID | Default `did:key` derived from the signing key; `did:web` also resolved, with `http://localhost` only when explicitly allowed. |
+| **DP-6** | Draft compiler | `compiler_poc` validates and compiles a JSON draft format through levels `N1`–`N5`. |
+| **DP-7** | Evaluator | `evaluator_poc` checks JSON-LD contexts offline and executes `json-schema` artefacts; `shacl` and `context` roles are reported, not executed. |
+| **DP-8** | Clock | `timex.Clock` is injected everywhere; only `internal/clock` reads the wall clock; a file clock replays long timelines in seconds. |
+| **DP-9** | JSON-LD context | Self-hosted: the hub serves the Appendix A.5 context at `/pub/_vhub/v1/context.jsonld`. |
+| **DP-10** | Initial rules | `deploy/rules.seed.json` holds the 16 rules of the DSP 2025-1 binding and is loaded only into an empty store. |
+| **DP-11** | Configuration | YAML or JSON, in the section layout or the flat specification layout, validated against a schema at startup. |
+| **DP-12** | Head redirect | `GET /pub/{ns}` answers `303` to the head's context file, or to its manifest, for any `Accept`. |
+| **DP-13** | Vocabulary proxy | `https` upstreams with timeouts and redirect limits; `http://localhost` only in the laboratory. |
+| **DP-14** | Laboratory security | Local keys, tokens and self-signed certificates are for laboratory use only. |
+
+---
+
+## 2. Implementation Decisions
+
+1. **Binary names.** `alexandria-server`, `alexandria-client` and `alexandriac`, keeping the package hierarchy of the specification.
+2. **`module.go` per context.** Binaries and in-process tests wire dependencies identically; construction guarantees are part of the types (the hot path has no hub client; `:explain` has no effectful port).
+3. **Direct HTTP transport in the proxy.** A standard reverse proxy would rewrite headers; using the transport directly forwards exact bytes.
+4. **`Date` header from the injected clock.** Makes clock-skew estimation deterministic under a file clock.
+5. **`-hub-ca` flag on the client.** Trusts a laboratory certificate without weakening default TLS verification.
+6. **Offline JSON-LD and the optional DSL compiler.** A loader that never touches the network; `compiler: dsl` enables the YAML profile language.
+7. **OpenTelemetry-compatible logging.** Inner layers use `log/slog` and `logx` only; the composition roots set up `internal/telemetry`.
+
+Later additions under the same rules: the **console** (`gui/`), embedded with the `gui` build tag through `internal/webui` and thin `http_ui` adapters, and the **interactive flow of `fake-idp`** (Authorization Code with PKCE) used for browser sign-in.
+
+---
+
+## 3. Open Questions (`Q18`–`Q22`)
+
+None blocks v1.
+
+| ID | Question | Treatment |
+|:---|:---|:---|
+| **Q18** | Registering the context IRI on w3id.org. | Self-hosted context meanwhile (`DP-9`). |
+| **Q19** | `"providerPid": null` in DSP error bodies when the request has none. | Implemented as specified. |
+| **Q20** | A four-eyes rule for approval. | Not applied: any steward may propose and approve. |
+| **Q21** | Expiry of entries in the client agreement registry. | Entries are kept indefinitely. |
+| **Q22** | Host allow-list for proxy vocabularies. | `vocab.proxy_allow`, plus the laboratory-only localhost option. |
+
+---
+
+## 4. Specification Observations
+
+| ID | Observation | Handling |
+|:---|:---|:---|
+| **G9** | The A.5 context redefines `iss` and `sub`, which VC 2.0 protects. | The context is served unmodified; a test pins the conflict to exactly those two terms. |
+| **G10** | A listing re-issued just after `enforced_from` already omits the retired version, while the client must still accept it for the lease margin. | The client synchronizes before each boundary, as in F6. |
+| **G11** | The slugs `packages` and `blobs` collide with fixed `/pub` routes. | Fixed routes win; no code was invented to reject the slugs. |
+| **G12** | §3.5 and §3.9 disagree on whether the admin reads namespace events. | The §3.5 table is applied: stewards only. |
+
+One catalog code, `VERDICT_SHACL_WARNING`, is unreachable because of `DP-7`.
+
+---
+
+## Consequences
+
+- Clients trust the hub through one DID and verify every credential offline once fetched.
+- The PoC compiler and evaluator bound what can be validated: JSON Schema is enforced, SHACL is not.
+- Laboratory conveniences (generated keys, self-signed TLS, `fake-idp`) keep the system runnable with Go alone, and must be replaced for production.
+
+## What Would Change This
+
+A production deployment (external key custody, a real identity provider, executed SHACL), or a specification revision that resolves the observations above.
