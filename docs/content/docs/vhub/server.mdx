@@ -1,109 +1,167 @@
 ---
 title: "alexandria-server Reference (C-HUB)"
-description: "Deep-dive reference for alexandria-server: governance API, role authorization matrix, 9-row lifecycle date calculation, JCS signing, and /pub distribution."
+description: "Reference for alexandria-server under specification v0.3.0: namespaces and stewards, authorization, vocabulary registry, release lifecycle, signed credentials, events and immutable publication."
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
 # `alexandria-server` Reference (`C-HUB`)
 
-**`alexandria-server`** (`cmd/alexandria-server`, `internal/server`) is the authoritative Vocabulary Hub server (`C-HUB`). It manages the vocabulary governance lifecycle, compiles drafts into Profile Vocabulary Packages (PVP), computes normative transition dates, signs version listings with Ed25519 over JCS, and serves immutable artifacts.
+**`alexandria-server`** (`cmd/alexandria-server`, `internal/server`) is the Vocabulary Hub. It exposes the authenticated management API under `/v1` and the public, immutable publication tree under `/pub`.
 
 ---
 
-## 1. Governance State Machine
+## 1. Namespaces and Authorization
 
-```
-  [POST /v1/drafts]
-          │
-          ▼
-     ┌─────────┐   PUT /v1/drafts/{id} (If-Match: ETag)
-     │  Draft  │◄──────────────────────────────────────┐
-     └────┬────┘                                       │
-          │                                            │
-          │ POST /v1/drafts/{id}:propose               │ (Draft remains editable;
-          │ (Runs N1–N5 compiler & writes SHA-256 blobs)│  Candidate is immutable)
-          ▼                                            │
-   ┌─────────────┐                                     │
-   │  Candidate  ├─────────────────────────────────────┘
-   │  (pending)  │
-   └──┬───────┬──┘
-      │       │
-      │       └────► POST /v1/candidates/{id}:reject ──► [Candidate (rejected)]
-      │
-      │ POST /v1/candidates/{id}:approve
-      │ (Checks DATE-1, DATE-2, registers SCITT receipt, signs eunomia.version/v1)
-      ▼
-   ┌─────────────┐
-   │   Release   │────► Published in GET /v1/versions & GET /pub/...
-   └──────┬──────┘
-          │
-          │ POST /v1/versions/{id}:revoke
-          │ (Checks REV-1..REV-4, sets revoked_from, re-issues listing)
-          ▼
-   ┌─────────────┐
-   │   Revoked   │
-   └─────────────┘
-```
+### Token validation (`A1`–`A5`)
+
+The hub is an OAuth 2.0 resource server. A bearer token is validated in this order (`REQ-HUB-022`); the first failing check answers `401` with `API_UNAUTHENTICATED`:
+
+| Check | Rule |
+|:---:|:---|
+| **A1** | The token is a JWT of type `at+jwt` signed with an allowed asymmetric algorithm. |
+| **A2** | Its issuer is one of the configured issuers. |
+| **A3** | The signature verifies against the issuer's JWKS, found through OIDC Discovery (one refresh on an unknown `kid`). |
+| **A4** | The audience contains the hub audience. |
+| **A5** | The token is within its validity period, with `clock_skew` tolerance. |
+
+A request with an invalid token is rejected even on a public endpoint; a request without a token is anonymous.
+
+### Authorization table (§3.5)
+
+| Operation | Anonymous | Authenticated | Steward of the namespace | Admin |
+|:---|:---:|:---:|:---:|:---:|
+| Read namespaces, vocabularies, the listing and records; everything under `/pub` | ✓ | ✓ | ✓ | ✓ |
+| Create a namespace; assign or remove stewards; read the hub-wide event log | 401 | 403 | 403 | ✓ |
+| List the stewards of a namespace | 401 | 403 | ✓ | ✓ |
+| Vocabularies, drafts, candidates, approval, rejection, revocation and events of a namespace | 401 | 403 | ✓ | 403 |
+
+<Callout type="info">
+The admin role does not include namespace operations. An admin who should also operate a namespace must be assigned as one of its stewards. Steward membership is evaluated on every request (`REQ-HUB-023`), and any steward may both propose and approve a candidate.
+</Callout>
+
+Namespace slugs match a fixed pattern, are unique and immutable; `_vhub` is reserved (`REQ-HUB-025`).
 
 ---
 
-## 2. Role-Based Authorization Matrix (`REQ-HUB-017`)
+## 2. Vocabulary Registry
 
-Every `/v1/*` endpoint requires a valid Bearer token (`Authorization: Bearer <token>`). In the default configuration (`DP-3`), tokens are mapped to principals and roles in `config/tokens.json` (or injected via the `http_v1.Authenticator` port in `internal/server/module.go`):
+A vocabulary belongs to a namespace and has a `name`, a `kind`, a `media_type` and a list of immutable **revisions**.
 
-| Endpoint | Action | Allowed Roles |
+| Kind | Behaviour |
+|:---|:---|
+| `hosted` | Content is uploaded with `PUT …/vocabularies/{name}/content`. Each distinct upload creates revision `n + 1`; identical bytes create nothing (`REQ-HUB-028`). An optional `If-Match` carrying the latest digest guards against lost updates. |
+| `proxy` | The hub downloads the `upstream` document when the vocabulary is created and on `POST …/vocabularies/{name}:refresh`. The upstream is never contacted while serving `/pub` (`REQ-HUB-027`). |
+
+Uploads are checked for size (`VOCAB_TOO_LARGE`), media type and parseability (`VOCAB_MEDIA_TYPE_MISMATCH`, `VOCAB_UNPARSEABLE`). Proxy upstreams must be `https`, optionally restricted by `vocab.proxy_allow`.
+
+Revisions are dereferenceable at `/pub/{ns}/vocab/{name}/r/{n}`; `/pub/{ns}/vocab/{name}` redirects to the latest one.
+
+---
+
+## 3. Release Workflow
+
+```text
+ POST …/drafts ──► Draft ◄── PUT …/drafts/{id} (If-Match)
+                     │
+                     │ POST …/drafts/{id}:validate   (report, no effect)
+                     │ POST …/drafts/{id}:propose
+                     ▼
+               Candidate (open) ── POST …:reject ──► Candidate (rejected)
+                     │
+                     │ POST …/candidates/{id}:approve
+                     ▼
+                  Version ── POST …/versions/{v}:revoke ──► revoked_from set
+```
+
+- **Drafts** are editable under optimistic concurrency: `PUT` requires `If-Match` (`428` without it, `412` when stale).
+- **Validation** runs levels `N1`–`N5` plus the `LIFECYCLE_*` invariants and reports one problem per finding (`REQ-HUB-001`).
+- **Candidates** are immutable: artefacts, diff, class and planned dates never change, and `approve` or `reject` are only possible from `open` (`REQ-HUB-002`).
+- **Approval** runs its steps in order; a failure leaves nothing visible (`REQ-HUB-004`, `RELEASE_ABORTED`).
+
+Two compilers implement the draft format, selected by `compiler`:
+
+| Compiler | Draft format |
+|:---|:---|
+| `poc` (default, `DP-6`) | A JSON document with `version`, `profiles`, `slots` and `files`; each file has a path, media type, role and either inline `content` or a `source` vocabulary revision of the same namespace. |
+| `dsl` | A YAML bundle in the [`eunomia.profiles/v1`](./profiles-dsl) language. |
+
+---
+
+## 4. Lifecycle Dates
+
+The release class comes from the version number: the first version is `initial`, a MAJOR increment is `breaking`, anything else is `compatible`.
+
+With publication instant `P`, propagation window `pw`, default grace `gw` and minimum grace `min`:
+
+| Class | `grace_window` in `:approve` | `new_content_from` | `enforced_from` |
+|:---|:---|:---|:---|
+| `initial` | not allowed | `P + pw` | `P + pw` |
+| `compatible` | not allowed (`DATES_GRACE_ON_COMPATIBLE`) | `P + pw` | `P + pw`, or the predecessor's `enforced_from` when that is later |
+| `breaking` | omitted | `P + pw` | `P + pw + gw` |
+| `breaking` | at least `min` | `P + pw` | `P + pw + grace_window` |
+| `breaking` | below `min` | — | rejected with `DATES_GRACE_TOO_SHORT` |
+
+### Approval invariants (`REQ-HUB-006`)
+
+- **`DATE-1`** — `enforced_from` must not precede that of an earlier version still in its window (`DATES_NON_MONOTONIC`).
+- **`DATE-2`** — the release must not put more than `max_concurrent_versions` in force at once (`DATES_TOO_MANY_VERSIONS`).
+
+### Revocation (`REQ-HUB-014`)
+
+| Rule | Check | Code |
+|:---:|:---|:---|
+| **`REV-1`** | The version is not already revoked. | `DATES_ALREADY_REVOKED` |
+| **`REV-2`** | A justification is given. | `DATES_JUSTIFICATION_REQUIRED` |
+| **`REV-3`** | `revoked_from` is at least the request instant plus `propagation_window` (the default). | `DATES_REVOCATION_TOO_EARLY` |
+| **`REV-4`** | Some version remains in force afterwards. | `DATES_REVOKE_LEAVES_NO_HEAD` |
+
+Emitted dates never change; `revoked_from` is added exactly once (`REQ-HUB-007`).
+
+### Reference states (§3.3.3)
+
+At a reference instant a version is `Scheduled` (before `new_content_from`), `Published` (the head in force), `Deprecated` (in force but not the head), `Superseded` or `Retired` (no longer in force), or `Revoked`.
+
+---
+
+## 5. Signed Credentials
+
+Three documents are W3C Verifiable Credentials 2.0 with a Data Integrity proof of cryptosuite **`eddsa-jcs-2022`** (`REQ-HUB-010`, `REQ-HUB-031`):
+
+| Credential | Subject | Where |
 |:---|:---|:---|
-| `POST /v1/drafts` | Create draft | `editor`, `authority` (`releaser`) |
-| `GET /v1/drafts/{id}` | Read draft | `editor`, `reviewer`, `authority` (`releaser`) |
-| `PUT /v1/drafts/{id}` | Replace draft (`If-Match` required) | `editor`, `authority` (`releaser`) |
-| `POST /v1/drafts/{id}:validate` | Validate draft (N1–N5) | `editor`, `reviewer`, `authority` (`releaser`) |
-| `POST /v1/drafts/{id}:propose` | Compile & freeze Candidate | `editor`, `authority` (`releaser`) |
-| `GET /v1/candidates/{id}` | Inspect Candidate | `editor`, `reviewer`, `authority` (`releaser`) |
-| `POST /v1/candidates/{id}:approve` | Approve & publish Release | **`authority` (`releaser`) only** (`REQ-HUB-003`) |
-| `POST /v1/candidates/{id}:reject` | Reject Candidate | `reviewer`, `authority` (`releaser`) |
-| `GET /v1/versions` | Fetch signed `eunomia.versions/v1` listing | `member`, `editor`, `reviewer`, `authority`, `operator` |
-| `GET /v1/versions/{id}` | Fetch signed `eunomia.version/v1` record | `member`, `editor`, `reviewer`, `authority`, `operator` |
-| `POST /v1/versions/{id}:revoke` | Revoke published version | **`authority` (`releaser`) only** |
-| `GET /v1/events` | Read governance event log | `editor`, `reviewer`, `authority`, `operator` |
+| `VersionListing` | Namespace, `sequence` and `versions[]` | `GET /v1/namespaces/{ns}/versions` |
+| `VersionRecord` | One version with its dates and manifest digest | `GET /v1/namespaces/{ns}/versions/{version}` |
+| `PackageManifest` | Lifecycle parameters, profiles and files of a package | `/pub/packages/{digest}/manifest.json` |
 
-*(Unauthenticated requests or callers lacking the required role receive `401 Unauthorized` or `403 Forbidden` with code `API_FORBIDDEN_ROLE`.)*
+- The issuer is the hub DID: by default the `did:key` of the signing key, or a configured `did:web` (`DP-5`). The hub never signs with a key that is not an `assertionMethod` of its own DID document (`REQ-HUB-015`, `SIGNER_KEY_NOT_PUBLISHED`).
+- A **listing** is issued whenever dates change and at least every `ttl / 2`, with `sequence + 1` and a validity of `ttl` (`REQ-HUB-008`). Each namespace has its own sequence.
+- `versions[]` contains the versions that are `Scheduled`, `Published` or `Deprecated`, plus every revoked version (`REQ-HUB-009`).
+- Listing and records are served with `Cache-Control: no-cache` (`REQ-HUB-012`).
 
 ---
 
-## 3. Lifecycle Dates & 9-Row Approval Matrix (`REQ-HUB-005`)
+## 6. Publication (`/pub`)
 
-When a Candidate is approved at instant `P` (`published_at`), `internal/core/lifecycle` computes `new_content_from` and `enforced_from` using the space's `propagation_window` (`pw`, default `P2D`) and `grace_window` (`gw`, default `P30D`):
+Everything under `/pub` is public.
 
-| Row | Release Class | `emergency` | Explicit `grace_window` | Resulting `new_content_from` | Resulting `enforced_from` |
-|:---:|:---|:---:|:---|:---|:---|
-| **1** | `initial` (first release) | `false` | — | `P + pw` | `P + pw` |
-| **2** | `compatible` (`MINOR` / `PATCH`) | `false` | None | `P + pw` | Inherits open IGW `enforced_from` if prior version is in grace; otherwise `P + pw` |
-| **3** | `compatible` | `false` | Provided | **Rejected:** `DATES_GRACE_ON_COMPATIBLE` | — |
-| **4** | `compatible` | `true` | Any | **Rejected:** `DATES_EMERGENCY_ON_COMPATIBLE` | — |
-| **5** | `breaking` (`MAJOR`) | `false` | None | `P + pw` | `(P + pw) + gw_default` |
-| **6** | `breaking` | `false` | `gw > 0` | `P + pw` | `(P + pw) + gw` |
-| **7** | `breaking` | `false` | `P0D` | **Rejected:** `DATES_ZERO_GRACE_WITHOUT_EMERGENCY` | — |
-| **8** | `breaking` | `true` (requires `justification`) | None / `P0D` | `P + pw` | `P + pw` |
-| **9** | `breaking` | `true` | `gw > 0` | **Rejected:** `DATES_EMERGENCY_WITH_GRACE` | — |
+| Route | Response |
+|:---|:---|
+| `/pub/{ns}` | `303` to the head version's context file, or its manifest when it has none (`DP-12`). `Cache-Control: no-cache`. |
+| `/pub/{ns}/{version}/{path}` | A file of a published package. Immutable. |
+| `/pub/{ns}/vocab/{name}` | `303` to the latest revision. `Cache-Control: no-cache`. |
+| `/pub/{ns}/vocab/{name}/r/{n}` | Bytes of a revision. Immutable; proxies add `Link: <upstream>; rel="via"`. |
+| `/pub/packages/{digest}/manifest.json` | Signed package manifest. Immutable. |
+| `/pub/blobs/sha256/{hex}` | Content-addressed blob. Immutable. |
+| `/pub/_vhub/v1/context.jsonld`, `/pub/_vhub/v1/vocab.ttl` | The Appendix A.5 context, byte for byte, and its Turtle vocabulary (`REQ-HUB-030`). |
 
-### Approval Date Invariants (`REQ-HUB-006`)
-- **`DATE-1` (`DATES_NON_MONOTONIC`):** The new version's `enforced_from` cannot precede the `enforced_from` of an existing version currently in its grace window.
-- **`DATE-2` (`DATES_TOO_MANY_VERSIONS`):** Approving the release must not cause more than `max_concurrent_versions` (default `2`) to be simultaneously active in the effective set `V_t` at any future instant.
-
-### Revocation Invariants (`REQ-HUB-014`)
-- **`REV-1` (`DATES_ALREADY_REVOKED`):** Cannot revoke an already-revoked version.
-- **`REV-2` (`DATES_JUSTIFICATION_REQUIRED`):** Revocation requires a non-empty `justification`.
-- **`REV-3` (`DATES_REVOCATION_TOO_EARLY`):** Explicit `revoked_from` must be `>= R + pw` (defaults to `R + pw`).
-- **`REV-4` (`DATES_REVOKE_LEAVES_NO_HEAD`):** Cannot revoke the only active head version when no replacement version is effective.
+Immutable routes answer `Cache-Control: public, max-age=31536000, immutable` with an `ETag` equal to the SHA-256 of the bytes (`REQ-HUB-011`).
 
 ---
 
-## 4. Cryptographic Signing, Scheduler & Storage Immutability
+## 7. Events and Storage
 
-- **JCS + Ed25519 Signing (`REQ-HUB-010`, `REQ-HUB-015`):** All `eunomia.versions/v1`, `eunomia.version/v1`, and `manifest.json` documents are canonicalized with RFC 8785 (JCS) and signed with Ed25519 (`alg: "EdDSA"`). Key rotation (`Signer.Rotate`) publishes the new public key in `/.well-known/did.json` **before** signing any document with it.
-- **Automatic Listing Re-Issuance (`REQ-HUB-008`):** A background scheduler (`internal/server/adapters/scheduler`) re-signs and increments `sequence` on the `eunomia.versions/v1` listing at least every `TTL / 2` so clients never see an expired listing (`SYNC_EXPIRED`).
-- **SQLite Immutability Triggers (`REQ-HUB-013`, `DP-2`):** The `releases`, `revocations`, `listings`, and `events` tables in SQLite are protected by `BEFORE UPDATE` and `BEFORE DELETE` SQL triggers that abort any mutation attempt at the database engine level.
-- **Public `/pub` Caching (`REQ-SYS-005`, `REQ-HUB-011`, `REQ-HUB-016`):**
-  - `GET /pub/{slug}` and `GET /pub/spaces/{slug}` return `303 See Other` with `Cache-Control: no-cache` pointing to the current head's manifest.
-  - Versioned routes (`/pub/{slug}/{version}/...`), package routes (`/pub/packages/{version}/...`), and hash-addressed blobs (`/pub/blobs/sha256/{hex}`) return `Cache-Control: public, max-age=31536000, immutable` and `ETag: "<sha256>"`.
+- Every effectful operation appends an event with an increasing id (`REQ-HUB-020`): `namespace.created`, `steward.assigned`, `steward.removed`, `vocabulary.created`, `vocabulary.revised`, `draft.created`, `draft.updated`, `candidate.proposed`, `candidate.approved`, `candidate.rejected`, `release.published`, `release.aborted`, `version.revoked`, `listing.issued` and `signer.key_unpublished`.
+- `GET /v1/namespaces/{ns}/events` is for stewards of the namespace; `GET /v1/events` is for the admin. Both page with `after` and `limit`.
+- Persistence is SQLite. Revisions, releases, revocations, listings and events live in tables whose rows cannot be updated or deleted: triggers abort the statement (`REQ-HUB-013`, `DP-2`).
+- Every `/v1` response is compact JSON-LD (`application/ld+json`), errors included (`REQ-HUB-029`).

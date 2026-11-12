@@ -1,0 +1,116 @@
+---
+title: "5. Resilience and Negative Cases"
+description: "Provoke and read the failures of the Vocabulary Hub: authentication and authorization, optimistic concurrency, date invariants, rule validation, synchronization failures and degraded operation."
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# 5. Resilience and Negative Cases
+
+Every failure carries a code from the [closed catalog](../vhub/error-catalog). This tutorial provokes the common ones, continuing from tutorials [2](./02-hub-governance-lifecycle) and [3](./03-edge-validation-sidecar).
+
+---
+
+## 1. Authentication and Authorization
+
+```bash
+# No token on a protected operation → 401 API_UNAUTHENTICATED
+curl -k -i -X POST $HUB/v1/namespaces -d '{"slug":"x"}'
+
+# A valid token that is neither admin nor steward → 403 API_FORBIDDEN_ROLE
+EVE=$(./bin/fake-idp token --sub eve)
+curl -k -i -X POST $HUB/v1/namespaces/demo/drafts -H "Authorization: Bearer $EVE" -d '{}'
+
+# The admin is not a steward → 403 on namespace operations
+curl -k -i $HUB/v1/namespaces/demo/events -H "Authorization: Bearer $ADMIN"
+```
+
+An expired or tampered token is `401` on any endpoint, including public ones.
+
+---
+
+## 2. Optimistic Concurrency
+
+```bash
+# Replace a draft without If-Match → 428 API_PRECONDITION_REQUIRED
+curl -k -i -X PUT $HUB/v1/namespaces/demo/drafts/$DRAFT \
+  -H "Authorization: Bearer $STEWARD" --data-binary @draft-1.0.0.json
+
+# With a stale ETag → 412 API_PRECONDITION_FAILED
+curl -k -i -X PUT $HUB/v1/namespaces/demo/drafts/$DRAFT \
+  -H "Authorization: Bearer $STEWARD" -H 'If-Match: "stale"' --data-binary @draft-1.0.0.json
+```
+
+The rule API of the client behaves the same way, with the revision as `ETag`.
+
+---
+
+## 3. Governance Invariants
+
+| Try this | Result |
+|:---|:---|
+| Create a namespace with slug `Demo!` | `422 NS_SLUG_INVALID` |
+| Create `demo` twice, or `_vhub` | `409 NS_EXISTS` |
+| Approve a candidate that is already approved | `409 API_INVALID_STATE` |
+| Propose a draft whose version is not greater than the latest | `422` with a compiler finding |
+| Approve a `compatible` release with a `grace_window` | `422 DATES_GRACE_ON_COMPATIBLE` |
+| Approve a `breaking` release with `grace_window` below the minimum | `422 DATES_GRACE_TOO_SHORT` |
+| Revoke without a justification | `422 DATES_JUSTIFICATION_REQUIRED` |
+| Revoke the only version in force | `422 DATES_REVOKE_LEAVES_NO_HEAD` |
+| Register a proxy vocabulary with an `http://` upstream outside the laboratory | `502 VOCAB_UPSTREAM_FAILED` |
+
+A draft with several problems returns a single response whose `findings[]` lists them all.
+
+---
+
+## 4. Rules
+
+```bash
+# Add a rule whose id already exists → 422 RULES_DUPLICATE_ID
+curl -s $ADMINAPI/rules/contract-request > dup.json
+curl -i -X POST $ADMINAPI/rules -H 'If-Match: "1"' --data-binary @dup.json
+```
+
+The whole set is re-validated on every change, so a rejected change leaves the previous set untouched. The same checks run at startup: with an invalid seed the client exits with a non-zero status and the code.
+
+---
+
+## 5. Messages
+
+| Message | With the rule in `enforce` |
+|:---|:---|
+| Body that is not valid JSON | `400`, `MESSAGE_UNPARSEABLE` |
+| Uses a JSON-LD `@context` that the package does not contain | `400`, `CONTEXT_NOT_IN_PACKAGE` |
+| Policy outside the schema | `400`, `VERDICT_VIOLATION` |
+| Transfer for an agreement that was never captured | Follows `unknown_agreement` |
+| Request that no rule matches | Follows `default_action` |
+
+The client never fetches a remote context to validate a message: only URLs listed in the package manifest resolve.
+
+---
+
+## 6. When the Hub Is Unreachable
+
+Stop `alexandria-server` and keep sending traffic.
+
+1. The client keeps deciding with its last accepted snapshot. Synchronization failures are recorded as `vhub.sync` events with `SYNC_UNREACHABLE`; the state does not change because of them.
+2. When the listing passes `validUntil`, the state becomes **`Degraded`**. Each gate follows the `degraded` setting of the head version: `continue` keeps classifying, `reject` answers `CLIENT_DEGRADED_REJECT`.
+3. After `max_staleness` more, the state becomes **`FailClosed`**: every `enforce` rule rejects with `CLIENT_FAIL_CLOSED`.
+
+Restart the hub and the client recovers on the next synchronization.
+
+<Callout type="info">
+A hub that answers with something wrong is treated more strictly than one that does not answer. A listing with a lower sequence (`SYNC_ROLLBACK`), changed dates (`SYNC_DATES_CHANGED`), a missing revocation (`SYNC_REVOCATION_DROPPED`) or a bad proof (`SYNC_SIGNATURE_INVALID`) is discarded whole, and the previous snapshot stays in use.
+</Callout>
+
+---
+
+## 7. Every Code, Automatically
+
+The conformance suite has one minimal negative case per reachable code:
+
+```bash
+go test ./conformance -run 'TestN_' -v
+```
+
+See [conformance and traceability](../development/conformance).

@@ -1,51 +1,58 @@
 ---
 title: Getting Started
-description: Overview of the Alexandria Vocabulary Hub ecosystem, components, and capabilities.
+description: Overview of the Alexandria components and how they fit together under the Vocabulary Hub specification v0.3.0.
 ---
 
 import { Card, Cards } from 'fumadocs-ui/components/card';
 import { Callout } from 'fumadocs-ui/components/callout';
 
-# Alexandria: The Vocabulary Hub Ecosystem
+# Getting Started
 
-**Alexandria** is a sovereign dataspace **Vocabulary Hub** and **Identity Gateway**. It enables dataspace authorities to author and govern semantic profiles in YAML, distribute cryptographically signed vocabulary packages, validate Dataspace Protocol (DSP) traffic at the connector edge without runtime network latency, and manage decentralized identities (DIDs) and verifiable credentials.
+Alexandria lets a dataspace authority publish the vocabularies and policy profiles every participant must speak, and lets each participant check its own DSP traffic against them locally.
 
 ---
 
-## Core Binaries & Components
+## Binaries
 
-The repository provides four main entrypoints under `cmd/` and `deploy/`:
-
-| Binary | Source | Role in the Dataspace |
+| Binary | Source | Role |
 |:---|:---|:---|
-| **`alexandriac`** | `cmd/alexandriac` | **Profile Language Compiler CLI:** Validates `eunomia.profiles/v1` YAML documents (`OdrlProfile`, `SpaceProfile`) across N1–N5 and deterministically compiles RDF/OWL/SKOS, JSON-LD `@context`, SHACL shapes, JSON Schema Draft 2020-12, Cedar schemas, W3C PROF, HTML specs, and `space-lock.json`. |
-| **`alexandria-server`** | `cmd/alexandria-server` | **Vocabulary Hub Server (`C-HUB`):** Exposes `/v1` governance APIs (drafts, candidates, releases, revocations, events), signs `eunomia.versions/v1` listings with Ed25519 over JCS, serves `/.well-known/did.json`, and publishes immutable content-addressed artifacts under `/pub/`. |
-| **`alexandria-client`** | `cmd/alexandria-client` | **Edge Validation & Sync Sidecar (`C-CLI`):** Runs alongside a dataspace Connector. Synchronizes and verifies signed packages in the background (`S1`–`S13`), proxies DSP ingress/egress traffic (`observe`, `shadow`, `enforce`), emits `VHub-Verdict` headers, tracks contract agreements, and exposes a local Admin & Prometheus metrics API. |
-| **`alexandria`** | `cmd/alexandria` | **Identity, SSI & Auth Gateway:** Modular monolith providing node-terminated **Zitadel** OIDC + PKCE login, interactive Swagger UI (`/docs`), and the unified `wallet.Wallet` REST API (`/api/v1/wallet/*`) backed by **Fafnir** or **Eclipse EDC IdentityHub**. |
+| **`alexandria-server`** | `cmd/alexandria-server` | **Vocabulary Hub (`C-HUB`).** Serves the `/v1` management API and the public `/pub` tree. Validates OAuth 2.0 bearer tokens, keeps namespaces isolated and signs credentials with the hub key. |
+| **`alexandria-client`** | `cmd/alexandria-client` | **Edge proxy (`C-CLI`).** Sits in front of a DSP connector, synchronizes verified packages and applies the rule set to every message. Exposes an admin API on its own listener. |
+| **`alexandriac`** | `cmd/alexandriac` | **Profile compiler.** Validates and compiles `eunomia.profiles/v1` YAML documents offline. |
+| **`fake-idp`** | `deploy/fake-idp` | Laboratory OAuth 2.0 / OIDC provider: discovery, JWKS, an interactive sign-in page and a token CLI. |
+| **`fake-connector`** | `deploy/fake-connector` | Laboratory DSP connector that acknowledges and records the traffic it receives. |
 
 ---
 
 ## How the Pieces Fit Together
 
-### 1. Authoring & Governance (`alexandriac` + `alexandria-server`)
-A dataspace authority defines allowed policy actions, constraints, and slot bindings in YAML (`eunomia.profiles/v1`). When proposed and approved on `alexandria-server`, the Hub compiles the deterministic artifacts, calculates lifecycle transition dates (`published_at`, `new_content_from`, `enforced_from`), registers a transparency receipt, and signs the version listing (`eunomia.versions/v1`) with its Ed25519 key published at `/.well-known/did.json`.
+### 1. Namespaces and stewards
 
-### 2. Edge Synchronization & Zero-Latency Enforcement (`alexandria-client`)
-Each participant runs `alexandria-client` as a sidecar proxy in front of their Dataspace Connector:
-- **Background Sync Loop:** Periodically polls `GET /v1/versions`, verifies the Hub's `did:web` key, checks anti-rollback continuity (`S1`–`S13`), and downloads content-addressed PVP packages (`ni:///sha-256;...`) to local disk.
-- **Hot-Path L7 Proxy:** Intercepts inbound and outbound DSP messages (`ContractRequestMessage`, `ContractAgreementMessage`, `TransferRequestMessage`, `CatalogRequestMessage`) and evaluates them strictly against local verified packages—**never contacting the Hub on the request path** (`REQ-SYS-002`).
-- **Graceful Version Transitions:** During a breaking release's transition window, offers using deprecated/retired terms from the previous version are forwarded with an RFC 9651 `VHub-Verdict: warning;gate=policy_intake;code="VERDICT_NOT_IN_HEAD";sunset=...` header, and only rejected after `enforced_from + lease_margin`.
+The hub is divided into **namespaces**, each with its own vocabularies, release line and listing sequence. The hub **admin** creates namespaces and assigns **stewards**; stewards perform every operation inside their namespace. No namespace operation reads or modifies another namespace (`REQ-SYS-010`).
 
-### 3. Decentralized Identity & Delegated Wallets (`alexandria`)
-Through `internal/ssi-auth` and `internal/auth-proxy`, Alexandria delegates private key storage, DID document management, W3C Verifiable Credential storage, OID4VCI/OID4VP flows, and DCP credential requests to external wallets (**Fafnir** or **Eclipse EDC IdentityHub**), while protecting management APIs with **Zitadel** OIDC sessions.
+### 2. From draft to release
+
+A steward creates a **draft**, validates it and proposes it, which freezes an immutable **candidate** with its diff, release class and planned dates. Approving the candidate publishes the package, signs a `VersionRecord` and issues a new `VersionListing`.
+
+### 3. Synchronization
+
+Each `alexandria-client` polls the listing of its namespace, verifies the proof against the hub DID, checks continuity (no rollback, no changed dates, no dropped revocation) and downloads the packages it needs, verifying every digest. A listing is accepted whole or not at all.
+
+### 4. Decisions at the edge
+
+For every DSP message the client selects one rule, evaluates its gates against the packages in force at the local instant and applies the action for the rule mode. The decision uses only local state: there is no network request on the request path (`REQ-SYS-002`), and forwarded bodies are byte-identical (`REQ-SYS-003`).
+
+<Callout type="info">
+Prefer a browser to `curl`? The [console](./vhub/console) covers both binaries and can be embedded in them with `make build-gui`.
+</Callout>
 
 ---
 
 ## Next Steps
 
 <Cards>
-  <Card title="Prerequisites" href="./getting-started/prerequisites" description="Required tools, runtimes, and port allocations for both vhub and alexandria." />
-  <Card title="Quickstart" href="./getting-started/quickstart" description="Run the vhub F6 demo in 3 commands or boot the full Docker + Zitadel + Wallet stack." />
-  <Card title="Configuration Reference" href="./getting-started/configuration" description="Complete reference for server.json, client config.json, and node config.yaml." />
-  <Card title="Incremental Tutorials" href="./tutorials" description="Follow the 5-step hands-on tutorial series from beginner to advanced." />
+  <Card title="Prerequisites" href="./getting-started/prerequisites" description="Tooling and default ports." />
+  <Card title="Quickstart" href="./getting-started/quickstart" description="Run the F6 demo, then start the lab by hand." />
+  <Card title="Configuration" href="./getting-started/configuration" description="Server and client configuration in both accepted layouts." />
+  <Card title="Tutorials" href="./tutorials" description="Five incremental hands-on guides." />
 </Cards>

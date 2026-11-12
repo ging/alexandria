@@ -1,11 +1,11 @@
 {
-  "title": "Incremental Tutorials",
+  "title": "Tutorials",
   "pages": [
     "index",
     "01-first-profile-dsl",
     "02-hub-governance-lifecycle",
     "03-edge-validation-sidecar",
     "04-breaking-changes-and-f6",
-    "05-wallets-and-identityhub"
+    "05-resilience-and-negative-cases"
   ]
 }

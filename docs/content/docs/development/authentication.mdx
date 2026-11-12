@@ -1,52 +1,78 @@
 ---
 title: Authentication & Authorization
-description: Node-terminated OIDC + PKCE with Zitadel in alexandria and role-based Bearer authentication in alexandria-server.
+description: How alexandria-server authenticates OAuth 2.0 access tokens (A1–A5), authorizes operations with the admin role and namespace stewards, and how the laboratory identity provider works.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
 # Authentication & Authorization
 
-Alexandria implements authentication and access control tailored to each deployment plane:
-1. **`cmd/alexandria` (`internal/auth-proxy`):** Node-terminated OpenID Connect (OIDC) with PKCE against **Zitadel**, issuing encrypted `HttpOnly` session cookies and validating Bearer JWTs/opaque tokens ([ADR 0004](../adr/0004-authentication-terminated-at-the-node)).
-2. **`cmd/alexandria-server` (`internal/server/adapters/auth_static` & `http_v1`):** Role-based Bearer authentication enforcing the §3.6 Governance Authorization Matrix (`REQ-HUB-017`, `DP-3`).
+`alexandria-server` is an **OAuth 2.0 resource server**. It never issues tokens or handles passwords: it validates JWT access tokens (RFC 9068, type `at+jwt`) issued by the identity providers listed in its configuration.
+
+The client admin API is unauthenticated and relies on being bound to its own listener.
 
 ---
 
-## 1. Node-Terminated OIDC in `alexandria` (`internal/auth-proxy`)
+## 1. Token Validation
 
-Rather than requiring browsers or CLI callers to orchestrate OAuth2 flows directly against Zitadel, authentication terminates at the Alexandria node:
+Checks run in order (`REQ-HUB-022`); the first failure answers `401`, `API_UNAUTHENTICATED` and `WWW-Authenticate: Bearer error="invalid_token"`.
 
-1. **Initiate Login:** Navigating to `GET /api/v1/auth/login` generates an ephemeral state and PKCE verifier, sets a sealed state cookie, and redirects the user to Zitadel (`https://auth.127.0.0.1.nip.io:8443`).
-2. **User Authenticates:** In local development, `task auth:bootstrap` seeds the default administrator (`admin@alexandria.auth.127.0.0.1.nip.io` / `Password1!`).
-3. **Authorization Callback:** Zitadel redirects to `GET /api/v1/auth/callback?code=...&state=...`. Alexandria verifies the state, exchanges the code + PKCE verifier for tokens, and seals the session into an encrypted `HttpOnly`, `Secure`, `SameSite=Lax` cookie (`alexandria_session`).
-4. **API Access & Introspection:** Subsequent `/api/v1/*` requests authenticate via the `alexandria_session` cookie or an `Authorization: Bearer <token>` header. JWTs are verified locally against Zitadel's cached JWKS (`jwks_refresh: 15m`), with optional fallback to OAuth2 token introspection (`auth_config.introspect: "fallback"`).
+| Check | Rule |
+|:---:|:---|
+| **A1** | JWT of type `at+jwt`, signed with an allowed asymmetric algorithm. |
+| **A2** | Issuer listed in `auth.issuers`. |
+| **A3** | Signature verifies with a key of the issuer's JWKS, located through its discovery document. An unknown `kid` triggers one JWKS refresh. |
+| **A4** | Audience contains `auth.audience`. |
+| **A5** | Not expired and not used before `nbf`, within `clock_skew`. |
+
+The **principal** of a valid token is the pair `iss` + `sub`. It is **admin** when the claim named by `auth.admin_claim.claim` (default `roles`) contains `auth.admin_claim.value` (default `vhub-admin`).
+
+<Callout type="info">
+A request without `Authorization` is anonymous and may use public endpoints. A request with an invalid token is always rejected, even on a public endpoint.
+</Callout>
 
 ---
 
-## 2. Role-Based Governance Auth in `alexandria-server` (`DP-3`, `REQ-HUB-017`)
+## 2. Authorization
 
-In `alexandria-server`, all `/v1/*` management endpoints are protected by the `http_v1.Authenticator` port:
+| Operation | Rule |
+|:---|:---|
+| Public reads | Always allowed. |
+| Namespace creation, steward assignment and removal, hub-wide events | Admin only. |
+| Listing the stewards of a namespace | Admin or a steward of it. |
+| Everything else inside a namespace | A steward of that namespace. The admin role alone is not enough. |
 
-```go
-type Authenticator interface {
-    Authenticate(r *http.Request) (domain.Principal, bool)
-}
+Missing token: `401`. Valid token without permission: `403`, `API_FORBIDDEN_ROLE`. Steward membership is read on every request, so assigning or removing a steward takes effect immediately (`REQ-HUB-023`).
+
+There is no four-eyes rule in this version: the steward who proposes a candidate may also approve it.
+
+---
+
+## 3. Laboratory Identity Provider (`fake-idp`)
+
+`deploy/fake-idp` replaces a real provider in the laboratory (`DP-4`). The hub validates its tokens through the same JWKS path as any other issuer.
+
+```bash
+./bin/fake-idp serve                                   # http://127.0.0.1:9400
+./bin/fake-idp token --sub ana --admin --ttl 24h       # admin token
+./bin/fake-idp token --sub sergio --ttl 24h            # plain principal
 ```
 
-### Static Token Adapter (`auth_static`)
-By default (`DP-3`), `alexandria-server` loads `config/tokens.json`, which maps Bearer tokens to a `domain.Principal{Name, Roles}`:
+`serve` implements OIDC Discovery, the JWKS and an interactive Authorization Code flow with PKCE (a password-less subject picker, `/token` with rotating refresh tokens and `/logout`), which is what the [console](../vhub/console) uses to sign in. Flags: `--addr`, `--issuer`, `--key`, `--ttl`, `--clock-file`.
 
-```json
-{
-  "editor-token":   {"principal": "steward",     "roles": ["editor"]},
-  "releaser-token": {"principal": "releaser",    "roles": ["releaser"]},
-  "member-token":   {"principal": "alexandria-client", "roles": ["member"]}
-}
-```
+`token` prints one access token. Flags: `--sub`, `--admin`, `--aud`, `--ttl`, `--clock-file`. Both subcommands must use the same `--key` file, which is created on first use.
 
-- **Missing or Unknown Token:** Returns `401 Unauthorized` with `WWW-Authenticate: Bearer realm="vhub"` and an `application/problem+json` payload carrying `"code": "API_FORBIDDEN_ROLE"`.
-- **Insufficient Role:** If an authenticated principal lacks the role required for an operation (e.g., an `editor` attempting `POST /v1/candidates/{id}:approve`), `alexandria-server` returns `403 Forbidden` with `"code": "API_FORBIDDEN_ROLE"` (`REQ-HUB-003`, `REQ-HUB-017`).
+<Callout type="warn">
+`fake-idp` lets anyone become any subject. It only redirects to loopback addresses and is strictly a laboratory tool.
+</Callout>
 
-### Injecting Custom Auth into `alexandria-server`
-When embedding `internal/server.Module` inside a larger composition root, pass any implementation of `http_v1.Authenticator` (such as an adapter backed by `internal/auth-proxy` or `internal/ssi-auth`) via `server.Deps{Auth: customAuth}`.
+---
+
+## 4. Using a Real Provider
+
+1. Add the provider to `auth.issuers` (section layout: `auth_config.issuer`) and set the audience.
+2. Make the provider emit access tokens as JWTs with that audience.
+3. Map the admin role into the configured claim.
+4. Assign stewards by the `iss` and `sub` their tokens carry.
+
+Browser clients such as the console additionally need a public client registration with PKCE and, when the console is embedded in the hub, CORS for the hub origin.

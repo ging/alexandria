@@ -1,80 +1,75 @@
 ---
 title: Conformance & Traceability
-description: Normative requirement conformance suite (61 REQ-*), negative test corpus (64 F5 codes), Scenario F6 E2E verification, and automated traceability.
+description: How Alexandria proves the 81 requirements and 76 of the 77 catalog codes of specification v0.3.0, replays scenario F6 and generates the traceability matrix.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
-import { Steps } from 'fumadocs-ui/components/steps';
 
-# Conformance & Traceability Suite
-
-Alexandria enforces conformance at two complementary levels:
-1. **Dataspace Payload Conformance:** Validating Connector DSP messages, ODRL offers/agreements, and DCAT catalog datasets against compiled JSON Schema Draft 2020-12 (`schema.json`) and W3C SHACL (`shapes.ttl`) artifacts.
-2. **System Conformance & Traceability (`conformance/`):** An automated verification suite proving that `alexandria-server`, `alexandria-client`, and `alexandriac` satisfy all **61 normative requirements (`REQ-*`)**, the **64-code closed error catalog (`F5`)**, and the **End-to-End Scenario F6**.
+# Conformance & Traceability
 
 ---
 
-## 1. Summary of Normative Coverage
+## 1. Coverage
 
-Running `make conformance trace` verifies and regenerates [`TRACEABILITY.md`](https://github.com/ging/alexandria/blob/feat/vhub-poc/TRACEABILITY.md):
-
-| Dimension | Coverage | Details |
+| Dimension | Coverage | Where |
 |:---|:---:|:---|
-| **Normative Requirements (`F2`, `F3`, `F4`)** | **61 / 61** | `REQ-SYS-001`..`009` (9), `REQ-HUB-001`..`021` (21), `REQ-CLI-001`..`027` (27), `REQ-DOC-001`..`004` (4). Every requirement is mapped to production packages and `TestT_*` tests. |
-| **Production Packages Audited (`§8.8`)** | **44 packages** | Bidirectional traceability (`REQ-* -> Module -> TestT_*` and `Module -> REQ-*`). |
-| **Closed Error Catalog (`F5`)** | **63 / 64** | 63 codes verified with automated negative tests (`TestN_<CODE>` in `conformance/negative_hub_test.go` & `conformance/negative_client_test.go`). Only `VERDICT_SHACL_WARNING` is unreachable in the PoC (`DP-7`). |
-| **End-to-End F6 Scenario (`M8`)** | **19 / 19 rows** | Verified against real compiled `alexandria-server`, `alexandria-client`, and `fake-connector` binaries in `TestE2E_F6` and `make demo`. |
+| Normative requirements | **81 / 81** | `REQ-SYS` (10), `REQ-HUB` (31), `REQ-CLI` (34), `REQ-DOC` (6), listed in `spec/requirements.tsv`. Each has at least one test named `TestT_<AREA>_<NNN>_…`. |
+| Catalog codes | **76 / 77** | One minimal negative case per code in `conformance/` (`TestN_EveryReachableCode`). |
+| Scenario F6 | all rows | `TestE2E_F6` runs the four real binaries; `make demo` prints the table. |
+| Determinism | — | `conformance/determinism_test.go` checks that equal inputs give equal decisions (`REQ-SYS-001`). |
+
+<Callout type="info">
+The single uncovered code is `VERDICT_SHACL_WARNING`: the PoC evaluator does not execute SHACL (`DP-7`), so a warning-severity finding cannot occur. This is recorded in `OPEN_QUESTIONS.md`.
+</Callout>
 
 ---
 
-## 2. Running the Conformance Battery
-
-<Steps>
-
-### 1. Run Unit, Contract & Architecture Tests
+## 2. Running It
 
 ```bash
-make test
+make conformance   # go test ./conformance/...
+make e2e           # TestE2E_F6 only, verbose
+make demo          # the four binaries and the F6 verdict table
+make trace         # regenerate and verify TRACEABILITY.md
 ```
-Executes all tests under `./internal/...` and `./cmd/...`, including `internal/archtest` (Hexagonal boundaries, `DP-1` dependency allowlist, and `DP-9` no-`time.Now()` AST check) and all `TestT_SYS_*`, `TestT_HUB_*`, and `TestT_CLI_*` tests.
 
-### 2. Run the Full `conformance/` Suite
-
-```bash
-make conformance
-```
-This runs:
-- **`conformance/documents_test.go` (`T-DOC-001`..`004`, `T-SYS-005`..`006`):** Validates real binary outputs against the normative Appendix A JSON Schemas (`conformance/schemas/*.schema.json`) and verifies byte immutability on `/pub`.
-- **`conformance/determinism_test.go`:** Verifies that two independent `alexandria-client` instances given the same listing and clock produce identical classifications and headers across all inputs (`REQ-SYS-001`).
-- **`conformance/negative_hub_test.go`:** Executes negative `TestN_<CODE>` tests for every `C-HUB` error code (`API_*`, `RELEASE_ABORTED`, `DATES_*`, `LIFECYCLE_*`) using the negative draft corpus in `conformance/corpus/drafts/`.
-- **`conformance/negative_client_test.go`:** Executes negative `TestN_<CODE>` tests for every `C-CLI` error code (`CONFIG_*` in `conformance/corpus/config/`, `SYNC_*`, `DID_*`, `CLIENT_*`, `VERDICT_*`, `AGREEMENT_*`, `AUDIT_*`, `CLOCK_SKEW_EXCEEDED`).
-- **`conformance/e2e_f6_test.go` (`TestE2E_F6`):** Launches the real binaries and verifies all 19 rows of Scenario F6.
-
-### 3. Regenerate & Verify `TRACEABILITY.md`
-
-```bash
-make trace
-```
-Runs `go run ./conformance/trace`, which parses Go test functions (`TestT_*`, `TestN_*`), package requirement annotations, and `internal/core/codes/catalog.tsv`, failing if any requirement or reachable catalog code lacks test coverage, and writes `TRACEABILITY.md`.
-
-</Steps>
+`T-*` tests live next to the code they exercise; `conformance/` holds the cross-cutting ones: the negative corpus, the determinism check and the end-to-end scenario.
 
 ---
 
-## 3. Normative Schemas & Corpus (`conformance/`)
+## 3. Scenario F6
 
-```text
-conformance/
-├── corpus/
-│   ├── config/             # Invalid client configs triggering CONFIG_SCHEMA, CONFIG_ROUTE_OVERLAP, etc.
-│   └── drafts/             # Invalid drafts triggering LIFECYCLE_CLOCK_SKEW, LIFECYCLE_GRACE_ZERO, etc.
-├── demo/                   # CLI runner for make demo (prints F6 verdict table)
-├── examples/               # Normative JSON examples (config.json, version.json, versions.json, verdict-event.json)
-├── f6/                     # Scenario F6 YAML drafts (v1.0.0.yaml, v2.0.0.yaml), process launcher & driver
-├── schemas/                # Appendix A JSON Schemas (Draft 2020-12):
-│   ├── config.schema.json          # Appendix A.3: alexandria-client configuration
-│   ├── verdict-event.schema.json   # Appendix A.4: structured verdict events
-│   ├── version.schema.json         # Appendix A.2: eunomia.version/v1 record
-│   └── versions.schema.json        # Appendix A.1: eunomia.versions/v1 listing
-└── trace/                  # Automated TRACEABILITY.md generator & verifier
-```
+F6 follows one namespace over two and a half months:
+
+1. `1.0.0` is published (`initial`) and takes effect after the propagation window.
+2. `2.0.0` (`breaking`) removes a policy action and opens a grace window.
+3. During the grace window, a message valid only under `1.0.0` is forwarded with a `VHub-Verdict` warning that names the sunset instant.
+4. After `enforced_from` plus the lease margin, the same message is rejected.
+5. An agreement captured under `1.0.0` keeps admitting transfers until `1.0.0` is revoked and the revocation takes effect.
+
+All processes read the same file clock (`-clock-file`), so the whole timeline replays in seconds and gives the same table on every run.
+
+---
+
+## 4. Traceability Matrix
+
+`make trace` runs `conformance/trace`, which regenerates [`TRACEABILITY.md`](https://github.com/ging/alexandria/blob/main/TRACEABILITY.md) and fails unless:
+
+- every requirement maps to at least one module and one `T-*` test,
+- every production package declares the requirements it implements, and
+- every reachable catalog code has its negative case.
+
+Packages declare their requirements in the two-line header comment of each file, which is where the generator reads them.
+
+---
+
+## 5. Specification Documents
+
+| Path | Content |
+|:---|:---|
+| `spec/schemas/` | Normative JSON Schemas of Appendix A (listing, record, client configuration, verdict event, rules, manifest) and the A.5 context. |
+| `spec/examples/` | Example documents validated by the tests. |
+| `spec/requirements.tsv` | The requirement list. |
+| `internal/core/codes/catalog.tsv` | The code catalog. |
+| `conformance/vectors/eddsa-jcs-2022/` | The W3C test vector for the cryptosuite. |
+| `DECISIONS.md`, `OPEN_QUESTIONS.md` | PoC decisions and specification observations. |

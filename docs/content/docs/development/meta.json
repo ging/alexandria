@@ -2,9 +2,10 @@
   "title": "API & Development",
   "pages": [
     "index",
-    "conformance",
-    "authentication",
     "endpoints",
+    "authentication",
+    "observability",
+    "conformance",
     "testing-and-ci"
   ]
 }
