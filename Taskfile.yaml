@@ -44,6 +44,16 @@ tasks:
     deps: [build]
     cmds: ["go run ./conformance/demo -bin-dir bin"]
 
+  example:proxy:
+    desc: Run the F6 scenario with alexandria-client as the L7 proxy (examples/proxy).
+    deps: [build]
+    cmds: ["go run ./examples/proxy -bin-dir bin"]
+
+  example:envoy:
+    desc: Run the F6 scenario with Envoy as the proxy and alexandria-client as validator (examples/envoy; needs envoy or Docker).
+    deps: [build]
+    cmds: ["go run ./examples/envoy -bin-dir bin"]
+
   trace:
     desc: Verify requirement traceability across TRACEABILITY.md and tests.
     cmds: ["go run ./conformance/trace"]
