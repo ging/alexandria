@@ -162,6 +162,9 @@ func main() {
 		fail(err)
 	}
 	oq, _ := os.ReadFile("OPEN_QUESTIONS.md")
+	if len(oq) == 0 {
+		oq, _ = os.ReadFile("docs/content/docs/adr/0010-vhub-v030-decisions-and-open-questions.mdx")
+	}
 	var b strings.Builder
 	var problems []string
 	withTest, withModule := 0, 0

@@ -481,10 +481,14 @@ func TestN_EveryReachableCode(t *testing.T) {
 	}
 }
 
+// TestN_CatalogIsCovered verifies that every catalog code has a negative test or documented rationale.
 func TestN_CatalogIsCovered(t *testing.T) {
 	oq, err := os.ReadFile("../OPEN_QUESTIONS.md")
 	if err != nil {
-		t.Fatal(err)
+		oq, err = os.ReadFile("../docs/content/docs/adr/0010-vhub-v030-decisions-and-open-questions.mdx")
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	for c := range codes.All() {
 		_, has := cases[c]
