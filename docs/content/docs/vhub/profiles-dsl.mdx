@@ -1,16 +1,16 @@
 ---
-title: "eunomia.profiles/v1 Language & Compiler"
+title: "alexandria.profiles/v1 Language & Compiler"
 description: Complete reference for authoring OdrlProfile and SpaceProfile YAML files, N1–N5 validation, and compiling artifacts with alexandriac.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 
-# Profile Language (`eunomia.profiles/v1`) & `alexandriac` Compiler
+# Profile Language (`alexandria.profiles/v1`) & `alexandriac` Compiler
 
 A sovereign dataspace is built on a **stack of specifications** (ODRL, DCAT-AP, DSP, DCP). Each base specification leaves extension points (**slots**), and a dataspace authority constrains those slots with **bindings**: which profile governs the slot, at which version, with what obligation (`mandatory` or `recommended`), and at which validation gate (`policy_intake`, `dsp_message`, `catalog_entry`, `agreement_admission`).
 
-In Alexandria, authorities write that stack in YAML (`dsl: eunomia.profiles/v1`), and **`alexandriac`** (or `alexandria-server` with `"compiler": "dsl"`) compiles all validation artifacts deterministically on the fly.
+In Alexandria, authorities write that stack in YAML (`dsl: alexandria.profiles/v1`), and **`alexandriac`** (or `alexandria-server` with `"compiler": "dsl"`) compiles all validation artifacts deterministically on the fly.
 
 ---
 
@@ -41,10 +41,10 @@ bin/alexandriac compile -o out -vendor vendor/ -previous release-1.0.0.yaml rele
 ## 2. Document Kinds
 
 ### `kind: OdrlProfile`
-Defines an ODRL policy vocabulary profile, including namespaces, adopted ODRL 2.2 terms, custom terms (`action`, `left_operand`, `right_operand`), operand signatures, and optional Cedar runtime enforcement mappings:
+Defines an ODRL policy vocabulary profile, including namespaces, adopted ODRL 2.2 terms, custom terms (`action`, `left_operand`, `right_operand`), and operand signatures:
 
 ```yaml
-dsl: eunomia.profiles/v1
+dsl: alexandria.profiles/v1
 kind: OdrlProfile
 
 profile:
@@ -87,10 +87,6 @@ terms:
       value_kind: iri
       values: [col:red, col:green, col:blue, col:yellow]
       operators: [eq, neq]
-    enforcement:
-      cedar_path: context.color
-      pdp_level: PDP-4
-      eval_timing: once
 
   - id: red
     kind: right_operand
@@ -105,7 +101,7 @@ rules:
 Binds the dataspace slots (`odrl`, `dcat`, `dsp`, `dcp`) to concrete profiles (`source: internal` or `source: vendored`) and configures the dataspace's lifecycle parameters:
 
 ```yaml
-dsl: eunomia.profiles/v1
+dsl: alexandria.profiles/v1
 kind: SpaceProfile
 
 space:
@@ -148,11 +144,10 @@ Compiling an `OdrlProfile` and `SpaceProfile` produces deterministic, byte-repro
 
 | Artifact Path | Manifest Role | Description |
 |:---|:---|:---|
-| `profiles/odrl/<token>/<ver>/vocab.ttl` | `vocabulary` | OWL/SKOS ontology, SKOS collections, terms (§8.5), reified constraint signatures (§9.3), and Cedar `eu:` enforcement triples. |
+| `profiles/odrl/<token>/<ver>/vocab.ttl` | `vocabulary` | OWL/SKOS ontology, SKOS collections, terms (§8.5), and reified constraint signatures (§9.3). |
 | `profiles/odrl/<token>/<ver>/context.jsonld` | `mapping` | JSON-LD `@context` mapping every term alias to its full IRI (with mandatory `url` per `D-PVP-1`). |
 | `profiles/odrl/<token>/<ver>/shapes.ttl` | `shacl` | W3C SHACL shapes (§13.3): closed action lists, `sh:Warning` shapes for `deprecated` terms, and one constraint shape per `left_operand` signature. |
 | `profiles/odrl/<token>/<ver>/schema.json` | `json-schema` | Self-contained JSON Schema Draft 2020-12 over compact ODRL `Offer`/`Agreement` payloads (validates declared `profile`, allowed actions, atomic and logical `and`/`or`/`xone` constraints, and per-signature operators/values). |
-| `profiles/odrl/<token>/<ver>/cedar-mapping.json` & `cedar.schema` | `cedar-mapping`, `cedar-schema` | Generated whenever at least one term declares an `enforcement` block (§13.4). |
 | `profiles/odrl/<token>/<ver>/prof.ttl` & `spec.html` | `prof`, `specification` | W3C PROF manifest and human-readable HTML specification. |
 | `space/prof.ttl` & `space/spec.html` | `prof`, `specification` | Space-level W3C PROF manifest and HTML specification. |
 | `space/shacl-union.ttl` | `shacl-union` | Combined SHACL shapes across all `mandatory` bindings per gate. |
@@ -171,5 +166,5 @@ Compiling an `OdrlProfile` and `SpaceProfile` produces deterministic, byte-repro
 | **N5** | Verifies all generated outputs: valid JSON, self-compiling JSON Schema Draft 2020-12, and well-formed Turtle structure. | `OUTPUT_INVALID` |
 
 <Callout type="info">
-For the complete engineering review of the `eunomia.profiles/v1` specification (items `R1`–`R15`), see [`PROFILES_DSL.md`](https://github.com/ging/alexandria/blob/feat/vhub-poc/PROFILES_DSL.md) at the repository root.
+For the complete engineering review of the `alexandria.profiles/v1` specification (items `R1`–`R15`), see [`PROFILES_DSL.md`](https://github.com/ging/alexandria/blob/feat/vhub-poc/PROFILES_DSL.md) at the repository root.
 </Callout>

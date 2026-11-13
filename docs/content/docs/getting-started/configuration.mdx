@@ -112,7 +112,7 @@ vhub_config:
 | `did_resolver.allow_insecure_localhost` | No | Accept `http://` for a localhost `did:web`. Laboratory only. |
 | `storage.database`, `storage.blobs` | Yes | SQLite database and content-addressed blob directory. |
 | `tls.cert`, `tls.key` | No | Serve HTTPS. A self-signed laboratory certificate is generated when the files are absent. Omit both to serve plain HTTP behind a TLS proxy. |
-| `compiler` | No | Draft compiler: `poc` (JSON drafts, default) or `dsl` (`eunomia.profiles/v1` YAML). |
+| `compiler` | No | Draft compiler: `poc` (JSON drafts, default) or `dsl` (`alexandria.profiles/v1` YAML). |
 | `vendor_dir` | No | Local copies of vendored profiles for the `dsl` compiler. |
 | `clock_skew` | No | Tolerance applied to token and credential times. |
 | `clock_file` | No | Read the current instant from a file (PoC and tests). |

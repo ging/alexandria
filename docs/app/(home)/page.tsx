@@ -19,9 +19,9 @@ export default function HomePage() {
     {
       icon: BookOpen,
       category: 'Profile DSL & Compiler',
-      title: 'eunomia.profiles/v1 & alexandriac',
+      title: 'alexandria.profiles/v1 & alexandriac',
       description:
-        'Author ODRL policy profiles and SpaceProfiles in YAML. Validate across N1–N5 and deterministically generate RDF, JSON-LD, SHACL, JSON Schema, and Cedar artifacts.',
+        'Author ODRL policy profiles and SpaceProfiles in YAML. Validate across N1–N5 and deterministically generate RDF, JSON-LD, SHACL and JSON Schema artifacts.',
       link: '/docs/vhub/profiles-dsl',
     },
     {
@@ -74,7 +74,7 @@ export default function HomePage() {
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 mb-8 rounded-full border border-fd-border bg-fd-card/80 backdrop-blur-md text-xs font-medium text-fd-foreground shadow-xs">
             <Sparkles className="size-3.5 text-[#e6007e]" />
-            <span>Specification v0.3.0 · W3C VC 2.0 eddsa-jcs-2022 · eunomia.profiles/v1</span>
+            <span>Specification v0.3.0 · W3C VC 2.0 eddsa-jcs-2022 · alexandria.profiles/v1</span>
           </div>
 
           {/* Headline */}

@@ -1,5 +1,5 @@
 // Package http_ui is the driving adapter that serves the embedded console on the admin listener under /ui/.
-// It is mounted only beside the admin API, never on DSP or management listeners, and exposes the client workspace.
+// It is mounted only beside the admin API, never on DSP or management listeners (REQ-CLI-019); laboratory tooling (DP-14).
 package http_ui
 
 import (

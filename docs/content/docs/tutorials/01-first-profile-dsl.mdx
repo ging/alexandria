@@ -1,5 +1,5 @@
 ---
-title: "1. Your First Profile in eunomia.profiles/v1"
+title: "1. Your First Profile in alexandria.profiles/v1"
 description: Learn how to author an OdrlProfile and SpaceProfile in YAML, validate N1–N5 rules, and generate deterministic artifacts with alexandriac.
 ---
 
@@ -9,13 +9,13 @@ import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 
 # Tutorial 1: Authoring & Compiling Your First Profile (`alexandriac`)
 
-In a sovereign dataspace, participants never hand-edit SHACL shapes, JSON-LD contexts, JSON Schemas, and Cedar schemas separately—doing so inevitably leads to semantic drift across validation engines. Instead, you author a single source of truth in the **`eunomia.profiles/v1`** YAML language, and the **`alexandriac`** compiler generates every artifact deterministically.
+In a sovereign dataspace, participants never hand-edit SHACL shapes, JSON-LD contexts and JSON Schemas separately—doing so inevitably leads to semantic drift across validation engines. Instead, you author a single source of truth in the **`alexandria.profiles/v1`** YAML language, and the **`alexandriac`** compiler generates every artifact deterministically.
 
 In this first tutorial, you will:
 1. Build the `alexandriac` command-line compiler.
 2. Author an `OdrlProfile` and a `SpaceProfile` in YAML.
 3. Validate the profile across the 5 normative levels (`N1`–`N5`).
-4. Compile and inspect the generated artifacts (`vocab.ttl`, `context.jsonld`, `shapes.ttl`, `schema.json`, `cedar.schema`, `spec.html`, and `space-lock.json`).
+4. Compile and inspect the generated artifacts (`vocab.ttl`, `context.jsonld`, `shapes.ttl`, `schema.json`, `spec.html`, and `space-lock.json`).
 5. Trigger and understand compiler diagnostics when a breaking change violates lifecycle rules (`N4`).
 
 ---
@@ -39,7 +39,7 @@ Verify the CLI usage:
 
 ### Step 2: Inspect an `OdrlProfile` Document
 
-An `OdrlProfile` defines domain-specific policy terms (`action`, `left_operand`, `right_operand`), adopts standard ODRL 2.2 terms, and optionally declares runtime Cedar enforcement bindings.
+An `OdrlProfile` defines domain-specific policy terms (`action`, `left_operand`, `right_operand`), adopts standard ODRL 2.2 terms.
 
 Let's validate the built-in `colors.profile.yaml` located in `internal/dsl/testdata/colors.profile.yaml`:
 
@@ -60,8 +60,6 @@ Now compile it into `/tmp/colors-build`:
 
 Output:
 ```text
-/tmp/colors-build/profiles/odrl/colors/0.1.0/cedar-mapping.json
-/tmp/colors-build/profiles/odrl/colors/0.1.0/cedar.schema
 /tmp/colors-build/profiles/odrl/colors/0.1.0/context.jsonld
 /tmp/colors-build/profiles/odrl/colors/0.1.0/prof.ttl
 /tmp/colors-build/profiles/odrl/colors/0.1.0/schema.json
@@ -71,7 +69,7 @@ Output:
 ```
 
 <Callout type="info">
-Because the `color` left operand in `colors.profile.yaml` declares an `enforcement` block (`cedar_path: context.color`, `pdp_level: PDP-4`), `alexandriac` automatically generates `cedar-mapping.json` and `cedar.schema` alongside the RDF, SHACL, and JSON Schema artifacts!
+The `color` left operand declares an `enforcement` block. It is parsed and validated, but the policy-engine projection it feeds is currently disconnected, so no extra artefacts are generated for it.
 </Callout>
 
 ### Step 3: Create a Complete Space Bundle (`OdrlProfile` + `SpaceProfile`)
@@ -82,7 +80,7 @@ Create a file `/tmp/my-space-v1.yaml` containing both an `OdrlProfile` and a `Sp
 
 ```bash
 cat << 'EOF' > /tmp/my-space-v1.yaml
-dsl: eunomia.profiles/v1
+dsl: alexandria.profiles/v1
 kind: OdrlProfile
 profile:
   id: https://example.com/odrl/profile/mobility
@@ -114,7 +112,7 @@ terms:
       datatype: xsd:integer
       operators: [gt, gteq]
 ---
-dsl: eunomia.profiles/v1
+dsl: alexandria.profiles/v1
 kind: SpaceProfile
 space:
   id: https://example.com/spaces/mobility
@@ -179,7 +177,7 @@ Notice how `profiles/odrl/mobility/1.0.0/schema.json` is a **self-contained JSON
 
 ### Step 5: Test Cross-Release Evolution Rules (`N4` Validation)
 
-The `eunomia.profiles/v1` specification enforces strict governance over vocabulary evolution (`N4`):
+The `alexandria.profiles/v1` specification enforces strict governance over vocabulary evolution (`N4`):
 - You **cannot delete** a term from a profile (`TERM_REMOVED`).
 - You **cannot retire** an active term directly without first deprecating it in an intermediate release (`TERM_RETIRED_WITHOUT_DEPRECATION`).
 

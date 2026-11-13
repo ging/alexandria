@@ -17,7 +17,7 @@ Reference implementation of **Specification v0.3.0** (`alexandria-vhub`, F2–F8
 
 - **[`cmd/alexandria-server`](cmd/alexandria-server/main.go) (`C-HUB`):** Namespaces and stewards, OAuth 2.0/OIDC `at+jwt` authentication via JWKS (`A1`–`A5`) and the §3.5 authorization table, `hosted` and `proxy` vocabulary registry (`/pub/{ns}/vocab/{name}`), draft/candidate/release/revocation lifecycle, W3C VC 2.0 credentials signed with `eddsa-jcs-2022`, periodic `VersionListing` re-issuance, JSON-LD 1.1 `/v1` responses, and immutable `/pub` artifacts (including `/pub/_vhub/v1/context.jsonld` and `vocab.ttl`).
 - **[`cmd/alexandria-client`](cmd/alexandria-client/main.go) (`C-CLI`):** L7 edge proxy in front of an unmodified DSP connector, dynamic rule set (`A.6`) with CRUD (`/rules`) and side-effect-free `:explain` (`/rules:explain`), synchronization `S1`–`S13`, proof verification `V0`–`V4` (`did:key` and `did:web`), state machine (`Onboarding`, `Active`, `Transition`, `Degraded`, `FailClosed`), classification (`ok`, `warning`, `violation`), mode actions (`observe`, `shadow`, `enforce`), `VHub-Verdict` RFC 9651 header, agreement capture and transfer admission, package garbage collection, and passive catalog audit.
-- **[`cmd/alexandriac`](cmd/alexandriac/main.go):** Offline CLI compiler for the profile language (`eunomia.profiles/v1`).
+- **[`cmd/alexandriac`](cmd/alexandriac/main.go):** Offline CLI compiler for the profile language (`alexandria.profiles/v1`).
 
 ---
 
@@ -68,7 +68,7 @@ alexandria/
 │   ├── client/               # Bounded context: alexandria-client (module.go, domain, app, config, adapters)
 │   ├── clock/                # System and file-backed timex.Clock implementations (DP-8)
 │   ├── core/                 # Pure shared core: timex, semver, canon (JCS), ni, did, vc, lifecycle, pkgv, codes, problem, schemas, jsonld
-│   ├── dsl/                  # Profile language compiler (eunomia.profiles/v1)
+│   ├── dsl/                  # Profile language compiler (alexandria.profiles/v1)
 │   ├── server/               # Bounded context: alexandria-server (module.go, domain, app, config, adapters)
 │   └── testkit/              # In-memory test doubles, fake IdP, fake clock & F6 fixtures
 ├── spec/                     # Normative Appendix A schemas, A.5 context.jsonld, examples & requirements.tsv
