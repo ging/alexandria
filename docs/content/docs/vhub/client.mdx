@@ -7,7 +7,7 @@ import { Callout } from 'fumadocs-ui/components/callout';
 
 # `alexandria-client` Reference (`C-CLI`)
 
-**`alexandria-client`** (`cmd/alexandria-client`, `internal/client`) is an L7 proxy placed in front of an unmodified DSP connector. It keeps a verified local copy of the packages of one namespace and decides on every message with local state only.
+**`alexandria-client`** (`cmd/alexandria-client`, `internal/client`) is an L7 proxy placed in front of an unmodified DSP connector. It keeps a verified local copy of the packages of one namespace and decides on every message with local state only. It can also run as a **validator** behind another proxy such as Envoy (see [Deployment modes](#deployment-modes)).
 
 ---
 
@@ -21,6 +21,23 @@ import { Callout } from 'fumadocs-ui/components/callout';
 | `admin` | API | Status, rules, agreements, audit, health and metrics. Never mounted on a traffic listener (`REQ-CLI-019`). |
 
 Requests and responses are forwarded byte for byte; the only thing the client ever adds is the `VHub-Verdict` header (`REQ-SYS-003`, `REQ-CLI-014`).
+
+### Deployment modes
+
+`mode` selects who forwards the traffic. The decision path (rules, gates, classification, events, admin API) is the same in both.
+
+| `mode` | The client… | Traffic listeners | `upstreams` |
+|:---|:---|:---|:---|
+| `proxy` (default) | Decides and forwards. | Reverse and forward proxies, as in the table above. | Required. |
+| `validator` | Only decides; an external proxy forwards. | Check endpoints: the proxy sends the original method, path and body. | Not used. |
+
+In `validator` mode a listener answers `200` to allow (with `VHub-Verdict` on a `forward-notice`) and the §4.8 reject (`400`/`422`, body and `VHub-Verdict`) otherwise, which is the contract of Envoy's `ext_authz` HTTP service. Rules still match on `listener`, so each proxy listener asks the client listener of the same name.
+
+<Callout type="warn">
+In `validator` mode the client never sees the connector's response: an agreement is captured when its `ContractAgreementMessage` is allowed rather than on the connector's `2xx`, `validate_response` rules are not evaluated, and byte-identical forwarding is the responsibility of the external proxy.
+</Callout>
+
+`examples/proxy` and `examples/envoy` run the F6 scenario through each topology (`make example-proxy`, `make example-envoy`).
 
 ---
 

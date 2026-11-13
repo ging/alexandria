@@ -1,0 +1,16 @@
+# alexandria-client as a validator (mode: validator): Envoy proxies the connector and asks before forwarding.
+# No upstreams: the client never forwards. Each traffic listener answers the checks of the proxy listener of the same name.
+mode: validator
+trust:
+  hub: "https://127.0.0.1:8443"
+  namespace: "demo"
+  hub_did: "did:key:z6MkpTHR8VNsBxYAAWHut2Geadd9jSwuBV8xRoAnwWsdvktH"
+  context: "https://127.0.0.1:8443/pub/_vhub/v1/context.jsonld"
+listeners:
+  # Envoy's ext_authz filter calls this address (VALIDATOR_PORT in envoy.yaml); it must not be reachable by counterparties.
+  dsp-ingress: { bind: "127.0.0.1:9085" }
+  admin: { bind: "127.0.0.1:9090" }
+rules:
+  seed: "file:deploy/rules.seed.json"
+events:
+  sink: "file:var/client/events.jsonl"

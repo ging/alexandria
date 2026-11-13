@@ -6,11 +6,32 @@
   "additionalProperties": false,
   "required": [
     "trust",
-    "upstreams",
     "listeners",
     "events"
   ],
+  "if": {
+    "required": [
+      "mode"
+    ],
+    "properties": {
+      "mode": {
+        "const": "validator"
+      }
+    }
+  },
+  "else": {
+    "required": [
+      "upstreams"
+    ]
+  },
   "properties": {
+    "mode": {
+      "enum": [
+        "proxy",
+        "validator"
+      ],
+      "default": "proxy"
+    },
     "trust": {
       "type": "object",
       "additionalProperties": false,

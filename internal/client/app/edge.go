@@ -1,4 +1,4 @@
-// Package app implements the hot path: Explainer decides without effects and Edge adds forwarding, events, capture and response validation.
+// Package app implements the hot path: Explainer decides without effects and Edge adds forwarding (or a check for an external proxy), events, capture and response validation.
 // Both run domain.Decide on one snapshot and one rule revision; neither holds a HubAPI or DIDResolver (REQ-SYS-002, REQ-SYS-003, REQ-CLI-010..015, REQ-CLI-021, REQ-CLI-032).
 package app
 
@@ -109,22 +109,9 @@ type Edge struct {
 
 // Handle processes one message end to end; the forwarded body and headers are never modified.
 func (e *Edge) Handle(req *Request) *Response {
-	d, state, tL, snap := e.decision(req)
-	for _, g := range d.Gates {
-		e.emit(req, d, g, state, tL)
-	}
-	if d.Action == domain.Reject {
-		ruleID := ""
-		if d.Rule != nil {
-			ruleID = d.Rule.ID
-		}
-		logx.Default(e.Logger).Warn("dsp message rejected",
-			slog.String("listener", string(req.Listener)),
-			slog.String("rule", ruleID),
-			slog.String("state", string(state)),
-			logx.Code(d.Code),
-		)
-		return e.reject(req, d)
+	d, state, tL, snap, rejected := e.admit(req)
+	if rejected != nil {
+		return rejected
 	}
 	resp := e.forward(req)
 	if d.Action == domain.ForwardNotice {
@@ -139,6 +126,45 @@ func (e *Edge) Handle(req *Request) *Response {
 		}
 	}
 	return resp
+}
+
+// Check decides for an external proxy that forwards itself: 200 allows (with the notice header), anything else is the §4.8 reject.
+func (e *Edge) Check(req *Request) *Response {
+	d, _, tL, snap, rejected := e.admit(req)
+	if rejected != nil {
+		return rejected
+	}
+	resp := &Response{Status: http.StatusOK, Header: http.Header{}}
+	if d.Action == domain.ForwardNotice {
+		resp.Header.Set(domain.HeaderName, d.Header)
+	}
+	if d.Rule != nil && d.Rule.Message == "ContractAgreementMessage" {
+		// The upstream answer is never seen here, so the agreement is captured when it is allowed.
+		e.capture(req, d, snap, tL)
+	}
+	return resp
+}
+
+// admit decides, emits the gate verdicts and returns the reject response when the message must not pass.
+func (e *Edge) admit(req *Request) (domain.Decision, domain.State, timex.Instant, *domain.Snapshot, *Response) {
+	d, state, tL, snap := e.decision(req)
+	for _, g := range d.Gates {
+		e.emit(req, d, g, state, tL)
+	}
+	if d.Action != domain.Reject {
+		return d, state, tL, snap, nil
+	}
+	ruleID := ""
+	if d.Rule != nil {
+		ruleID = d.Rule.ID
+	}
+	logx.Default(e.Logger).Warn("dsp message rejected",
+		slog.String("listener", string(req.Listener)),
+		slog.String("rule", ruleID),
+		slog.String("state", string(state)),
+		logx.Code(d.Code),
+	)
+	return d, state, tL, snap, e.reject(req, d)
 }
 
 // emit sends one vhub.verdict for an evaluated gate that is not ok or carries info codes, and counts it.

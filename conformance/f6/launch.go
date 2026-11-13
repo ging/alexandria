@@ -48,6 +48,9 @@ type Env struct {
 	HubDID                  did.DID
 	CAFile, EventsFile      string
 	Log                     io.Writer
+	// Validator starts the client in validator mode on Check; Ingress is then the address of the external proxy.
+	Validator bool
+	Check     string
 }
 
 // freePort returns a TCP port that is free right now.
@@ -104,7 +107,7 @@ func (e Env) SetClock(ts string) error { return os.WriteFile(e.ClockFile, []byte
 
 // Launch starts fake-idp, fake-connector and alexandria-server from binDir; the client is started later by StartClient.
 func Launch(binDir, work string, log io.Writer) (Env, func(), error) {
-	var ports [6]int
+	var ports [7]int
 	for i := range ports {
 		p, err := freePort()
 		if err != nil {
@@ -117,6 +120,7 @@ func Launch(binDir, work string, log io.Writer) (Env, func(), error) {
 		HubURL: fmt.Sprintf("https://127.0.0.1:%d", ports[0]), IDPURL: fmt.Sprintf("http://127.0.0.1:%d", ports[1]),
 		ConnURL: fmt.Sprintf("http://127.0.0.1:%d", ports[2]), Ingress: fmt.Sprintf("http://127.0.0.1:%d", ports[3]),
 		Egress: fmt.Sprintf("127.0.0.1:%d", ports[4]), Admin: fmt.Sprintf("http://127.0.0.1:%d", ports[5]),
+		Check:  fmt.Sprintf("127.0.0.1:%d", ports[6]),
 		CAFile: filepath.Join(work, "hub.crt"), EventsFile: filepath.Join(work, "client", "events.jsonl"),
 		Log: &syncWriter{w: log},
 	}
@@ -190,6 +194,11 @@ func (e Env) StartClient(log io.Writer) (func(), error) {
 		"rules":  map[string]string{"seed": "file:" + filepath.Join(repoRoot(), "deploy", "rules.seed.json")},
 		"events": map[string]string{"sink": "file:" + e.EventsFile},
 	}
+	if e.Validator {
+		cfg["mode"] = "validator"
+		delete(cfg, "upstreams")
+		cfg["listeners"].(map[string]any)["dsp-ingress"] = map[string]string{"bind": e.Check}
+	}
 	if err := os.MkdirAll(filepath.Join(e.Work, "client"), 0o750); err != nil {
 		return nil, err
 	}
@@ -211,6 +220,37 @@ func (e Env) StartClient(log io.Writer) (func(), error) {
 		return nil, err
 	}
 	return stop, nil
+}
+
+// EnsureBinaries returns binDir when it holds the four binaries, and builds them into fallbackDir otherwise.
+func EnsureBinaries(binDir, fallbackDir string) (string, error) {
+	targets := map[string]string{
+		"alexandria-server": "./cmd/alexandria-server",
+		"alexandria-client": "./cmd/alexandria-client",
+		"fake-idp":          "./deploy/fake-idp",
+		"fake-connector":    "./deploy/fake-connector",
+	}
+	allExist := true
+	for name := range targets {
+		if _, err := os.Stat(filepath.Join(binDir, name)); err != nil {
+			allExist = false
+			break
+		}
+	}
+	if allExist {
+		return filepath.Abs(binDir)
+	}
+	if err := os.MkdirAll(fallbackDir, 0o750); err != nil {
+		return "", err
+	}
+	for name, pkg := range targets {
+		cmd := exec.CommandContext(context.Background(), "go", "build", "-o", filepath.Join(fallbackDir, name), pkg) // #nosec G204 -- fixed package list of this repository.
+		cmd.Dir = repoRoot()
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return "", fmt.Errorf("build %s: %w\n%s", name, err, out)
+		}
+	}
+	return fallbackDir, nil
 }
 
 // Token mints an access token for sub at the current file-clock instant, valid for 100 days.

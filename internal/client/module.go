@@ -1,4 +1,4 @@
-// Package client wires the alexandria-client bounded context: stores, hub client, trust, sync, rules, edge, GC and the admin API.
+// Package client wires the alexandria-client bounded context: stores, hub client, trust, sync, rules, edge (as L7 proxy or validator), GC and the admin API.
 // Edge and Explainer are built without the hub client or DID resolver (DP-2, DP-5, DP-7, REQ-SYS-002, REQ-CLI-001, REQ-CLI-019).
 package client
 
@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/ging/alexandria/internal/client/adapters/authz_http"
 	"github.com/ging/alexandria/internal/client/adapters/did_resolver"
 	"github.com/ging/alexandria/internal/client/adapters/evaluator_poc"
 	"github.com/ging/alexandria/internal/client/adapters/events"
@@ -104,16 +105,18 @@ func New(deps Deps) (*Module, error) {
 		Hub: hub, Trust: trust, Continuity: store, Packages: pkgs, Agreements: agreements, Audit: audit, Status: status,
 		Cell: cell, Clock: deps.Clock, Events: sink, Logger: logx.Component(logger, "sync"), Namespace: ns, HubDID: hubDID, Context: cfg.Trust.Context,
 	}
-	rules := &app.Rules{Store: store_sqlite.Rules{S: store}, Cell: rulesCell, Events: sink, Clock: deps.Clock, Logger: logx.Component(logger, "rules"), Namespace: ns, HasManagement: cfg.Upstreams.Management != ""}
+	rules := &app.Rules{Store: store_sqlite.Rules{S: store}, Cell: rulesCell, Events: sink, Clock: deps.Clock, Logger: logx.Component(logger, "rules"), Namespace: ns, HasManagement: hasManagement(cfg)}
 	if cerr := rules.Init(cfg.Rules.Seed); cerr != nil {
 		return nil, cerr
 	}
 	if err := syncer.Restore(); err != nil {
 		return nil, err
 	}
-	up, err := proxy_dsp.NewUpstream(cfg.Upstreams.DSP, cfg.Upstreams.Management)
-	if err != nil {
-		return nil, err
+	var up app.Upstream
+	if !cfg.Validator() {
+		if up, err = proxy_dsp.NewUpstream(cfg.Upstreams.DSP, cfg.Upstreams.Management); err != nil {
+			return nil, err
+		}
 	}
 	explainer := app.Explainer{
 		Snap: cell, Rules: rulesCell, Evaluator: ev, Agreements: store_sqlite.Agreements{S: store}, Clock: deps.Clock,
@@ -139,11 +142,27 @@ func New(deps Deps) (*Module, error) {
 			Listener:   "admin",
 		}, adminRoot),
 	}
-	proxyLog := logx.Component(logger, "proxy.dsp")
+	proxyLog, authzLog := logx.Component(logger, "proxy.dsp"), logx.Component(logger, "authz.http")
 	for _, l := range []domain.Listener{domain.DSPIngress, domain.MgmtIngress, domain.DSPEgress} {
+		if cfg.Validator() {
+			handlers[string(l)] = authz_http.Handler{Edge: edge, Listener: l, Latency: reg, Logger: authzLog, Tracer: deps.Tracer}
+			continue
+		}
 		handlers[string(l)] = proxy_dsp.Handler{Edge: edge, Listener: l, Latency: reg, Logger: proxyLog, Tracer: deps.Tracer}
 	}
+	if cfg.Validator() {
+		logger.Info("validator mode: traffic listeners answer proxy checks and never forward; validate_response rules are not evaluated")
+	}
 	return &Module{cfg: cfg, syncer: syncer, gc: gc, status: status, edge: edge, store: store, handlers: handlers}, nil
+}
+
+// hasManagement reports whether mgmt-ingress rules have somewhere to go: an upstream, or in validator mode the listener an external proxy checks against.
+func hasManagement(cfg *config.Config) bool {
+	if cfg.Validator() {
+		_, ok := cfg.Listeners[string(domain.MgmtIngress)]
+		return ok
+	}
+	return cfg.Upstreams.Management != ""
 }
 
 // Coded returns the coded error of a startup failure, if any.
