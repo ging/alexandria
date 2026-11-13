@@ -147,7 +147,7 @@ function NewDraft({ slug, initial, open, onOpenChange, onCreated }: { slug: stri
       onOpenChange={onOpenChange}
       width="max-w-3xl"
       title="New draft"
-      description="JSON for the PoC compiler or a YAML profile document (eunomia.profiles/v1) for the DSL compiler."
+      description="JSON for the PoC compiler or a YAML profile document (alexandria.profiles/v1) for the DSL compiler."
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>

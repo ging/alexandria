@@ -1,4 +1,4 @@
-// Package dsl defines the document model of the eunomia.profiles/v1 language: OdrlProfile and SpaceProfile (ConformanceSuite is out of scope).
+// Package dsl defines the document model of the alexandria.profiles/v1 language: OdrlProfile and SpaceProfile (ConformanceSuite is out of scope).
 // Typed view of a YAML document after it has passed the normative schema (Parte II §7–§11).
 package dsl
 
@@ -9,7 +9,7 @@ import (
 
 // Language identifier and document kinds of §7.
 const (
-	Language         = "eunomia.profiles/v1"
+	Language         = "alexandria.profiles/v1"
 	KindOdrlProfile  = "OdrlProfile"
 	KindSpaceProfile = "SpaceProfile"
 )
@@ -23,8 +23,8 @@ var Reserved = map[string]string{
 	"owl":  "http://www.w3.org/2002/07/owl#",
 	"skos": "http://www.w3.org/2004/02/skos/core#",
 	"dct":  "http://purl.org/dc/terms/",
-	"sig":  "https://w3id.org/eunomia/ns/signature#",
-	"eu":   "https://w3id.org/eunomia/ns/",
+	"sig":  "https://w3id.org/alexandria/ns/signature#",
+	"alx":  "https://w3id.org/alexandria/ns/",
 }
 
 // LangMap maps a BCP 47 tag to text; it always contains "en".

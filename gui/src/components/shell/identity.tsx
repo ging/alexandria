@@ -27,8 +27,8 @@ export function IdentityMenu({ onAdd }: { onAdd: () => void }) {
     <Menu
       align="end"
       trigger={
-        <button className="flex h-6 items-center gap-1.5 rounded-md border border-line-strong bg-bg px-2 text-xs hover:bg-hover">
-          <UserRound className={cn('size-3.5', active ? 'text-accent dark:text-info' : 'text-subtle')} />
+        <button className="flex h-8 items-center gap-1.5 rounded-md border border-line-strong bg-bg px-2.5 text-xs transition-colors hover:border-accent/50 hover:bg-hover">
+          <UserRound className={cn('size-3.5', active ? 'text-accent' : 'text-subtle')} />
           <span className="max-w-32 truncate font-medium">{active ? active.label : 'Anonymous'}</span>
           {active?.admin ? <Badge tone="purple">admin</Badge> : null}
           {active?.expired ? <Badge tone="danger">expired</Badge> : null}

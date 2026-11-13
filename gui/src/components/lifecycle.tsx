@@ -62,7 +62,7 @@ export function ModeBadge({ mode }: { mode: string }) {
 }
 
 const marks: { key: keyof VersionRecord; label: string; color: string }[] = [
-  { key: 'published_at', label: 'Published', color: 'bg-info' },
+  { key: 'published_at', label: 'Published', color: 'bg-purple' },
   { key: 'new_content_from', label: 'New content from', color: 'bg-success' },
   { key: 'enforced_from', label: 'Enforced from', color: 'bg-warning' },
   { key: 'revoked_from', label: 'Revoked from', color: 'bg-danger' },
@@ -82,7 +82,7 @@ export function Timeline({ records, now = Date.now(), selected, onSelect }: { re
     <div className="space-y-2">
       <div className="relative">
         <div className="pointer-events-none absolute inset-y-0 z-10 w-px bg-accent" style={{ left: `calc(64px + (100% - 64px) * ${(now - from) / span})` }}>
-          <span className="absolute -top-0.5 left-1 text-2xs font-medium whitespace-nowrap text-accent dark:text-info">now</span>
+          <span className="absolute -top-0.5 left-1 text-2xs font-medium whitespace-nowrap text-accent">now</span>
         </div>
         <div className="space-y-1 pt-4">
           {records.map((r) => {

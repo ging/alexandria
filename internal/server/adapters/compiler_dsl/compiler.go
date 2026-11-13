@@ -1,4 +1,4 @@
-// Package compiler_dsl is the ProfileCompiler adapter over the eunomia.profiles/v1 language: a draft is a YAML stream with one SpaceProfile and its OdrlProfiles.
+// Package compiler_dsl is the ProfileCompiler adapter over the alexandria.profiles/v1 language: a draft is a YAML stream with one SpaceProfile and its OdrlProfiles.
 // Language roles outside the manifest enum become "other", and slot obligations go to profile/slots.json (agent decision, REQ-HUB-001, DP-6).
 package compiler_dsl
 

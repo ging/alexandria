@@ -37,7 +37,7 @@ var odrlSiblings = map[string][]string{
 // vocabPrefixes returns the prefixes used by the profile Turtle artefacts.
 func vocabPrefixes(ix *Index) map[string]string {
 	out := map[string]string{}
-	for _, k := range []string{"odrl", "rdf", "rdfs", "owl", "skos", "dct", "xsd", "sig", "eu"} {
+	for _, k := range []string{"odrl", "rdf", "rdfs", "owl", "skos", "dct", "xsd", "sig", "alx"} {
 		out[k] = Reserved[k]
 	}
 	for k, v := range ix.P.Namespaces {
@@ -89,7 +89,7 @@ func emitVocab(ix *Index) []byte {
 	for _, e := range ix.Signed() {
 		emitSignature(t, ix, e)
 	}
-	t.raw(annotationDeclarations)
+	t.raw(declarations())
 	for _, e := range sortedEntries(ix.Entries) {
 		if e.Created != nil && e.Created.ExtraTurtle != "" {
 			t.raw("# extra_turtle of " + e.CURIE + "\n" + strings.TrimSpace(e.Created.ExtraTurtle) + "\n\n")
@@ -129,7 +129,7 @@ func emitTerm(t *turtle, ix *Index, e *Entry) {
 		p("skos:note", langLits(tm.Note)...),
 		p("dct:isReplacedBy", expand(tm.ReplacedBy)))
 	if tm.State() != "active" {
-		pairs = append(pairs, p("owl:deprecated", "true"), p("eu:status", lit(tm.State())))
+		pairs = append(pairs, p("owl:deprecated", "true"), p("alx:status", lit(tm.State())))
 	}
 	t.subject(t.ref(e.IRI), pairs...)
 }
@@ -185,7 +185,10 @@ func emitSignature(t *turtle, ix *Index, e *Entry) {
 		pairs = append(pairs, p("sig:scheme", t.ref(sc)))
 	}
 	if en := e.Enforcement; en != nil {
-		pairs = append(pairs, p("eu:cedarPath", lit(en.CedarPath)), p("eu:pdpLevel", optLit(en.PDPLevel)), p("eu:evalTiming", optLit(en.EvalTiming)))
+		if cedarEnabled {
+			pairs = append(pairs, p("alx:cedarPath", lit(en.CedarPath)))
+		}
+		pairs = append(pairs, p("alx:pdpLevel", optLit(en.PDPLevel)), p("alx:evalTiming", optLit(en.EvalTiming)))
 	}
 	t.subject(t.ref(sigIRI(ix, e)), pairs...)
 }
@@ -232,10 +235,10 @@ sig:valueKind a owl:AnnotationProperty .
 sig:value a owl:AnnotationProperty .
 sig:scheme a owl:AnnotationProperty .
 sig:allowReference a owl:AnnotationProperty .
-eu:cedarPath a owl:AnnotationProperty .
-eu:pdpLevel a owl:AnnotationProperty .
-eu:evalTiming a owl:AnnotationProperty .
-eu:status a owl:AnnotationProperty .
+alx:cedarPath a owl:AnnotationProperty .
+alx:pdpLevel a owl:AnnotationProperty .
+alx:evalTiming a owl:AnnotationProperty .
+alx:status a owl:AnnotationProperty .
 skos:member a owl:AnnotationProperty .
 skos:prefLabel a owl:AnnotationProperty .
 skos:definition a owl:AnnotationProperty .

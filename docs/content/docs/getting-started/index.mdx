@@ -18,7 +18,7 @@ Alexandria lets a dataspace authority publish the vocabularies and policy profil
 |:---|:---|:---|
 | **`alexandria-server`** | `cmd/alexandria-server` | **Vocabulary Hub (`C-HUB`).** Serves the `/v1` management API and the public `/pub` tree. Validates OAuth 2.0 bearer tokens, keeps namespaces isolated and signs credentials with the hub key. |
 | **`alexandria-client`** | `cmd/alexandria-client` | **Edge proxy (`C-CLI`).** Sits in front of a DSP connector, synchronizes verified packages and applies the rule set to every message. Exposes an admin API on its own listener. |
-| **`alexandriac`** | `cmd/alexandriac` | **Profile compiler.** Validates and compiles `eunomia.profiles/v1` YAML documents offline. |
+| **`alexandriac`** | `cmd/alexandriac` | **Profile compiler.** Validates and compiles `alexandria.profiles/v1` YAML documents offline. |
 | **`fake-idp`** | `deploy/fake-idp` | Laboratory OAuth 2.0 / OIDC provider: discovery, JWKS, an interactive sign-in page and a token CLI. |
 | **`fake-connector`** | `deploy/fake-connector` | Laboratory DSP connector that acknowledges and records the traffic it receives. |
 

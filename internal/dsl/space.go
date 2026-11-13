@@ -28,7 +28,7 @@ func (r *Resolved) Roles() map[string]bool {
 	case r.Profile != nil:
 		out["shacl"], out["json-schema"] = true, true
 		for _, e := range r.Profile.Signed() {
-			if e.Enforcement != nil {
+			if cedarEnabled && e.Enforcement != nil {
 				out["cedar-mapping"], out["cedar-schema"] = true, true
 			}
 		}

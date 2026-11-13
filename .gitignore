@@ -96,6 +96,10 @@ __pycache__/
 CURRENT_NOTES.md
 /CLAUDE.md
 /GEMINI.md
+DECISIONS.md
+PROFILES_DSL.md
+OPEN_QUESTIONS.md
+TRACEABILITY.md
 
 # ─── Assistants and code-intelligence tools ──────────────────────────────────
 .claude/

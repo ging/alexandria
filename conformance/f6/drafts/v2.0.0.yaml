@@ -1,5 +1,5 @@
 # F6 release 2.0.0: ex:access goes deprecated in profile 1.1.0 (odrl:read adopted) and retired in profile 2.0.0.
-dsl: eunomia.profiles/v1
+dsl: alexandria.profiles/v1
 kind: OdrlProfile
 profile:
   id: https://example.com/odrl/profile/f6
@@ -21,7 +21,7 @@ terms:
     status: deprecated
     replaced_by: odrl:read
 ---
-dsl: eunomia.profiles/v1
+dsl: alexandria.profiles/v1
 kind: OdrlProfile
 profile:
   id: https://example.com/odrl/profile/f6
@@ -43,7 +43,7 @@ terms:
     status: retired
     replaced_by: odrl:read
 ---
-dsl: eunomia.profiles/v1
+dsl: alexandria.profiles/v1
 kind: SpaceProfile
 space:
   id: https://example.com/spaces/demo

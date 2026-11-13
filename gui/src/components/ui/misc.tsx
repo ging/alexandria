@@ -9,7 +9,7 @@ export type Tone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'in
 
 const tones: Record<Tone, string> = {
   neutral: 'bg-active text-muted',
-  accent: 'bg-accent-soft text-accent dark:text-info',
+  accent: 'bg-accent-soft text-accent',
   success: 'bg-success-soft text-success',
   warning: 'bg-warning-soft text-warning',
   danger: 'bg-danger-soft text-danger',
@@ -30,7 +30,7 @@ const dots: Record<Tone, string> = {
 // Badge renders a compact status pill, optionally with a leading dot.
 export function Badge({ tone = 'neutral', dot, children, className }: { tone?: Tone; dot?: boolean; children: ReactNode; className?: string }) {
   return (
-    <span className={cn('inline-flex h-[18px] items-center gap-1 rounded-sm px-1.5 text-xs font-medium whitespace-nowrap', tones[tone], className)}>
+    <span className={cn('inline-flex h-5 items-center gap-1 rounded-sm px-1.5 text-xs font-medium whitespace-nowrap', tones[tone], className)}>
       {dot ? <span className={cn('size-1.5 rounded-full', dots[tone])} /> : null}
       {children}
     </span>
@@ -50,7 +50,7 @@ const methods: Record<string, string> = {
   DELETE: 'text-danger',
 }
 
-// Method renders an HTTP method with the Postman color convention.
+// Method renders an HTTP method with semantic accent coloring.
 export function Method({ value, className }: { value: string; className?: string }) {
   return <span className={cn('font-mono text-xs font-semibold tracking-tight', methods[value.toUpperCase()] ?? 'text-muted', className)}>{value.toUpperCase()}</span>
 }
@@ -58,7 +58,7 @@ export function Method({ value, className }: { value: string; className?: string
 // Tabs renders an underlined tab strip controlled by the caller.
 export function Tabs<T extends string>({ tabs, value, onChange, className, trailing }: { tabs: { id: T; label: ReactNode; count?: number }[]; value: T; onChange: (id: T) => void; className?: string; trailing?: ReactNode }) {
   return (
-    <div role="tablist" className={cn('flex h-8 shrink-0 items-stretch gap-4 border-b px-4', className)}>
+    <div role="tablist" className={cn('flex h-9 shrink-0 items-stretch gap-5 border-b px-6', className)}>
       {tabs.map((t) => (
         <button
           key={t.id}
@@ -66,15 +66,17 @@ export function Tabs<T extends string>({ tabs, value, onChange, className, trail
           aria-selected={value === t.id}
           onClick={() => onChange(t.id)}
           className={cn(
-            '-mb-px flex items-center gap-1.5 border-b-2 text-sm transition-colors',
-            value === t.id ? 'border-accent font-medium text-fg' : 'border-transparent text-muted hover:text-fg',
+            'relative -mb-px flex items-center gap-1.5 text-sm transition-colors',
+            value === t.id
+              ? 'font-medium text-fg after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-full after:bg-accent-gradient'
+              : 'text-muted hover:text-fg',
           )}
         >
           {t.label}
-          {t.count != null ? <span className="tnum rounded-sm bg-active px-1 text-2xs text-muted">{t.count}</span> : null}
+          {t.count != null ? <span className="tnum rounded-sm bg-active px-1.5 text-2xs text-muted">{t.count}</span> : null}
         </button>
       ))}
-      {trailing ? <div className="ml-auto flex items-center gap-1">{trailing}</div> : null}
+      {trailing ? <div className="ml-auto flex items-center gap-1.5">{trailing}</div> : null}
     </div>
   )
 }
@@ -113,7 +115,7 @@ export function Mono({ children, copy, className, title }: { children: ReactNode
 // KV renders a definition grid of labelled values.
 export function KV({ items, className }: { items: [label: string, value: ReactNode][]; className?: string }) {
   return (
-    <dl className={cn('grid grid-cols-[minmax(110px,max-content)_minmax(0,1fr)] gap-x-4 gap-y-1.5', className)}>
+    <dl className={cn('grid grid-cols-[minmax(110px,max-content)_minmax(0,1fr)] gap-x-4 gap-y-2', className)}>
       {items.map(([k, v]) => (
         <div key={k} className="contents">
           <dt className="text-muted">{k}</dt>
@@ -126,21 +128,21 @@ export function KV({ items, className }: { items: [label: string, value: ReactNo
 
 // Spinner renders an inline loading indicator.
 export function Spinner({ className }: { className?: string }) {
-  return <Loader2 className={cn('size-4 animate-spin text-subtle', className)} />
+  return <Loader2 className={cn('size-4 animate-spin text-accent', className)} />
 }
 
 // Kbd renders a keyboard shortcut hint.
 export function Kbd({ children }: { children: ReactNode }) {
-  return <kbd className="rounded-sm border border-line-strong bg-bg px-1 font-sans text-2xs text-muted">{children}</kbd>
+  return <kbd className="rounded-sm border border-line-strong bg-bg px-1.5 font-sans text-2xs text-muted">{children}</kbd>
 }
 
 // Empty renders a centered placeholder for views without data.
 export function Empty({ icon, title, children, action }: { icon?: ReactNode; title: string; children?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="flex h-full min-h-48 flex-col items-center justify-center gap-2 px-6 py-10 text-center">
-      {icon ? <div className="mb-1 text-subtle [&>svg]:size-7 [&>svg]:stroke-[1.25]">{icon}</div> : null}
-      <p className="text-base font-medium text-fg">{title}</p>
-      {children ? <p className="max-w-sm text-sm text-muted">{children}</p> : null}
+    <div className="flex h-full min-h-56 flex-col items-center justify-center gap-2.5 px-6 py-12 text-center">
+      {icon ? <div className="mb-1 text-accent/80 [&>svg]:size-8 [&>svg]:stroke-[1.35]">{icon}</div> : null}
+      <p className="text-base font-semibold text-fg">{title}</p>
+      {children ? <p className="max-w-sm text-sm leading-relaxed text-muted">{children}</p> : null}
       {action ? <div className="mt-2 flex gap-2">{action}</div> : null}
     </div>
   )
@@ -150,15 +152,15 @@ export function Empty({ icon, title, children, action }: { icon?: ReactNode; tit
 export function Page({ title, subtitle, actions, children, tabs, flush }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; children: ReactNode; tabs?: ReactNode; flush?: boolean }) {
   return (
     <div className="flex h-full min-w-0 flex-col">
-      <header className="flex min-h-11 shrink-0 items-center justify-between gap-4 border-b px-4 py-2">
+      <header className="flex min-h-14 shrink-0 items-center justify-between gap-4 border-b px-6 py-3">
         <div className="min-w-0">
-          <h1 className="truncate text-lg font-semibold text-fg">{title}</h1>
-          {subtitle ? <p className="truncate text-xs text-muted">{subtitle}</p> : null}
+          <h1 className="truncate text-lg font-semibold tracking-tight text-fg">{title}</h1>
+          {subtitle ? <p className="mt-0.5 truncate text-xs text-muted">{subtitle}</p> : null}
         </div>
-        {actions ? <div className="flex shrink-0 items-center gap-1.5">{actions}</div> : null}
+        {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
       </header>
       {tabs}
-      <div className={cn('min-h-0 flex-1 overflow-auto', !flush && 'p-4')}>{children}</div>
+      <div className={cn('min-h-0 flex-1 overflow-auto', !flush && 'p-6')}>{children}</div>
     </div>
   )
 }
@@ -166,12 +168,12 @@ export function Page({ title, subtitle, actions, children, tabs, flush }: { titl
 // Section groups related content under a small caption.
 export function Section({ title, actions, children, className }: { title: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <section className={cn('rounded-lg border bg-bg', className)}>
-      <header className="flex h-8 items-center justify-between gap-2 border-b px-3">
+    <section className={cn('rounded-lg border bg-raised', className)}>
+      <header className="flex h-9 items-center justify-between gap-2 border-b px-4">
         <h2 className="label-caps">{title}</h2>
-        {actions ? <div className="flex items-center gap-1">{actions}</div> : null}
+        {actions ? <div className="flex items-center gap-1.5">{actions}</div> : null}
       </header>
-      <div className="p-3">{children}</div>
+      <div className="p-4">{children}</div>
     </section>
   )
 }

@@ -29,7 +29,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <Tooltip.Provider delayDuration={250}>
         <RouterProvider router={router} />
-        <Toaster theme={dark ? 'dark' : 'light'} position="bottom-right" offset={32} toastOptions={{ style: { fontSize: 12, fontFamily: 'var(--font-sans)', background: 'var(--bg-raised)', color: 'var(--fg)', border: '1px solid var(--border-strong)' } }} />
+        <Toaster theme={dark ? 'dark' : 'light'} position="bottom-right" offset={16} toastOptions={{ style: { fontSize: 13, fontFamily: 'var(--font-sans)', background: 'var(--bg-raised)', color: 'var(--fg)', border: '1px solid var(--border-strong)' } }} />
       </Tooltip.Provider>
     </QueryClientProvider>
   )

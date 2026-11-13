@@ -1,5 +1,5 @@
 // Package http_ui is the driving adapter that serves the embedded console on the hub listener under /ui/.
-// It holds no logic: it tells the page it runs beside /v1 and /pub and which issuer and audience to offer for OIDC sign-in.
+// It holds no logic: it tells the page it runs beside /v1 and /pub and which issuer and audience to offer for sign-in; laboratory tooling (DP-14).
 package http_ui
 
 import (

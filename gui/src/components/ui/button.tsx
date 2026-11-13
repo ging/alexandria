@@ -1,5 +1,5 @@
-// Button primitives of the console: dense text buttons and square icon buttons in four visual variants.
-// Sizes follow the compact 24/28px control height used throughout the layout.
+// Button primitives of the console: labelled buttons and square icon buttons in four visual variants.
+// Primary actions carry the warm acid gradient while secondary controls stay strictly neutral.
 import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/cn'
@@ -8,7 +8,7 @@ import { cn } from '@/lib/cn'
 export type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
 
 const variants: Record<Variant, string> = {
-  primary: 'bg-accent text-accent-fg hover:bg-accent-hover border-transparent',
+  primary: 'bg-accent-gradient text-accent-fg border-transparent shadow-2xs hover:opacity-92 active:opacity-85',
   secondary: 'bg-raised text-fg border-line-strong hover:bg-hover',
   ghost: 'bg-transparent text-muted border-transparent hover:bg-hover hover:text-fg',
   danger: 'bg-transparent text-danger border-danger/40 hover:bg-danger-soft',
@@ -30,8 +30,8 @@ export function Button({ variant = 'secondary', size = 'md', icon, loading, clas
       type={type}
       disabled={disabled || loading}
       className={cn(
-        'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md border font-medium whitespace-nowrap transition-colors select-none disabled:opacity-50',
-        size === 'sm' ? 'h-6 px-2 text-xs' : 'h-7 px-2.5 text-sm',
+        'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md border font-medium whitespace-nowrap transition-all select-none disabled:opacity-50',
+        size === 'sm' ? 'h-7 px-2.5 text-xs' : 'h-8 px-3 text-sm',
         variants[variant],
         className,
       )}
@@ -46,7 +46,7 @@ export function Button({ variant = 'secondary', size = 'md', icon, loading, clas
 // IconButton renders a square icon-only action that requires an accessible label.
 export function IconButton({ label, className, size = 'md', children, ...rest }: Omit<ButtonProps, 'icon'> & { label: string }) {
   return (
-    <Button aria-label={label} title={label} variant="ghost" size={size} className={cn(size === 'sm' ? 'w-6 px-0' : 'w-7 px-0', className)} {...rest}>
+    <Button aria-label={label} title={label} variant="ghost" size={size} className={cn(size === 'sm' ? 'w-7 px-0' : 'w-8 px-0', className)} {...rest}>
       {children}
     </Button>
   )

@@ -1,4 +1,4 @@
-dsl: eunomia.profiles/v1
+dsl: alexandria.profiles/v1
 kind: OdrlProfile
 
 profile:
