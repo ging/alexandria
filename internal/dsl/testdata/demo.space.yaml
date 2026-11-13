@@ -1,4 +1,4 @@
-dsl: eunomia.profiles/v1
+dsl: alexandria.profiles/v1
 kind: SpaceProfile
 
 space:
@@ -34,8 +34,6 @@ bindings:
         applies_to: policy_intake
       - role: json-schema
         applies_to: dsp_message
-      - role: cedar-mapping
-        applies_to: pdp_load
 
   - slot: dcat
     profile: https://semiceu.github.io/DCAT-AP/releases/3.0.0/

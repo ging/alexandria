@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://w3id.org/eunomia/dsl/profiles/v1/schema.json",
-  "title": "Eunomia profile DSL v1 (Appendix A, revision 2 alignment; ConformanceSuite omitted)",
+  "$id": "https://w3id.org/alexandria/dsl/profiles/v1/schema.json",
+  "title": "Alexandria profile DSL v1 (Appendix A, revision 2 alignment; ConformanceSuite omitted)",
   "type": "object",
   "required": [
     "dsl",
@@ -9,7 +9,7 @@
   ],
   "properties": {
     "dsl": {
-      "const": "eunomia.profiles/v1"
+      "const": "alexandria.profiles/v1"
     },
     "kind": {
       "enum": [
@@ -382,7 +382,7 @@
                 "skos",
                 "dct",
                 "sig",
-                "eu"
+                "alx"
               ]
             }
           },

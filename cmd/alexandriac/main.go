@@ -1,4 +1,4 @@
-// alexandriac: command-line compiler of eunomia.profiles/v1 YAML into the profile and space artefacts.
+// alexandriac: command-line compiler of alexandria.profiles/v1 YAML into the profile and space artefacts.
 // "validate" reports N1–N5 findings; "compile" also writes the artefacts and space-lock.json (Parte II §12–§13).
 package main
 

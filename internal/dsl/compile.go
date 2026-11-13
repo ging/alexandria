@@ -201,7 +201,7 @@ func profileFiles(ix *Index) map[string][]byte {
 		"vocab.ttl": emitVocab(ix), "context.jsonld": emitContext(ix), "shapes.ttl": emitShapes(ix),
 		"schema.json": emitSchema(ix), "prof.ttl": emitProf(ix), "spec.html": emitSpec(ix),
 	}
-	if hasEnforcement(ix) {
+	if emitsCedar(ix) {
 		out["cedar-mapping.json"], out["cedar.schema"] = emitCedarMapping(ix), emitCedarSchema(ix)
 	}
 	return out
@@ -305,7 +305,7 @@ func (l *Lock) JSON() []byte {
 func (r *Result) spaceProf() []byte {
 	s := r.Space.Space.Space
 	base := strings.TrimRight(s.BaseURL, "/") + "/" + s.Version + "/"
-	t := newTurtle(map[string]string{"prof": "http://www.w3.org/ns/dx/prof/", "dct": Reserved["dct"], "owl": Reserved["owl"], "eu": Reserved["eu"]})
+	t := newTurtle(map[string]string{"prof": "http://www.w3.org/ns/dx/prof/", "dct": Reserved["dct"], "owl": Reserved["owl"], "alx": Reserved["alx"]})
 	var of, res []string
 	for _, b := range r.Bindings {
 		of = append(of, "<"+b.Binding.Profile+">")
@@ -316,8 +316,8 @@ func (r *Result) spaceProf() []byte {
 	t.subject("<"+s.ID+">", p("a", "prof:Profile"), p("dct:title", langLits(s.Title)...), p("owl:versionInfo", lit(s.Version)),
 		p("dct:publisher", "<"+s.Operator+">"), p("prof:isProfileOf", sortedStrings(of)...), p("prof:hasResource", res...))
 	for i, a := range r.Artifacts {
-		t.subject(fmt.Sprintf("<%s#r%d>", s.ID, i), p("a", "prof:ResourceDescriptor"), p("eu:role", lit(a.Role)),
-			p("eu:slot", optLit(a.Slot)), p("eu:appliesTo", litsOf(a.AppliesTo)...),
+		t.subject(fmt.Sprintf("<%s#r%d>", s.ID, i), p("a", "prof:ResourceDescriptor"), p("alx:role", lit(a.Role)),
+			p("alx:slot", optLit(a.Slot)), p("alx:appliesTo", litsOf(a.AppliesTo)...),
 			p("prof:hasArtifact", "<"+base+a.Path+">"), p("dct:format", "<https://www.iana.org/assignments/media-types/"+a.MediaType+">"))
 	}
 	return t.bytes()

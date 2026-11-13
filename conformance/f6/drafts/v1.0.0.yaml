@@ -1,5 +1,5 @@
 # F6 release 1.0.0 of the demo space: the policy slot admits odrl:use and ex:access.
-dsl: eunomia.profiles/v1
+dsl: alexandria.profiles/v1
 kind: OdrlProfile
 profile:
   id: https://example.com/odrl/profile/f6
@@ -17,7 +17,7 @@ terms:
     label: { en: Access }
     definition: { en: To access the asset. }
 ---
-dsl: eunomia.profiles/v1
+dsl: alexandria.profiles/v1
 kind: SpaceProfile
 space:
   id: https://example.com/spaces/demo

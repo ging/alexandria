@@ -32,7 +32,7 @@ func colors(t *testing.T, repl ...string) Source {
 
 // space builds a SpaceProfile binding the colors profile with the given version range and extra bindings.
 func space(version, rng, extra string) Source {
-	return Source{Name: "demo.space.yaml", Data: []byte(`dsl: eunomia.profiles/v1
+	return Source{Name: "demo.space.yaml", Data: []byte(`dsl: alexandria.profiles/v1
 kind: SpaceProfile
 space:
   id: https://example.com/spaces/demo/profile
@@ -50,6 +50,13 @@ bindings:
       - { role: shacl, applies_to: policy_intake }
       - { role: json-schema, applies_to: dsp_message }
 ` + extra)}
+}
+
+// withCedar enables the disconnected Cedar projection for one test.
+func withCedar(t *testing.T) {
+	t.Helper()
+	cedarEnabled = true
+	t.Cleanup(func() { cedarEnabled = false })
 }
 
 // codes returns the codes of the findings with a severity.
@@ -87,8 +94,38 @@ func artifact(t *testing.T, r *Result, path string) []byte {
 func TestSpecProfileExampleCompiles(t *testing.T) {
 	r := Compile(Options{}, colors(t))
 	expectErrors(t, r)
+	if len(r.Artifacts) != 6 {
+		t.Fatalf("%d artefacts, want 6", len(r.Artifacts))
+	}
+}
+
+func TestCedarIsDisconnectedByDefault(t *testing.T) {
+	r := Compile(Options{}, colors(t))
+	for _, a := range r.Artifacts {
+		if strings.Contains(a.Path, "cedar") || strings.Contains(a.Role, "cedar") {
+			t.Fatalf("unexpected Cedar artefact %s (%s)", a.Path, a.Role)
+		}
+	}
+	if vocab := string(artifact(t, r, "profiles/odrl/colors/0.1.0/vocab.ttl")); strings.Contains(vocab, "cedarPath") {
+		t.Fatal("vocab.ttl carries alx:cedarPath while Cedar is disconnected")
+	}
+}
+
+func TestCedarRoleIsUnavailableWhileDisconnected(t *testing.T) {
+	sp := space("1.0.0", "^0.1", "")
+	sp.Data = bytes.Replace(sp.Data, []byte("      - { role: json-schema"), []byte("      - { role: cedar-mapping, applies_to: pdp_load }\n      - { role: json-schema"), 1)
+	expectErrors(t, Compile(Options{}, colors(t), sp), CodeArtifactMissing)
+}
+
+func TestCedarProjectionWhenEnabled(t *testing.T) {
+	withCedar(t)
+	r := Compile(Options{}, colors(t))
+	expectErrors(t, r)
 	if len(r.Artifacts) != 8 {
 		t.Fatalf("%d artefacts, want 8", len(r.Artifacts))
+	}
+	if vocab := string(artifact(t, r, "profiles/odrl/colors/0.1.0/vocab.ttl")); !strings.Contains(vocab, "alx:cedarPath") {
+		t.Fatal("vocab.ttl lacks alx:cedarPath with Cedar enabled")
 	}
 }
 
@@ -143,9 +180,9 @@ func TestCompilationIsDeterministic(t *testing.T) {
 
 func TestN1RejectsAnchorsAliasesAndTags(t *testing.T) {
 	for name, doc := range map[string]string{
-		"anchor": "dsl: &x eunomia.profiles/v1\nkind: OdrlProfile\n",
+		"anchor": "dsl: &x alexandria.profiles/v1\nkind: OdrlProfile\n",
 		"alias":  "a: &x 1\nb: *x\n",
-		"tag":    "dsl: !custom eunomia.profiles/v1\nkind: OdrlProfile\n",
+		"tag":    "dsl: !custom alexandria.profiles/v1\nkind: OdrlProfile\n",
 	} {
 		r := Compile(Options{}, Source{Name: name, Data: []byte(doc)})
 		expectErrors(t, r, CodeYAML)
@@ -363,7 +400,7 @@ func TestSpaceArtefactsCarryGates(t *testing.T) {
 func mustSemver(s string) semver.Version { return semver.MustParse(s) }
 
 func TestClosedListWithoutLeftOperandsForbidsConstraints(t *testing.T) {
-	src := Source{Name: "p.yaml", Data: []byte("dsl: eunomia.profiles/v1\nkind: OdrlProfile\nprofile:\n  id: https://example.com/p\n  version: 1.0.0\n  title: { en: P }\n  publisher: X\n  license: https://example.com/l\n  base_url: https://example.com/p\nnamespaces:\n  p: https://example.com/ns/p#\n")}
+	src := Source{Name: "p.yaml", Data: []byte("dsl: alexandria.profiles/v1\nkind: OdrlProfile\nprofile:\n  id: https://example.com/p\n  version: 1.0.0\n  title: { en: P }\n  publisher: X\n  license: https://example.com/l\n  base_url: https://example.com/p\nnamespaces:\n  p: https://example.com/ns/p#\n")}
 	r := Compile(Options{}, src)
 	expectErrors(t, r)
 	s, err := schemas.Compile(artifact(t, r, "profiles/odrl/p/1.0.0/schema.json"))

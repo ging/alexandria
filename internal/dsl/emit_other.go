@@ -13,7 +13,7 @@ import (
 // PROF roles of the artefacts, and the eu: roles for the Cedar projections.
 const (
 	profRole = "http://www.w3.org/ns/dx/prof/role/"
-	euRole   = "https://w3id.org/eunomia/ns/role/"
+	alxRole  = "https://w3id.org/alexandria/ns/role/"
 )
 
 // artefactSpec describes one profile artefact for prof.ttl.
@@ -21,7 +21,7 @@ type artefactSpec struct {
 	file, frag, role, mediaType, conformsTo string
 }
 
-// profileArtefacts lists the artefacts of a profile; Cedar ones only when some term has enforcement.
+// profileArtefacts lists the artefacts of a profile; Cedar ones only when Cedar is enabled and some term has enforcement.
 func profileArtefacts(ix *Index) []artefactSpec {
 	out := []artefactSpec{
 		{"spec.html", "spec", profRole + "specification", "text/html", ""},
@@ -30,10 +30,10 @@ func profileArtefacts(ix *Index) []artefactSpec {
 		{"schema.json", "jsonschema", profRole + "validation", "application/schema+json", "https://json-schema.org/draft/2020-12/schema"},
 		{"context.jsonld", "context", profRole + "mapping", "application/ld+json", "https://www.w3.org/TR/json-ld11/"},
 	}
-	if hasEnforcement(ix) {
+	if emitsCedar(ix) {
 		out = append(out,
-			artefactSpec{"cedar-mapping.json", "cedarmapping", euRole + "cedar-mapping", "application/json", ""},
-			artefactSpec{"cedar.schema", "cedarschema", euRole + "cedar-schema", "text/plain", ""})
+			artefactSpec{"cedar-mapping.json", "cedarmapping", alxRole + "cedar-mapping", "application/json", ""},
+			artefactSpec{"cedar.schema", "cedarschema", alxRole + "cedar-schema", "text/plain", ""})
 	}
 	return out
 }
@@ -53,7 +53,7 @@ func emitProf(ix *Index) []byte {
 	m := ix.P.Profile
 	base := strings.TrimRight(m.BaseURL, "/") + "/"
 	t := newTurtle(map[string]string{
-		"prof": "http://www.w3.org/ns/dx/prof/", "role": profRole, "eurole": euRole,
+		"prof": "http://www.w3.org/ns/dx/prof/", "role": profRole, "alxrole": alxRole,
 		"dct": Reserved["dct"], "owl": Reserved["owl"], "xsd": Reserved["xsd"], "r": base,
 	})
 	core := "http://www.w3.org/ns/odrl/2/core"
