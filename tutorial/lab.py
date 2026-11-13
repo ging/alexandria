@@ -241,7 +241,7 @@ def _highlight_yaml(text: str, with_line_numbers: bool = True) -> str:
         if m:
             indent, key, colon, val = m.groups()
             val_esc = html.escape(val)
-            if val_esc.startswith(("http://", "https://", "eunomia.", "odrl:", "xsd:", "did:")):
+            if val_esc.startswith(("http://", "https://", "alexandria.", "odrl:", "xsd:", "did:")):
                 val_html = f'<span class="ag-ni">{val_esc}</span>'
             elif val_esc in ("true", "false", "null", "OdrlProfile", "SpaceProfile", "mandatory", "recommended"):
                 val_html = f'<span class="ag-b">{val_esc}</span>'
@@ -290,7 +290,7 @@ def _describe_token(token: str) -> str:
 
 
 def show_yaml(title: str, yaml_text: str, subtitle: str = "") -> None:
-    """Renders a syntax-highlighted YAML viewer widget for eunomia.profiles/v1 documents."""
+    """Renders a syntax-highlighted YAML viewer widget for alexandria.profiles/v1 documents."""
     kinds = re.findall(r"^\s*kind:\s*(\S+)", yaml_text, flags=re.MULTILINE)
     versions = re.findall(r"^\s*version:\s*(\S+)", yaml_text, flags=re.MULTILINE)
     line_count = len(yaml_text.strip().splitlines())
