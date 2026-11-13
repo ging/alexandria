@@ -42,7 +42,7 @@ export function ClientVersionsPage() {
         <Empty icon={<ListTree />} title="No versions synchronized">The client has not accepted a listing yet.</Empty>
       ) : (
         <>
-          <div className="border-b px-4 py-3"><Timeline records={q.data} now={now} /></div>
+          <div className="border-b px-6 py-3.5"><Timeline records={q.data} now={now} /></div>
           <DataTable minWidth={1180} data={q.data} columns={columns} />
         </>
       )}

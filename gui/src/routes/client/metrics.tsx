@@ -44,7 +44,7 @@ export function MetricsPage() {
         cell: (c) => (
           <span className="flex items-center gap-2">
             <span className="tnum w-10 text-right font-mono text-xs">{c.row.original.count}</span>
-            <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-active"><span className="block h-full rounded-full bg-accent" style={{ width: `${total ? (c.row.original.count / total) * 100 : 0}%` }} /></span>
+            <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-active"><span className="block h-full rounded-full bg-accent-gradient" style={{ width: `${total ? (c.row.original.count / total) * 100 : 0}%` }} /></span>
           </span>
         ),
         meta: { className: 'w-56' },
@@ -71,7 +71,7 @@ export function MetricsPage() {
         <div className="flex h-full flex-col">
           <div className="grid shrink-0 grid-cols-4 gap-px border-b bg-line">
             {tiles.map(([label, v, hint]) => (
-              <div key={label} className="bg-bg px-4 py-3">
+              <div key={label} className="bg-bg px-6 py-3.5">
                 <p className="text-xs text-muted">{label}</p>
                 <p className="tnum mt-0.5 text-xl font-semibold tracking-tight">{v}</p>
                 <p className="font-mono text-2xs text-subtle">{hint}</p>

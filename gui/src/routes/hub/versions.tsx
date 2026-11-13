@@ -70,13 +70,13 @@ export function VersionsPage() {
               ['Valid until', <span className="tnum">{formatInstant(listing.validUntil)} <span className="text-subtle">({relativeTo(listing.validUntil, now)})</span></span>],
               ['Issuer', <Mono copy={listing.issuer}>{shortDigest(listing.issuer, 22)}</Mono>],
             ].map(([k, v]) => (
-              <div key={k as string} className="min-w-0 bg-bg px-4 py-2">
+              <div key={k as string} className="min-w-0 bg-bg px-6 py-2.5">
                 <p className="text-xs text-muted">{k}</p>
                 <div className="mt-0.5 truncate font-medium">{v}</div>
               </div>
             ))}
           </div>
-          <div className="border-b px-4 py-3">
+          <div className="border-b px-6 py-3.5">
             <Timeline records={versions} now={now} selected={selected} onSelect={setSelected} />
           </div>
           <DataTable minWidth={980} data={versions} columns={columns} rowId={(v) => v.version} selected={selected} onRowClick={(v) => setSelected(v.version)} />

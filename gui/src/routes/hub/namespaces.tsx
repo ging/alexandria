@@ -15,7 +15,7 @@ import { Empty, Mono, Page, Spinner } from '@/components/ui/misc'
 import { Dialog } from '@/components/ui/overlay'
 
 const columns: Column<Namespace>[] = [
-  { accessorKey: 'slug', header: 'Slug', cell: (c) => <span className="font-mono text-xs font-medium text-accent dark:text-info">{c.row.original.slug}</span>, meta: { className: 'w-48' } },
+  { accessorKey: 'slug', header: 'Slug', cell: (c) => <span className="font-mono text-xs font-medium text-accent">{c.row.original.slug}</span>, meta: { className: 'w-48' } },
   { accessorKey: 'title', header: 'Title', cell: (c) => c.row.original.title ?? <span className="text-subtle">—</span> },
   { accessorKey: 'description', header: 'Description', enableSorting: false, cell: (c) => <span className="text-muted">{c.row.original.description ?? '—'}</span> },
   { accessorKey: 'created_at', header: 'Created', cell: (c) => <span className="tnum text-muted">{formatInstant(c.row.original.created_at)}</span>, meta: { className: 'w-56' } },

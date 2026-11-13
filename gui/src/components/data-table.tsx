@@ -55,7 +55,7 @@ export function DataTable<T extends object>({
                   <th
                     key={header.id}
                     aria-sort={sort === 'asc' ? 'ascending' : sort === 'desc' ? 'descending' : undefined}
-                    className={cn('h-7 border-b px-3 text-left align-middle text-xs font-medium whitespace-nowrap text-muted first:pl-4 last:pr-4', (header.column.columnDef as Column<T>).meta?.className)}
+                    className={cn('h-8 border-b px-3 text-left align-middle text-xs font-medium whitespace-nowrap text-muted first:pl-6 last:pr-6', (header.column.columnDef as Column<T>).meta?.className)}
                   >
                     {header.isPlaceholder ? null : (
                       <button type="button" disabled={!can} onClick={header.column.getToggleSortingHandler()} className={cn('inline-flex items-center gap-1', can && 'hover:text-fg')}>
@@ -82,7 +82,7 @@ export function DataTable<T extends object>({
                 className={cn('group/row', onRowClick && 'cursor-pointer', active ? 'bg-accent-soft' : 'hover:bg-hover')}
               >
                 {row.getAllCells().map((cell) => (
-                  <td key={cell.id} className={cn('h-8 border-b px-3 align-middle first:pl-4 last:pr-4', (cell.column.columnDef as Column<T>).meta?.className)}>
+                  <td key={cell.id} className={cn('h-9 border-b px-3 align-middle first:pl-6 last:pr-6', (cell.column.columnDef as Column<T>).meta?.className)}>
                     <div className="truncate">
                       <table.FlexRender cell={cell} />
                     </div>
@@ -100,14 +100,14 @@ export function DataTable<T extends object>({
 // FilterInput renders the quick-filter box placed in page headers.
 export function FilterInput({ value, onChange, placeholder = 'Filter', className }: { value: string; onChange: (v: string) => void; placeholder?: string; className?: string }) {
   return (
-    <div className={cn('relative w-52', className)}>
-      <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-subtle" />
+    <div className={cn('relative w-56', className)}>
+      <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-subtle" />
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         spellCheck={false}
-        className="h-7 w-full rounded-md border border-line-strong bg-input pr-2 pl-7 text-sm placeholder:text-subtle focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+        className="h-8 w-full rounded-md border border-line-strong bg-input pr-2.5 pl-8 text-sm placeholder:text-subtle focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
       />
     </div>
   )

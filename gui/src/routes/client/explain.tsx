@@ -50,7 +50,7 @@ export function ExplainPage() {
   return (
     <Page flush title="Explain" subtitle="What would the hot path decide for this message right now? Nothing is forwarded, recorded or emitted.">
       <div className="flex h-full flex-col">
-        <form className="flex shrink-0 items-center gap-2 border-b px-4 py-2.5" onSubmit={(e) => { e.preventDefault(); send() }}>
+        <form className="flex shrink-0 items-center gap-2 border-b px-6 py-3" onSubmit={(e) => { e.preventDefault(); send() }}>
           <Select className="w-36 [&>select]:h-8 [&>select]:font-mono [&>select]:text-xs" value={listener} onChange={(e) => setListener(e.target.value)} aria-label="Listener">
             {listeners.map((l) => <option key={l}>{l}</option>)}
           </Select>
@@ -62,7 +62,7 @@ export function ExplainPage() {
           </div>
           <Button type="submit" variant="primary" className="h-8 px-4" icon={<SendHorizontal className="size-3.5" />} loading={run.isPending}>Explain</Button>
         </form>
-        <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b bg-side px-4 py-1.5">
+        <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b bg-side px-6 py-2">
           <span className="label-caps mr-1 shrink-0">From rule</span>
           {rules.data?.rules.map((r) => (
             <button key={r.id} onClick={() => preset(r)} className="h-5 shrink-0 rounded-sm border bg-bg px-1.5 text-xs text-muted hover:border-accent/60 hover:text-fg">{r.id}</button>
@@ -70,7 +70,7 @@ export function ExplainPage() {
         </div>
         <div className="grid min-h-0 flex-1 grid-cols-2">
           <div className="flex min-h-0 flex-col border-r">
-            <div className="flex h-8 shrink-0 items-center justify-between border-b px-4">
+            <div className="flex h-9 shrink-0 items-center justify-between border-b px-6">
               <span className="label-caps">Message body</span>
               <span className="text-xs text-subtle">application/json</span>
             </div>

@@ -38,8 +38,8 @@ export const clientNav: NavItem[] = [
   { label: 'Metrics', to: '/client/metrics', icon: Gauge, hint: 'OpenMetrics exposition' },
 ]
 
-// workspaces lists the activity-bar entries.
+// workspaces lists the top-bar workspace switcher entries.
 export const workspaces = [
-  { id: 'hub', label: 'alexandria-server', to: '/hub/namespaces', icon: BookMarked },
-  { id: 'client', label: 'alexandria-client', to: '/client/status', icon: Activity },
+  { id: 'hub', label: 'Server', hint: 'alexandria-server (C-HUB)', to: '/hub/namespaces', icon: BookMarked },
+  { id: 'client', label: 'Client', hint: 'alexandria-client (C-CLI)', to: '/client/status', icon: Activity },
 ] as const

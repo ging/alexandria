@@ -104,7 +104,7 @@ export function StatusPage() {
           </Section>
         </div>
 
-        <Section title="Local versions" actions={<Link to="/client/versions" className="text-xs text-accent hover:underline dark:text-info">All lifecycle records</Link>}>
+        <Section title="Local versions" actions={<Link to="/client/versions" className="text-xs text-accent hover:underline">All lifecycle records</Link>}>
           {s.versions.length === 0 ? (
             <p className="text-sm text-muted">No version packages held.</p>
           ) : (

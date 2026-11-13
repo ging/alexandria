@@ -62,6 +62,6 @@ Hub roles: the **admin** creates namespaces, assigns stewards and reads the glob
 ```text
 src/
 ├── lib/          http (problem+json), hub and client API clients, oidc, settings store, formatters
-├── components/   ui primitives, shell (title bar, activity bar, sidebar, status bar), tables, editor
+├── components/   ui primitives, shell (top bar, sidebar, command palette, identity), tables, editor
 └── routes/       hub/* and client/* views, auth-callback
 ```

@@ -41,7 +41,7 @@ export function PubPage() {
   return (
     <Page flush title="Publication" subtitle="Public, cacheable artefacts: head redirects, package manifests, versioned files, vocabulary revisions and content-addressed blobs.">
       <div className="flex h-full flex-col">
-        <form className="flex shrink-0 items-center gap-2 border-b px-4 py-2.5" onSubmit={(e) => { e.preventDefault(); send() }}>
+        <form className="flex shrink-0 items-center gap-2 border-b px-6 py-3" onSubmit={(e) => { e.preventDefault(); send() }}>
           <div className="flex h-8 min-w-0 flex-1 items-center rounded-md border border-line-strong bg-input focus-within:border-accent focus-within:ring-1 focus-within:ring-accent">
             <span className="flex h-full items-center border-r px-2.5"><Method value="GET" /></span>
             <span className="pl-2.5 font-mono text-xs text-subtle">{new URL(runtime.hubTarget).origin}</span>
@@ -49,7 +49,7 @@ export function PubPage() {
           </div>
           <Button type="submit" variant="primary" className="h-8 px-4" icon={<SendHorizontal className="size-3.5" />} loading={q.isFetching}>Send</Button>
         </form>
-        <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b bg-side px-4 py-1.5">
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b bg-side px-6 py-2">
           <span className="label-caps mr-1">Shortcuts</span>
           {shortcuts.map(([label, p]) => (
             <button key={p} onClick={() => send(p)} className="h-5 rounded-sm border bg-bg px-1.5 text-xs text-muted hover:border-accent/60 hover:text-fg">{label}</button>
@@ -68,7 +68,7 @@ export function PubPage() {
             </div>
           ) : res ? (
             <div className="flex h-full flex-col">
-              <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b px-4 py-2 text-xs">
+              <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b px-6 py-2 text-xs">
                 <Badge tone="success" dot>{res.status} OK</Badge>
                 <span className="text-muted">Type <span className="font-mono text-fg">{type.split(';')[0]}</span></span>
                 <span className="text-muted">Size <span className="tnum text-fg">{formatBytes(new Blob([res.text]).size)}</span></span>

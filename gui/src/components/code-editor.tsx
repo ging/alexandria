@@ -1,5 +1,5 @@
 // CodeMirror wrapper used for every JSON, YAML and plain-text surface, editable or read-only.
-// Syntax colors come from CSS variables so the editor follows the VS Code inspired light and dark palettes.
+// Syntax colors come from CSS variables so the editor follows the console light and dark palettes.
 import { useMemo } from 'react'
 import { json } from '@codemirror/lang-json'
 import { yaml } from '@codemirror/lang-yaml'

@@ -1,4 +1,4 @@
-/* Design tokens and base styles of the Alexandria console: compact Postman-like typography and a VS Code inspired palette. */
+/* Design tokens and base styles of the Alexandria console: neutral surfaces with warm acid accents. */
 /* Colors are CSS variables switched by the .dark class and mapped to Tailwind utilities through @theme inline. */
 @import 'tailwindcss';
 @import '@fontsource-variable/inter';
@@ -9,97 +9,95 @@
 :root {
   color-scheme: light;
   --bg: #ffffff;
-  --bg-side: #f8f8f8;
+  --bg-side: #fafafa;
   --bg-raised: #ffffff;
-  --bg-hover: #f0f0f0;
-  --bg-active: #e8e8e8;
+  --bg-hover: #f4f4f5;
+  --bg-active: #e9e9ec;
   --bg-input: #ffffff;
-  --border: #e5e5e5;
-  --border-strong: #cecece;
-  --fg: #2b2b2b;
-  --fg-muted: #616161;
-  --fg-subtle: #8a8a8a;
-  --accent: #005fb8;
-  --accent-hover: #0258a8;
+  --border: #e4e4e7;
+  --border-strong: #d4d4d8;
+  --fg: #18181b;
+  --fg-muted: #52525b;
+  --fg-subtle: #8b8b95;
+  --accent: #e10075;
+  --accent-hover: #c40065;
   --accent-fg: #ffffff;
-  --accent-soft: #e5f1fb;
-  --statusbar: #007acc;
-  --statusbar-fg: #ffffff;
-  --success: #2f7d32;
-  --success-soft: #e6f4e7;
-  --warning: #9a6700;
-  --warning-soft: #fdf3d3;
-  --danger: #c72e2e;
-  --danger-soft: #fde8e8;
-  --info: #0b6fc2;
-  --info-soft: #e5f1fb;
-  --purple: #7a3fc4;
-  --purple-soft: #f1e9fb;
-  --syn-key: #0451a5;
-  --syn-string: #a31515;
-  --syn-number: #098658;
-  --syn-keyword: #0000ff;
-  --syn-comment: #008000;
-  --syn-punct: #5f6368;
-  --shadow: 0 8px 28px rgb(0 0 0 / 0.14), 0 0 0 1px rgb(0 0 0 / 0.06);
+  --accent-soft: rgb(225 0 117 / 0.08);
+  --accent-gradient: linear-gradient(135deg, #e6007e 0%, #ff3358 52%, #ff7a00 100%);
+  --success: #059669;
+  --success-soft: rgb(5 150 105 / 0.1);
+  --warning: #ca8a04;
+  --warning-soft: rgb(202 138 4 / 0.12);
+  --danger: #dc2626;
+  --danger-soft: rgb(220 38 38 / 0.1);
+  --info: #ea580c;
+  --info-soft: rgb(234 88 12 / 0.1);
+  --purple: #b81db8;
+  --purple-soft: rgb(184 29 184 / 0.1);
+  --syn-key: #c8006b;
+  --syn-string: #c2410c;
+  --syn-number: #059669;
+  --syn-keyword: #9333ea;
+  --syn-comment: #8b8b95;
+  --syn-punct: #71717a;
+  --shadow: 0 10px 32px rgb(24 24 27 / 0.12), 0 0 0 1px rgb(24 24 27 / 0.06);
 }
 
 .dark {
   color-scheme: dark;
-  --bg: #1f1f1f;
-  --bg-side: #181818;
-  --bg-raised: #252526;
-  --bg-hover: #2a2d2e;
-  --bg-active: #37373d;
-  --bg-input: #2a2a2a;
-  --border: #2b2b2b;
-  --border-strong: #3c3c3c;
-  --fg: #cccccc;
-  --fg-muted: #9d9d9d;
-  --fg-subtle: #6e7681;
-  --accent: #0078d4;
-  --accent-hover: #1a86dc;
+  --bg: #0c0c0e;
+  --bg-side: #121215;
+  --bg-raised: #18181c;
+  --bg-hover: #1f1f25;
+  --bg-active: #27272f;
+  --bg-input: #141418;
+  --border: #232329;
+  --border-strong: #32323b;
+  --fg: #f4f4f6;
+  --fg-muted: #a1a1aa;
+  --fg-subtle: #71717a;
+  --accent: #ff2e88;
+  --accent-hover: #ff4d99;
   --accent-fg: #ffffff;
-  --accent-soft: #0a2f4d;
-  --statusbar: #007acc;
-  --statusbar-fg: #ffffff;
-  --success: #73c991;
-  --success-soft: #1b3524;
-  --warning: #e2c08d;
-  --warning-soft: #3d3220;
-  --danger: #f48771;
-  --danger-soft: #45201c;
-  --info: #75beff;
-  --info-soft: #12314d;
-  --purple: #c586c0;
-  --purple-soft: #37233a;
-  --syn-key: #9cdcfe;
-  --syn-string: #ce9178;
-  --syn-number: #b5cea8;
-  --syn-keyword: #569cd6;
-  --syn-comment: #6a9955;
-  --syn-punct: #808080;
-  --shadow: 0 8px 28px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.06);
+  --accent-soft: rgb(255 46 136 / 0.14);
+  --accent-gradient: linear-gradient(135deg, #ff1482 0%, #ff4259 52%, #ff850a 100%);
+  --success: #34d399;
+  --success-soft: rgb(52 211 153 / 0.14);
+  --warning: #fbbf24;
+  --warning-soft: rgb(251 191 36 / 0.14);
+  --danger: #f87171;
+  --danger-soft: rgb(248 113 113 / 0.14);
+  --info: #ff7a29;
+  --info-soft: rgb(255 122 41 / 0.14);
+  --purple: #e86bf5;
+  --purple-soft: rgb(232 107 245 / 0.14);
+  --syn-key: #ff4d94;
+  --syn-string: #ff9e44;
+  --syn-number: #34d399;
+  --syn-keyword: #e879f9;
+  --syn-comment: #71717a;
+  --syn-punct: #8b8b96;
+  --shadow: 0 12px 36px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.07);
 }
 
 @theme inline {
   --font-sans: 'Inter Variable', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono Variable', 'IBM Plex Mono', ui-monospace, Menlo, monospace;
 
-  --text-2xs: 10px;
+  --text-2xs: 10.5px;
   --text-2xs--line-height: 14px;
-  --text-xs: 11px;
+  --text-xs: 11.5px;
   --text-xs--line-height: 16px;
-  --text-sm: 12px;
-  --text-sm--line-height: 18px;
-  --text-base: 13px;
+  --text-sm: 13px;
+  --text-sm--line-height: 19px;
+  --text-base: 13.5px;
   --text-base--line-height: 20px;
-  --text-lg: 14px;
-  --text-lg--line-height: 20px;
-  --text-xl: 16px;
-  --text-xl--line-height: 24px;
-  --text-2xl: 20px;
-  --text-2xl--line-height: 28px;
+  --text-lg: 15px;
+  --text-lg--line-height: 22px;
+  --text-xl: 18px;
+  --text-xl--line-height: 26px;
+  --text-2xl: 22px;
+  --text-2xl--line-height: 30px;
 
   --color-bg: var(--bg);
   --color-side: var(--bg-side);
@@ -116,8 +114,6 @@
   --color-accent-hover: var(--accent-hover);
   --color-accent-fg: var(--accent-fg);
   --color-accent-soft: var(--accent-soft);
-  --color-statusbar: var(--statusbar);
-  --color-statusbar-fg: var(--statusbar-fg);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
   --color-warning: var(--warning);
@@ -130,9 +126,9 @@
   --color-purple-soft: var(--purple-soft);
 
   --shadow-pop: var(--shadow);
-  --radius-sm: 3px;
-  --radius-md: 4px;
-  --radius-lg: 6px;
+  --radius-sm: 5px;
+  --radius-md: 7px;
+  --radius-lg: 10px;
 
   --animate-in: fade-in 120ms ease-out;
   --animate-pop: pop-in 140ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -162,8 +158,8 @@
     background: var(--bg);
     color: var(--fg);
     font-family: var(--font-sans);
-    font-size: 12px;
-    line-height: 18px;
+    font-size: 13px;
+    line-height: 19px;
     font-feature-settings: 'cv11', 'ss01', 'calt';
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
@@ -176,10 +172,10 @@
     font-feature-settings: 'zero', 'calt' 0;
   }
   ::selection {
-    background: color-mix(in srgb, var(--accent) 35%, transparent);
+    background: color-mix(in srgb, var(--accent) 28%, transparent);
   }
   :focus-visible {
-    outline: 1px solid var(--accent);
+    outline: 1.5px solid var(--accent);
     outline-offset: 1px;
   }
   button {
@@ -190,12 +186,22 @@
   }
   * {
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, var(--fg-subtle) 45%, transparent) transparent;
+    scrollbar-color: color-mix(in srgb, var(--fg-subtle) 40%, transparent) transparent;
   }
 }
 
+@utility bg-accent-gradient {
+  background-image: var(--accent-gradient);
+}
+
+@utility text-accent-gradient {
+  background-image: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
 @utility label-caps {
-  font-size: 10px;
+  font-size: 10.5px;
   line-height: 14px;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -207,10 +213,10 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* CodeMirror chrome follows the app tokens. */
+/* CodeMirror chrome follows the neutral surfaces and warm acid tokens. */
 .cm-editor {
   height: 100%;
-  font-size: 12px;
+  font-size: 12.5px;
   background: transparent !important;
 }
 .cm-editor.cm-focused {
@@ -218,7 +224,7 @@
 }
 .cm-scroller {
   font-family: var(--font-mono) !important;
-  line-height: 18px !important;
+  line-height: 19px !important;
 }
 .cm-gutters {
   background: transparent !important;
@@ -227,14 +233,14 @@
 }
 .cm-activeLine,
 .cm-activeLineGutter {
-  background: color-mix(in srgb, var(--fg) 5%, transparent) !important;
+  background: color-mix(in srgb, var(--fg) 4%, transparent) !important;
 }
 .cm-selectionBackground,
 .cm-focused .cm-selectionBackground {
-  background: color-mix(in srgb, var(--accent) 30%, transparent) !important;
+  background: color-mix(in srgb, var(--accent) 24%, transparent) !important;
 }
 .cm-cursor {
-  border-left-color: var(--fg) !important;
+  border-left-color: var(--accent) !important;
 }
 .cm-tooltip {
   background: var(--bg-raised) !important;
