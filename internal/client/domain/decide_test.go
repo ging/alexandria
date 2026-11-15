@@ -231,3 +231,22 @@ func TestT_CLI_033_RetentionKeepsListedAndAgreed(t *testing.T) {
 		t.Fatal("kept a version neither listed nor agreed")
 	}
 }
+
+func TestReasonsSkipInformationalFindings(t *testing.T) {
+	c := Classification{Result: Violation, Codes: []codes.Code{codes.VerdictViolation}, Findings: []Finding{
+		{Severity: "Violation", Message: "missing property 'profile'"},
+		{Severity: "Info", Message: "artefact is not evaluated"},
+	}}
+	if got := reasons(c); len(got) != 1 || got[0] != "missing property 'profile'" {
+		t.Fatalf("reasons %v", got)
+	}
+}
+
+func TestReasonsFallBackToCodesWhenOnlyInformational(t *testing.T) {
+	c := Classification{Result: Violation, Codes: []codes.Code{codes.ClientDegradedReject}, Findings: []Finding{
+		{Severity: "Info", Message: "artefact is not evaluated"},
+	}}
+	if got := reasons(c); len(got) != 1 || got[0] != string(codes.ClientDegradedReject) {
+		t.Fatalf("reasons %v", got)
+	}
+}
