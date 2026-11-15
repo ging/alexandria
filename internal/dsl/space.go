@@ -5,6 +5,7 @@ package dsl
 import (
 	"bytes"
 	"encoding/json"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -79,6 +80,11 @@ func validateSpace(d *Document, profiles []*Index, vendor Vendor, fs *Findings) 
 		if b.Obligation == "mandatory" && len(b.Conformance) == 0 {
 			fs.add(d, "N2", Error, CodeMandatoryUnverifiable, ptr, "a mandatory binding needs at least one gate")
 		}
+		if b.Obligation == "mandatory" {
+			for _, g := range shaclOnlyGates(b) {
+				fs.add(d, "N2", Warning, CodeGateShaclOnly, ptr+"/conformance", "gate %s of mandatory slot %s is covered only by shacl, which no gate executes yet: it will accept any message", g, b.Slot)
+			}
+		}
 		for _, v := range b.Via {
 			if v == b.Profile {
 				fs.add(d, "N2", Error, CodeViaCycle, ptr+"/via", "via contains the bound profile itself")
@@ -89,6 +95,24 @@ func validateSpace(d *Document, profiles []*Index, vendor Vendor, fs *Findings) 
 		}
 	}
 	return out
+}
+
+// shaclOnlyGates returns, in order, the gates of a binding whose only artefact role is shacl.
+func shaclOnlyGates(b Binding) []string {
+	other := map[string]bool{}
+	for _, c := range b.Conformance {
+		if c.Role != "shacl" {
+			other[c.AppliesTo] = true
+		}
+	}
+	var out []string
+	for _, c := range b.Conformance {
+		if c.Role == "shacl" && !other[c.AppliesTo] {
+			out = append(out, c.AppliesTo)
+		}
+	}
+	sort.Strings(out)
+	return dedupe(out)
 }
 
 // resolve is N3 for one binding.

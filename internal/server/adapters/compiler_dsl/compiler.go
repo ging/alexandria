@@ -97,7 +97,7 @@ func (c Compiler) Compile(doc []byte, ctx app.CompileContext) (domain.Compiled, 
 			gates = append(gates, cf.AppliesTo)
 		}
 		sort.Strings(gates)
-		slots = append(slots, pkgv.Slot{Slot: b.Binding.Slot, Obligation: b.Binding.Obligation, AppliesTo: gates})
+		slots = append(slots, pkgv.Slot{Slot: b.Binding.Slot, Obligation: b.Binding.Obligation, AppliesTo: append([]string{}, dedupe(gates)...)})
 	}
 	for _, ps := range r.Lock.Profiles {
 		profiles = append(profiles, ps...)

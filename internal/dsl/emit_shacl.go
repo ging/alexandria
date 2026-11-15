@@ -1,11 +1,17 @@
-// Package dsl provides the emitter of shapes.ttl following §13.3: closed action and left-operand lists, deprecation warnings and one shape per signature.
-// Signature shapes use the conditional pattern sh:or ( not-X | rules ), validated over the expanded graph.
+// Package dsl provides the emitter of shapes.ttl following §13.3: declared profile, closed action and left-operand lists, deprecation warnings and one shape per signature.
+// Every constraint carries its own sh:message and mirrors a rule of schema.json, so both artefacts give the same verdict on the expanded graph.
 package dsl
 
 import "strings"
 
 // ruleTargets are the properties whose objects are rules.
 const ruleTargets = "sh:targetObjectsOf odrl:permission, odrl:prohibition, odrl:obligation, odrl:duty"
+
+// policyTargets select policy nodes: by class and as subjects of a rule property.
+const policyTargets = "sh:targetClass odrl:Policy, odrl:Set, odrl:Offer, odrl:Agreement ;\n  sh:targetSubjectsOf odrl:permission, odrl:prohibition, odrl:obligation"
+
+// coreActions are the two ODRL Core actions, always allowed and reported as ignored.
+var coreActions = []string{"odrl:use", "odrl:transfer"}
 
 // shapesNS is the namespace of the generated shapes.
 func shapesNS(ix *Index) string { return strings.TrimRight(ix.P.Profile.BaseURL, "/") + "/shapes#" }
@@ -17,21 +23,25 @@ func emitShapes(ix *Index) []byte {
 		pre[k] = v
 	}
 	t := newTurtle(pre)
+	emitProfileShape(t, ix)
 	actions := refsOf(t, ix.OfKind("action", true))
 	if ix.P.Rules.ActionsClosed() {
 		t.raw("gen:ActionShape a sh:NodeShape ;\n  " + ruleTargets + " ;\n" +
-			"  sh:message \"Action not allowed by profile " + ix.Token() + ".\" ;\n" +
 			"  sh:property [ sh:path odrl:action ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ;\n" +
-			"    sh:in " + list(append(append([]string{}, actions...), "odrl:use", "odrl:transfer")) + " ] .\n\n")
+			"    sh:message \"Action not allowed by profile " + ix.Token() + ".\" ;\n" +
+			"    sh:in " + list(append(append([]string{}, actions...), coreActions...)) + " ] .\n\n")
 		t.raw("gen:ActionCoreShape a sh:NodeShape ;\n  " + ruleTargets + " ;\n" +
-			"  sh:message \"ODRL Core actions are ignored by profile " + ix.Token() + ".\" ;\n" +
-			"  sh:property [ sh:path odrl:action ; sh:severity sh:Warning ;\n    sh:in " + list(actions) + " ] .\n\n")
+			"  sh:property [ sh:path odrl:action ; sh:severity sh:Warning ;\n" +
+			"    sh:message \"ODRL Core actions are ignored by profile " + ix.Token() + ".\" ;\n" +
+			"    sh:not [ sh:in " + list(coreActions) + " ] ] .\n\n")
 	}
 	if ix.P.Rules.LeftOperandsClosed() {
 		t.raw("gen:LeftOperandShape a sh:NodeShape ;\n  sh:targetSubjectsOf odrl:leftOperand ;\n" +
-			"  sh:message \"LeftOperand not defined by profile " + ix.Token() + ".\" ;\n" +
-			"  sh:property [ sh:path odrl:leftOperand ; sh:minCount 1 ; sh:maxCount 1 ;\n    sh:in " + list(refsOf(t, ix.OfKind("left_operand", true))) + " ] .\n\n")
+			"  sh:property [ sh:path odrl:leftOperand ; sh:minCount 1 ; sh:maxCount 1 ;\n" +
+			"    sh:message \"LeftOperand not defined by profile " + ix.Token() + ".\" ;\n" +
+			"    sh:in " + list(refsOf(t, ix.OfKind("left_operand", true))) + " ] .\n\n")
 	}
+	emitConstraintShape(t)
 	emitDeprecated(t, ix, "action", "Action", ruleTargets, "odrl:action")
 	emitDeprecated(t, ix, "left_operand", "LeftOperand", "sh:targetSubjectsOf odrl:leftOperand", "odrl:leftOperand")
 	for _, e := range ix.Signed() {
@@ -40,6 +50,25 @@ func emitShapes(ix *Index) []byte {
 		}
 	}
 	return t.bytes()
+}
+
+// emitProfileShape requires a policy to declare the profile, by its id or its versioned IRI (same rule as schema.json).
+func emitProfileShape(t *turtle, ix *Index) {
+	id := ix.P.Profile.ID
+	t.raw("gen:ProfileShape a sh:NodeShape ;\n  " + policyTargets + " ;\n" +
+		"  sh:property [ sh:path odrl:profile ;\n" +
+		"    sh:message \"Policy does not declare profile " + ix.Token() + ".\" ;\n" +
+		"    sh:qualifiedValueShape [ sh:in " + list([]string{"<" + id + ">", "<" + id + "/" + ix.P.Profile.Version + ">"}) + " ] ;\n" +
+		"    sh:qualifiedMinCount 1 ] .\n\n")
+}
+
+// emitConstraintShape requires an operator and a right operand or a reference on every atomic constraint (same rule as schema.json).
+func emitConstraintShape(t *turtle) {
+	t.raw("gen:ConstraintShape a sh:NodeShape ;\n  sh:targetSubjectsOf odrl:leftOperand ;\n" +
+		"  sh:property [ sh:path odrl:operator ; sh:minCount 1 ;\n" +
+		"    sh:message \"Constraint without operator.\" ] ;\n" +
+		"  sh:message \"Constraint without rightOperand nor rightOperandReference.\" ;\n" +
+		"  sh:or (\n    [ sh:path odrl:rightOperand ; sh:minCount 1 ]\n    [ sh:path odrl:rightOperandReference ; sh:minCount 1 ]\n  ) .\n\n")
 }
 
 // refsOf renders the IRIs of entries.

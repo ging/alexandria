@@ -33,6 +33,7 @@ const (
 	CodeSlotDup               = "SLOT_DUP"
 	CodeMandatoryUnverifiable = "MANDATORY_UNVERIFIABLE"
 	CodeViaCycle              = "VIA_CYCLE"
+	CodeGateShaclOnly         = "GATE_SHACL_ONLY"
 	CodeComplianceIgnored     = "CONFORMANCE_REQUIRED_IGNORED"
 	CodeAdoptedKindMismatch   = "ADOPTED_KIND_MISMATCH"
 	CodeAdoptedUnknown        = "ADOPTED_UNKNOWN"
