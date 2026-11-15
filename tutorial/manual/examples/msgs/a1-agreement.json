@@ -1,0 +1,36 @@
+{
+  "@context": [
+    "https://w3id.org/dspace/2025/1/context.jsonld",
+    "https://flexgrid.example/odrl/profile/metering/context.jsonld"
+  ],
+  "@type": "ContractAgreementMessage",
+  "providerPid": "urn:uuid:9c1f7a52-dso-neg-0042",
+  "consumerPid": "urn:uuid:7d2a9f10-ret-neg-0007",
+  "agreement": {
+    "@id": "urn:uuid:agreement-retail-0007",
+    "@type": "Agreement",
+    "profile": "https://flexgrid.example/odrl/profile/metering",
+    "target": "urn:uuid:dataset-qh-load-madrid-2026",
+    "assigner": "did:web:dso.flexgrid.example",
+    "assignee": "did:web:retailer.flexgrid.example",
+    "permission": [
+      {
+        "action": "profileConsumer",
+        "constraint": [
+          {
+            "leftOperand": "purpose",
+            "operator": "eq",
+            "rightOperand": {
+              "@id": "enr:billing"
+            }
+          },
+          {
+            "leftOperand": "retentionDays",
+            "operator": "lteq",
+            "rightOperand": 30
+          }
+        ]
+      }
+    ]
+  }
+}

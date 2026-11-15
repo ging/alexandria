@@ -1,0 +1,7 @@
+# Runtime state of the Flexgrid lab: databases, keys, clock, tokens, logs and API answers.
+var/
+clock
+*.token
+*.log
+last-candidate.*
+client.local.yaml

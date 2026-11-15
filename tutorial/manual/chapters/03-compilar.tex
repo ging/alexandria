@@ -1,0 +1,299 @@
+\chapter{Compilar un perfil y leer lo que sale}
+\label{ch:compilar}
+
+\section{Los dos subcomandos}
+
+\cod{alexandriac} tiene dos subcomandos. \cod{validate} ejecuta todas las comprobaciones e imprime los
+hallazgos. \cod{compile} hace lo mismo y además escribe los artefactos.
+
+\begin{lstlisting}[style=sh]
+cd tutorial/manual/examples
+../../../bin/alexandriac validate dsl/metering-1.0.0.yaml
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+ok: 1 documents valid
+\end{lstlisting}
+
+\begin{lstlisting}[style=sh]
+../../../bin/alexandriac compile -o /tmp/metering dsl/metering-1.0.0.yaml
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+/tmp/metering/profiles/odrl/metering/1.0.0/spec.html
+/tmp/metering/profiles/odrl/metering/1.0.0/vocab.ttl
+/tmp/metering/profiles/odrl/metering/1.0.0/context.jsonld
+/tmp/metering/profiles/odrl/metering/1.0.0/prof.ttl
+/tmp/metering/profiles/odrl/metering/1.0.0/schema.json
+/tmp/metering/profiles/odrl/metering/1.0.0/shapes.ttl
+\end{lstlisting}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{4.6cm}Y@{}}
+\toprule
+\textbf{Opción} & \textbf{Para qué} \\
+\midrule
+\texttt{-o <dir>} & Directorio de salida de \cod{compile}. Por defecto, \cod{out}. \\
+\texttt{-vendor <dir>} & Copias locales de perfiles externos, para \emph{bindings} vendorizados (capítulo~\ref{ch:spaceprofile}). \\
+\texttt{-previous <fichero>} & Fuente de la versión anterior, para comprobar el versionado (capítulo~\ref{ch:evolucion}). Repetible. \\
+\cod{-log-level}, \cod{-log-format} & Registro estructurado por la salida de error. \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+El código de salida es \cod{0} si no hay errores, \cod{1} si los hay y \cod{2} si el comando está mal invocado.
+Los avisos no cambian el código de salida.
+
+El directorio de un perfil es \texttt{profiles/\allowbreak{}odrl/\allowbreak{}<token>/\allowbreak{}<versión>/\allowbreak{}}, donde el \emph{token} es el último
+segmento del \cod{id} del perfil: \cod{metering}.
+
+\section{Los seis artefactos de un perfil}
+
+De 114 líneas de YAML salen unos 37~KB repartidos en seis ficheros. Todos dicen lo mismo en idiomas distintos,
+para consumidores distintos.
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{2.9cm}L{2.9cm}Y@{}}
+\toprule
+\textbf{Fichero} & \textbf{Rol} & \textbf{Para quién} \\
+\midrule
+\cod{vocab.ttl} & \cod{vocabulary} & Quien razona sobre el vocabulario: ontología OWL, colecciones SKOS y firmas. \\
+\cod{context.jsonld} & \cod{mapping} & Quien escribe mensajes: un alias corto por término. \\
+\cod{schema.json} & \cod{json-schema} & El gate que valida la forma compacta de una política. \\
+\cod{shapes.ttl} & \cod{shacl} & El gate que validaría el grafo expandido (capítulo~\ref{ch:shacl}). \\
+\cod{prof.ttl} & \cod{prof} & Catálogos y buscadores: manifiesto W3C PROF del perfil. \\
+\cod{spec.html} & \cod{specification} & Personas: una tabla legible de términos. \\
+\bottomrule
+\end{tabularx}
+
+\subsection{\texttt{vocab.ttl}: la ontología}
+
+Cada término creado se emite en la forma RDF de su tipo. Una acción:
+
+\begin{lstlisting}[style=ttl]
+enr:forecastDemand
+    a odrl:Action, skos:Concept ;
+    odrl:includedIn odrl:use ;
+    rdfs:isDefinedBy <https://flexgrid.example/odrl/profile/metering> ;
+    rdfs:label "Forecast demand"@en, "Predecir la demanda"@es ;
+    skos:definition "To train or run load-forecasting models on the metering data."@en .
+\end{lstlisting}
+
+Los términos se agrupan en colecciones SKOS por tipo, lo que permite preguntar «qué operandos izquierdos tiene
+este perfil» sin conocer su estructura:
+
+\begin{lstlisting}[style=ttl]
+<https://flexgrid.example/odrl/profile/metering#leftOperands>
+    a skos:Collection ;
+    skos:prefLabel "Constraint Left Operands"@en ;
+    skos:member odrl:dateTime, odrl:purpose, enr:minAggregation, enr:processingRegion, enr:retentionDays .
+\end{lstlisting}
+
+Y cada firma queda reificada, para que una máquina pueda leer el álgebra de un operando:
+
+\begin{lstlisting}[style=ttl]
+<https://flexgrid.example/odrl/profile/metering#sig-minAggregation>
+    a sig:Signature ;
+    sig:leftOperand enr:minAggregation ;
+    sig:operator odrl:gteq, odrl:gt ;
+    sig:valueKind sig:Literal ;
+    sig:allowReference false ;
+    sig:datatype xsd:integer .
+\end{lstlisting}
+
+De los términos adoptados solo se dice que son miembros. El perfil no afirma nada sobre IRI que no son suyas.
+
+\subsection{\texttt{context.jsonld}: los alias}
+
+\begin{lstlisting}[style=json]
+{"@context":{"@version":1.1,
+  "aggregate":"http://www.w3.org/ns/odrl/2/aggregate",
+  "anonymize":"http://www.w3.org/ns/odrl/2/anonymize",
+  "billing":"enr:billing",
+  "dateTime":"http://www.w3.org/ns/odrl/2/dateTime",
+  "enr":"https://flexgrid.example/ns/metering#",
+  "forecastDemand":"enr:forecastDemand",
+  "minAggregation":"enr:minAggregation",
+  "purpose":"http://www.w3.org/ns/odrl/2/purpose",
+  "regionES":"enr:regionES", … }}
+\end{lstlisting}
+
+Hay un alias por término, creado o adoptado. Gracias a él una política escribe \texttt{"action": "forecastDemand"}
+en lugar de la IRI completa.
+
+\begin{trampaHabitual}[Dos términos no pueden compartir alias]
+Si creas un término \cod{purpose} cuando ya has adoptado \cod{odrl:purpose}, los dos querrían el alias
+\cod{purpose} y el contexto no sabría distinguirlos. El compilador lo rechaza:
+
+\begin{lstlisting}[style=out]
+error   ALIAS_COLLISION   n2-alias.yaml#1:24 /adopted/left_operands/0 enr:purpose and odrl:purpose share the compact alias "purpose"
+\end{lstlisting}
+\end{trampaHabitual}
+
+El contexto no redefine \cod{use} ni los doce operadores de ODRL, porque el contexto de DSP ya los define y los
+protege.
+
+\subsection{\texttt{schema.json}: el gate que hoy se ejecuta}
+
+Es un JSON Schema Draft 2020-12 \textbf{autocontenido}: no tiene ningún \texttt{\$ref} remoto, así que un gate lo
+evalúa sin tocar la red. Valida una política ODRL en la forma compacta que viaja en los mensajes DSP.
+
+Comprueba cuatro cosas. La primera, que la política \textbf{declara el perfil}:
+
+\begin{lstlisting}[style=json]
+"profile": {"anyOf": [
+  {"enum": ["https://flexgrid.example/odrl/profile/metering",
+            "https://flexgrid.example/odrl/profile/metering/1.0.0"]},
+  {"type": "array", "contains": {"enum": [ … los mismos dos … ]}}
+]}
+\end{lstlisting}
+
+La segunda, que las \textbf{acciones} están en la lista cerrada, en cualquiera de sus tres grafías: alias, CURIE
+o IRI completa. La tercera, que los \textbf{operandos izquierdos} están en su lista. Y la cuarta, que cada
+restricción respeta la \textbf{firma} de su operando, con un condicional por firma:
+
+\begin{lstlisting}[style=json]
+{
+  "if":   {"required": ["leftOperand"],
+           "properties": {"leftOperand": {"enum": ["minAggregation", "enr:minAggregation",
+                          "https://flexgrid.example/ns/metering#minAggregation"]}}},
+  "then": {"required": ["rightOperand"],
+           "not": {"required": ["rightOperandReference"]},
+           "properties": {
+             "operator": {"enum": ["gteq", "odrl:gteq", "http://www.w3.org/ns/odrl/2/gteq",
+                                   "gt",   "odrl:gt",   "http://www.w3.org/ns/odrl/2/gt"]},
+             "rightOperand": {"anyOf": [
+               {"type": "object", "required": ["@value", "@type"],
+                "properties": {"@type": {"enum": ["xsd:integer",
+                                         "http://www.w3.org/2001/XMLSchema#integer"]},
+                               "@value": {"type": "string", "pattern": "^[+-]?[0-9]+$"}}},
+               {"type": "integer"}]}}}
+}
+\end{lstlisting}
+
+Se lee así: \emph{si} el operando izquierdo es \cod{minAggregation}, \emph{entonces} el operador es \cod{gteq} o
+\cod{gt}, el operando derecho es obligatorio y es un entero, y no se admite una referencia. Si el entero va
+como valor tipado, su \cod{@value} tiene que tener además la forma léxica de un entero: el patrón rechaza
+\texttt{"abc"} aunque diga ser \cod{xsd:integer}.
+
+Fuera de las firmas, toda regla tiene que llevar \cod{action} cuando la lista de acciones es cerrada, y toda
+restricción atómica tiene que llevar \cod{leftOperand}, \cod{operator} y un operando derecho o una referencia.
+
+\subsection{\texttt{shapes.ttl}: lo mismo, sobre el grafo}
+
+El mismo perfil en SHACL. La firma anterior es esta \emph{shape}:
+
+\begin{lstlisting}[style=ttl]
+gen:Sig_minAggregation a sh:NodeShape ;
+  sh:targetSubjectsOf odrl:leftOperand ;
+  sh:message "Constraint enr:minAggregation: signature not respected." ;
+  sh:or (
+    [ sh:not [ sh:path odrl:leftOperand ; sh:hasValue enr:minAggregation ] ]
+    [
+      sh:property [ sh:path odrl:operator ; sh:minCount 1 ; sh:maxCount 1 ; sh:in ( odrl:gteq odrl:gt ) ] ;
+      sh:property [ sh:path odrl:rightOperand ; sh:minCount 1 ; sh:maxCount 1 ;
+                    sh:nodeKind sh:Literal ; sh:datatype xsd:integer ] ;
+      sh:property [ sh:path odrl:rightOperandReference ; sh:maxCount 0 ]
+    ]
+  ) .
+\end{lstlisting}
+
+Es el mismo condicional, escrito como «o no es este operando, o cumple estas tres propiedades». Junto a las
+\emph{shapes} de firma, el fichero lleva \cod{gen:ProfileShape}, \cod{gen:ActionShape},
+\cod{gen:LeftOperandShape} y \cod{gen:ConstraintShape}, que repiten las demás comprobaciones del esquema. El
+capítulo~\ref{ch:shacl} ejecuta estas \emph{shapes} con un motor de verdad y compara los resultados con los del
+esquema.
+
+\subsection{\texttt{prof.ttl} y \texttt{spec.html}}
+
+\cod{prof.ttl} es el manifiesto W3C PROF: dice que el perfil es un perfil de ODRL Core, cuál es su \emph{token}
+y qué recurso cumple cada rol. \cod{spec.html} es una página con la tabla de términos, su tipo, su estado y su
+definición. No tienen efecto en la validación.
+
+\section{Escribir una política contra el perfil}
+
+Con el perfil compilado, esta es una oferta válida. Es lo que la distribuidora ofrece al agregador:
+
+\begin{lstlisting}[style=json]
+{
+  "@type": "Offer",
+  "@id": "urn:uuid:offer-forecast-01",
+  "profile": "https://flexgrid.example/odrl/profile/metering",
+  "target": "urn:uuid:dataset-qh-load-madrid-2026",
+  "permission": [{
+    "action": "forecastDemand",
+    "constraint": [
+      {"leftOperand": "purpose",          "operator": "eq",      "rightOperand": {"@id": "enr:demandForecast"}},
+      {"leftOperand": "minAggregation",   "operator": "gteq",    "rightOperand": 50},
+      {"leftOperand": "retentionDays",    "operator": "lteq",    "rightOperand": 90},
+      {"leftOperand": "processingRegion", "operator": "isAnyOf",
+       "rightOperand": [{"@id": "enr:regionES"}, {"@id": "enr:regionEU"}]},
+      {"leftOperand": "dateTime",         "operator": "lt",
+       "rightOperand": {"@value": "2027-01-01T00:00:00Z", "@type": "xsd:dateTime"}}
+    ]
+  }]
+}
+\end{lstlisting}
+
+En castellano: se permite prever la demanda, solo con esa finalidad, sobre registros que agreguen al menos 50
+puntos de suministro, guardándolos como mucho 90 días, tratándolos en España o en la UE, hasta final de año.
+
+Tres detalles de forma que conviene interiorizar:
+
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item Un valor \textbf{IRI} se escribe como objeto \texttt{\{"@id": …\}}. Una cadena suelta es un literal, y la
+        firma lo rechaza.
+  \item Un \textbf{entero} se escribe como número JSON, o como valor tipado con \cod{@value} y \cod{@type}.
+  \item Una \textbf{fecha} tiene que ir tipada. Una cadena suelta con una fecha dentro es \cod{xsd:string}.
+\end{itemize}
+
+\section{Qué acepta y qué rechaza}
+\label{sec:tabla-ofertas}
+
+La tabla resume qué hace \cod{schema.json} con variaciones de esa oferta. Todas las filas están ejecutadas; el
+capítulo~\ref{ch:shacl} repite la tabla añadiendo la columna de SHACL.
+
+\begin{longtable}{@{}L{8.6cm}C{1.6cm}L{5.2cm}@{}}
+\toprule
+\textbf{Variación} & \textbf{Esquema} & \textbf{Por qué} \\
+\midrule
+\endhead
+La oferta tal cual & \pasa & \\
+Acción \cod{odrl:sell} & \falla & No está en la lista cerrada. \\
+\cod{minAggregation} con operador \cod{lt} & \falla & La firma solo admite \cod{gteq} y \cod{gt}. \\
+\texttt{minAggregation gteq "fifty"} & \falla & No es un entero. \\
+\texttt{minAggregation gteq 50.5} & \falla & No es un entero. \\
+\texttt{purpose eq enr:marketing} & \falla & Valor fuera de la enumeración. \\
+\texttt{purpose eq "enr:billing"}, como cadena & \falla & Tiene que ser \texttt{\{"@id": …\}}. \\
+\texttt{processingRegion isAnyOf} con dos regiones & \pasa & Operador de conjunto: admite lista. \\
+\texttt{retentionDays lteq [30, 90]} & \falla & Sin operador de conjunto no hay listas. \\
+Acción \cod{use}, del núcleo de ODRL & \pasa & Un perfil no puede prohibirla. \\
+Operando \cod{odrl:spatial} & \falla & No está en la lista cerrada de operandos. \\
+Restricción lógica \cod{and} con dos hojas válidas & \pasa & Las restricciones lógicas se validan por dentro. \\
+Restricción lógica con una hoja inválida & \falla & \\
+\texttt{dateTime lt "2027-01-01T00:00:00Z"}, sin tipar & \falla & Falta \cod{@type}. \\
+\cod{duty} con una acción ajena & \falla & Los deberes anidados también se validan. \\
+Sin el campo \cod{profile} & \falla & La política tiene que declarar el perfil. \\
+\cod{rightOperandReference} en \cod{minAggregation} & \falla & \cod{allow_reference} es \cod{false}. \\
+Una regla sin \cod{action} & \falla & La lista de acciones es cerrada. \\
+Fecha tipada con valor \texttt{"mañana"} & \falla & No tiene la forma léxica del tipo. \\
+\bottomrule
+\end{longtable}
+
+\section{Determinismo}
+
+Las mismas fuentes producen los mismos bytes, siempre. Los prefijos se ordenan, los términos se ordenan por IRI
+y el JSON se emite en forma canónica.
+
+No es un detalle estético. El hub publica cada fichero por su resumen SHA-256 y firma el manifiesto que los
+lista. Si compilar dos veces diera bytes distintos, dos hubs con la misma fuente publicarían paquetes distintos.
+
+\begin{lstlisting}[style=sh]
+../../../bin/alexandriac compile -o /tmp/a dsl/metering-1.0.0.yaml > /dev/null
+../../../bin/alexandriac compile -o /tmp/b dsl/metering-1.0.0.yaml > /dev/null
+diff -r /tmp/a /tmp/b && echo identicos
+\end{lstlisting}
+
+\begin{retos}
+\begin{enumerate}[leftmargin=*, itemsep=2pt]
+  \item Cambia \cod{rules.actions} a \cod{open}, recompila y busca la definición \cod{Action} en
+        \cod{schema.json}. ¿Qué ha pasado con la enumeración? ¿Y con \cod{gen:ActionShape} en \cod{shapes.ttl}?
+  \item Abre \cod{spec.html} en un navegador. ¿Qué columna distingue un término adoptado de uno creado?
+\end{enumerate}
+\end{retos}

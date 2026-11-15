@@ -1,0 +1,26 @@
+{
+  "id": "contract-request",
+  "priority": 110,
+  "listener": "dsp-ingress",
+  "match": {
+    "method": "POST",
+    "path": "/negotiations/{providerPid}/request",
+    "body": [
+      {
+        "pointer": "/@type",
+        "one_of": [
+          "ContractRequestMessage",
+          "dspace:ContractRequestMessage"
+        ]
+      }
+    ]
+  },
+  "message": "ContractRequestMessage",
+  "verify": {
+    "select": "/offer",
+    "gates": [
+      "policy_intake"
+    ]
+  },
+  "mode": "enforce"
+}

@@ -1,0 +1,17 @@
+{
+  "profile": "https://w3id.org/dspace/2025/1",
+  "version": "2025-1",
+  "artifacts": [
+    {
+      "path": "dsp-messages.schema.json",
+      "role": "json-schema",
+      "media_type": "application/schema+json"
+    },
+    {
+      "path": "context.jsonld",
+      "role": "context",
+      "media_type": "application/ld+json",
+      "url": "https://w3id.org/dspace/2025/1/context.jsonld"
+    }
+  ]
+}

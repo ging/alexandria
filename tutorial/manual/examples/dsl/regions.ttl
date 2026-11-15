@@ -1,0 +1,9 @@
+@prefix enr:  <https://flexgrid.example/ns/metering#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+enr:regions a skos:ConceptScheme ;
+    skos:prefLabel "Processing regions"@en .
+
+enr:regionES a skos:Concept ; skos:inScheme enr:regions ; skos:notation "ES" .
+enr:regionEU a skos:Concept ; skos:inScheme enr:regions ; skos:notation "EU" .
+enr:regionEEA a skos:Concept ; skos:inScheme enr:regions ; skos:notation "EEA" .

@@ -1,0 +1,307 @@
+% ============================================================================
+% ALEXANDRIA EN LA PRÁCTICA
+% El lenguaje de perfiles, alexandria-server y alexandria-client,
+% con un espacio de datos de medida energética como caso de estudio
+% ============================================================================
+\documentclass[11pt,a4paper,openany,oneside]{book}
+
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[utf8]{inputenc}
+  \usepackage[T1]{fontenc}
+  \usepackage{lmodern}
+\else
+  \usepackage{fontspec}
+\fi
+
+\usepackage[spanish,es-tabla,es-nodecimaldot,es-noshorthands]{babel}
+\usepackage[top=2.2cm,bottom=2.2cm,left=2.25cm,right=2.25cm,headheight=15pt]{geometry}
+\usepackage{setspace}
+\setstretch{1.07}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{amsmath,amssymb}
+\usepackage{upquote}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage[most]{tcolorbox}
+\usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,fit,backgrounds,calc,decorations.pathreplacing,babel}
+\usepackage{xurl}
+\usepackage[hypertexnames=false,colorlinks=true,linkcolor=alxNavy,citecolor=alxTeal,urlcolor=alxBlue]{hyperref}
+
+% --- Evitar desbordamientos horizontales feos ---
+\setlength{\emergencystretch}{3em}
+\hfuzz=2pt
+\setlength{\parskip}{0.35em}
+
+% --- Paleta ---
+\definecolor{alxNavy}{HTML}{0F2942}
+\definecolor{alxBlue}{HTML}{1D5B9B}
+\definecolor{alxTeal}{HTML}{0D7A6F}
+\definecolor{alxAmber}{HTML}{B45309}
+\definecolor{alxRed}{HTML}{991B1B}
+\definecolor{alxPurple}{HTML}{5B21B6}
+\definecolor{alxSlate}{HTML}{F4F6F9}
+\definecolor{alxLightBlue}{HTML}{EBF3FA}
+\definecolor{alxLightTeal}{HTML}{EAF6F4}
+\definecolor{alxLightAmber}{HTML}{FEF6E7}
+\definecolor{alxLightRed}{HTML}{FDF2F2}
+\definecolor{alxLightPurple}{HTML}{F3EFFB}
+\definecolor{alxBorder}{HTML}{CBD5E1}
+\definecolor{codeComment}{HTML}{57606A}
+\definecolor{codeString}{HTML}{0A3069}
+\definecolor{codeKeyword}{HTML}{8250DF}
+
+% --- Columnas útiles ---
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+
+% --- Código en línea: se parte en cualquier carácter y no interpreta guiones bajos ---
+\Urlmuskip=0mu\relax
+\newcommand{\cod}[1]{\nolinkurl{#1}}
+\newcommand{\ok}{\textcolor{alxTeal}{\textbf{ok}}}
+\newcommand{\warn}{\textcolor{alxAmber}{\textbf{aviso}}}
+\newcommand{\viol}{\textcolor{alxRed}{\textbf{violación}}}
+\newcommand{\si}{\textcolor{alxTeal}{\textbf{sí}}}
+\newcommand{\no}{\textcolor{alxRed}{\textbf{no}}}
+\newcommand{\pasa}{\textcolor{alxTeal}{pasa}}
+\newcommand{\falla}{\textcolor{alxRed}{falla}}
+
+% --- Encabezados y pies ---
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textcolor{alxNavy!80}{\nouppercase{\leftmark}}}
+\fancyhead[R]{\small\textcolor{alxBlue}{\textbf{\thepage}}}
+\fancyfoot[C]{\footnotesize\textcolor{gray}{Alexandria en la práctica $\cdot$ lenguaje de perfiles, hub y cliente}}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.2pt}
+\fancypagestyle{plain}{%
+  \fancyhf{}%
+  \fancyfoot[C]{\small\textcolor{alxBlue}{\textbf{\thepage}}}%
+  \renewcommand{\headrulewidth}{0pt}%
+  \renewcommand{\footrulewidth}{0pt}%
+}
+
+% --- Partes, capítulos y secciones ---
+\titleformat{\part}[display]
+  {\centering\Huge\bfseries\color{alxNavy}}
+  {\normalfont\Large\scshape\color{alxTeal} Parte \thepart}
+  {1ex}
+  {\titlerule[1.5pt]\vspace{1.5ex}}
+  [\vspace{1.5ex}\titlerule]
+\titleformat{\chapter}[display]
+  {\normalfont\bfseries\color{alxNavy}}
+  {\filright\normalfont\large\scshape\color{alxTeal} \chaptertitlename\ \thechapter}
+  {1ex}
+  {\titlerule[1pt]\vspace{1ex}\huge\raggedright}
+  [\vspace{1ex}\titlerule]
+\titlespacing*{\chapter}{0pt}{-15pt}{25pt}
+\titleformat{\section}
+  {\normalfont\Large\bfseries\color{alxNavy}}
+  {\thesection}{0.8em}{}
+\titleformat{\subsection}
+  {\normalfont\large\bfseries\color{alxBlue}}
+  {\thesubsection}{0.7em}{}
+\titleformat{\subsubsection}
+  {\normalfont\normalsize\bfseries\color{alxTeal}}
+  {\thesubsubsection}{0.6em}{}
+
+% --- Índice: hueco suficiente para números de capítulo de dos cifras ---
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd{\l@chapter}{1.5em}{2.1em}{}{}
+\renewcommand*\l@section{\@dottedtocline{1}{2.1em}{2.7em}}
+\makeatother
+
+% --- Cajas pedagógicas ---
+\newtcolorbox{ideaClave}[1][Idea clave]{
+  enhanced, breakable,
+  colback=alxLightBlue, colframe=alxBlue,
+  coltitle=white, fonttitle=\bfseries,
+  title={#1},
+  boxrule=0.8pt, arc=3pt, left=8pt, right=8pt, top=6pt, bottom=6pt
+}
+\newtcolorbox{notaPractica}[1][Nota práctica]{
+  enhanced, breakable,
+  colback=alxLightTeal, colframe=alxTeal,
+  coltitle=white, fonttitle=\bfseries,
+  title={#1},
+  boxrule=0.8pt, arc=3pt, left=8pt, right=8pt, top=6pt, bottom=6pt
+}
+\newtcolorbox{trampaHabitual}[1][Trampa habitual]{
+  enhanced, breakable,
+  colback=alxLightAmber, colframe=alxAmber,
+  coltitle=white, fonttitle=\bfseries,
+  title={#1},
+  boxrule=0.8pt, arc=3pt, left=8pt, right=8pt, top=6pt, bottom=6pt
+}
+\newtcolorbox{bajoElCapo}[1][Bajo el capó]{
+  enhanced, breakable,
+  colback=alxSlate, colframe=alxNavy,
+  coltitle=white, fonttitle=\bfseries,
+  title={#1},
+  boxrule=0.8pt, arc=3pt, left=8pt, right=8pt, top=6pt, bottom=6pt
+}
+\newtcolorbox{hallazgo}[1]{
+  enhanced, breakable,
+  colback=alxLightRed, colframe=alxRed,
+  coltitle=white, fonttitle=\bfseries,
+  title={#1},
+  boxrule=0.8pt, arc=3pt, left=8pt, right=8pt, top=6pt, bottom=6pt
+}
+\newtcolorbox{retos}[1][Para practicar]{
+  enhanced, breakable,
+  colback=white, colframe=alxPurple,
+  coltitle=white, fonttitle=\bfseries,
+  title={#1},
+  boxrule=0.9pt, arc=3pt, left=8pt, right=8pt, top=6pt, bottom=6pt
+}
+
+% --- Listados ---
+\lstset{
+  basicstyle=\footnotesize\ttfamily,
+  backgroundcolor=\color{alxSlate},
+  frame=single,
+  rulecolor=\color{alxBorder},
+  framesep=5pt,
+  xleftmargin=6pt,
+  xrightmargin=6pt,
+  breaklines=true,
+  breakatwhitespace=false,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  upquote=true,
+  captionpos=b,
+  aboveskip=0.9em,
+  belowskip=0.7em,
+  commentstyle=\color{codeComment}\itshape,
+  keywordstyle=\color{codeKeyword}\bfseries,
+  stringstyle=\color{codeString},
+  literate=
+    {á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'\i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1
+    {Á}{{\'A}}1 {É}{{\'E}}1 {Í}{{\'I}}1 {Ó}{{\'O}}1 {Ú}{{\'U}}1
+    {ñ}{{\~n}}1 {Ñ}{{\~N}}1 {ü}{{\"u}}1 {Ü}{{\"U}}1
+    {¿}{{?`}}1 {¡}{{!`}}1
+    {→}{{$\rightarrow$}}1 {…}{{\ldots}}1 {·}{{$\cdot$}}1 {§}{{\S}}1
+}
+\lstdefinelanguage{yamlx}{
+  morecomment=[l]{\#},
+  morestring=[b]",
+  sensitive=true
+}
+\lstdefinelanguage{jsonx}{
+  morestring=[b]",
+  morekeywords={true,false,null},
+  sensitive=true
+}
+\lstdefinelanguage{turtlex}{
+  morekeywords={@prefix,a,true,false},
+  morestring=[b]",
+  sensitive=true
+}
+\lstdefinelanguage{shx}{
+  morekeywords={curl,cd,source,echo,cat,export,make,go,grep,sed,kill,sleep,python3,docker},
+  morecomment=[l]{\#},
+  morestring=[b]",
+  morestring=[b]',
+  sensitive=true
+}
+\lstdefinestyle{yaml}{language=yamlx}
+\lstdefinestyle{json}{language=jsonx}
+\lstdefinestyle{ttl}{language=turtlex}
+\lstdefinestyle{sh}{language=shx, backgroundcolor=\color{alxLightBlue!55}, rulecolor=\color{alxBlue!35}}
+\lstdefinestyle{out}{language={}, backgroundcolor=\color{white}, rulecolor=\color{alxBorder}, basicstyle=\scriptsize\ttfamily}
+
+% --- Metadatos ---
+\hypersetup{
+  pdftitle={Alexandria en la práctica},
+  pdfsubject={Tutorial de alexandriac, alexandria-server y alexandria-client},
+  pdfkeywords={Alexandria, vocabulary hub, ODRL, DSP, SHACL, espacios de datos}
+}
+
+\begin{document}
+
+% ============================== PORTADA ==============================
+\begin{titlepage}
+\begin{tikzpicture}[remember picture,overlay]
+  \fill[alxNavy] (current page.north west) rectangle ([yshift=-9.4cm]current page.north east);
+  \fill[alxTeal] ([yshift=-9.4cm]current page.north west) rectangle ([yshift=-9.75cm]current page.north east);
+\end{tikzpicture}
+\vspace*{0.6cm}
+\begin{flushleft}
+{\color{white}\large\scshape Tutorial de uso\par}
+\vspace{0.7cm}
+{\color{white}\fontsize{34}{40}\selectfont\bfseries Alexandria en la práctica\par}
+\vspace{0.5cm}
+{\color{white!85}\Large El lenguaje de perfiles \texttt{alexandria.profiles/v1},\\[2pt]
+el hub \texttt{alexandria-server} y el borde \texttt{alexandria-client}\par}
+\end{flushleft}
+\vspace{3.4cm}
+\begin{flushleft}
+{\Large\color{alxNavy}\bfseries Caso de estudio: un espacio de datos de medida energética\par}
+\vspace{0.4cm}
+{\large\color{alxNavy!80} De la regla de negocio al veredicto en la red: perfil ODRL, publicación gobernada,
+validación de tráfico DSP y una revisión de la parte de SHACL que queda por hacer.\par}
+\end{flushleft}
+\vfill
+\begin{tcolorbox}[enhanced, colback=alxSlate, colframe=alxBorder, boxrule=0.6pt, arc=3pt, left=10pt, right=10pt, top=8pt, bottom=8pt]
+\small
+\textbf{Qué está comprobado.} Todos los comandos, salidas, cabeceras y códigos de error de este documento se han
+ejecutado contra los binarios compilados desde la rama \cod{feat/client-validator-mode} (commit \cod{e824d3a})
+con las correcciones del capítulo~\ref{ch:shacl} aplicadas en el árbol de trabajo, el 13 y el 14 de noviembre de
+2026. Lo que no se ha ejecutado se marca expresamente como tal.
+
+\medskip
+\textbf{Ficheros.} Los ejemplos están en \cod{tutorial/manual/examples/}; el laboratorio usa puertos alternativos
+para convivir con el de \cod{config/}.
+\end{tcolorbox}
+\vspace{0.4cm}
+{\small\color{gray} Repositorio \cod{ging/alexandria} $\cdot$ especificación \cod{alexandria-vhub} 0.3.0 $\cdot$ noviembre de 2026}
+\end{titlepage}
+
+\frontmatter
+\setcounter{tocdepth}{1}
+\tableofcontents
+
+\mainmatter
+
+\input{chapters/00-como-leer}
+
+\part{El modelo mental}
+\input{chapters/01-modelo}
+
+\part{El lenguaje de perfiles}
+\input{chapters/02-odrlprofile}
+\input{chapters/03-compilar}
+\input{chapters/04-spaceprofile}
+\input{chapters/05-validacion}
+\input{chapters/06-evolucion}
+\input{chapters/07-segundo-perfil}
+
+\part{El hub: alexandria-server}
+\input{chapters/08-hub-arranque}
+\input{chapters/09-hub-release}
+
+\part{El borde: alexandria-client}
+\input{chapters/10-cliente-arranque}
+\input{chapters/11-cliente-reglas}
+\input{chapters/12-cliente-migracion}
+\input{chapters/13-cliente-resiliencia}
+
+\part{Revisión: la parte de SHACL}
+\input{chapters/14-shacl}
+
+\appendix
+\input{chapters/a-chuleta}
+
+\end{document}

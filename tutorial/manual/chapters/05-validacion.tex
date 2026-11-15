@@ -1,0 +1,176 @@
+\chapter{Los cinco niveles de validación}
+\label{ch:validacion}
+
+El compilador valida en cinco niveles, del más superficial al más profundo. Saber en qué nivel falla algo dice
+mucho de qué está mal.
+
+\begin{center}
+\begin{tikzpicture}[font=\small, node distance=3mm,
+  lvl/.style={draw=alxNavy, fill=alxLightBlue, rounded corners=2pt, minimum height=10mm, minimum width=25mm, align=center},
+  arr/.style={-{Stealth[length=2mm]}, alxNavy, thick}]
+  \node[lvl] (n1) {\textbf{N1}\\[-2pt]\scriptsize sintaxis};
+  \node[lvl, right=of n1] (n2) {\textbf{N2}\\[-2pt]\scriptsize invariantes};
+  \node[lvl, right=of n2] (n3) {\textbf{N3}\\[-2pt]\scriptsize referencias};
+  \node[lvl, right=of n3] (n4) {\textbf{N4}\\[-2pt]\scriptsize versionado};
+  \node[lvl, right=of n4, fill=alxLightTeal, draw=alxTeal] (em) {emisión};
+  \node[lvl, right=of em] (n5) {\textbf{N5}\\[-2pt]\scriptsize salidas};
+  \draw[arr] (n1) -- (n2); \draw[arr] (n2) -- (n3); \draw[arr] (n3) -- (n4); \draw[arr] (n4) -- (em); \draw[arr] (em) -- (n5);
+\end{tikzpicture}
+\end{center}
+
+\noindent\begin{tabularx}{\linewidth}{@{}C{1cm}L{3.2cm}Y@{}}
+\toprule
+\textbf{Nivel} & \textbf{Pregunta} & \textbf{Qué comprueba} \\
+\midrule
+N1 & ¿Es un documento del lenguaje? & YAML restringido al modelo JSON y el esquema normativo (\cod{internal/dsl/schema.json}). \\
+N2 & ¿Es coherente consigo mismo? & Identificadores únicos, prefijos declarados, tabla operador–tipo, un \emph{binding} por slot, invariantes de ciclo de vida. \\
+N3 & ¿Existe lo que cita? & Términos adoptados, resolución de rangos, copias vendorizadas, artefactos de cada gate. \\
+N4 & ¿Puede suceder a la versión anterior? & Diferencias contra la versión previa y el salto de versión mínimo. \\
+N5 & ¿Sirve lo generado? & El JSON es válido, el esquema compila, el contexto expande cada alias a su IRI y el Turtle está bien formado. \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+Si hay errores hasta N4, no se emite nada. Si N5 falla, los artefactos se descartan.
+
+\section{Cómo leer un hallazgo}
+
+Cada línea tiene el mismo formato:
+
+\begin{lstlisting}[style=out]
+error   SIG_OPERATOR_TYPE    n2-operator-type.yaml#1:73 /terms/4/signature/operators/1 isA requires value_kind iri
+\end{lstlisting}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{6.4cm}Y@{}}
+\toprule
+\textbf{Parte} & \textbf{Significado} \\
+\midrule
+\cod{error} & Severidad: \cod{error} bloquea, \cod{warning} no. \\
+\cod{SIG_OPERATOR_TYPE} & Código estable, pensado para buscarlo. \\
+\texttt{n2-operator-type.yaml\#1:73} & Fichero, número de documento dentro del flujo y línea. \\
+\cod{/terms/4/signature/operators/1} & Puntero JSON al nodo culpable. \\
+El resto & Mensaje para personas. \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+Estos códigos son del lenguaje. No pertenecen al catálogo cerrado de 77 códigos del hub y del cliente, aunque
+cuando el hub compila un borrador los devuelve tal cual en la respuesta.
+
+\section{N1: sintaxis}
+
+\subsection{Un ancla}
+
+\begin{lstlisting}[style=out]
+error   YAML     n1-anchor.yaml#1:1  line 93: anchors are not allowed (§6)
+\end{lstlisting}
+
+\subsection{Un campo que no existe}
+
+\begin{lstlisting}[style=out]
+error   SCHEMA   n1-unknown-field.yaml#1:1  'oneOf' failed, none matched
+error   SCHEMA   n1-unknown-field.yaml#1:1  validation failed
+error   SCHEMA   n1-unknown-field.yaml#1:1  missing properties 'space', 'bindings'
+error   SCHEMA   n1-unknown-field.yaml#1:1  additional properties 'namespaces', 'profile', 'rules', 'terms', 'adopted' not allowed
+error   SCHEMA   n1-unknown-field.yaml#1:2 /kind value must be 'SpaceProfile'
+error   SCHEMA   n1-unknown-field.yaml#1:113 /rules validation failed
+alexandriac: 6 errors
+\end{lstlisting}
+
+\begin{trampaHabitual}[Seis errores para una errata]
+El esquema de un documento es «o es un \cod{OdrlProfile}, o es un \cod{SpaceProfile}». Cuando una rama falla, el
+validador informa de por qué no encaja en \emph{ninguna}, y las cinco primeras líneas explican por qué tu perfil
+no es un \cod{SpaceProfile}, lo cual es cierto e inútil.
+
+La línea que importa es \textbf{la última}, la que tiene puntero y número de línea profundos: \cod{/rules} en la
+línea 113. Ahí está el campo mal escrito.
+\end{trampaHabitual}
+
+\section{N2: invariantes}
+
+\begin{longtable}{@{}L{6.3cm}L{9.3cm}@{}}
+\toprule
+\textbf{Código} & \textbf{Causa y mensaje real} \\
+\midrule
+\endhead
+\cod{TERM_DUP_ID} & Dos términos con el mismo \cod{id}. \newline {\scriptsize\ttfamily term id gridBalancing is repeated} \\
+\cod{ALIAS_COLLISION} & Un término creado y uno adoptado comparten nombre local. \newline {\scriptsize\ttfamily enr:purpose and odrl:purpose share the compact alias "purpose"} \\
+\cod{PREFIX_UNDECLARED} & Un CURIE usa un prefijo que no está en \cod{namespaces}. \newline {\scriptsize\ttfamily prefix of geo:ES is not declared} \\
+\cod{SIG_OPERATOR_TYPE} & Un operador no casa con el tipo. \newline {\scriptsize\ttfamily gteq requires an ordered datatype, not ""} \newline {\scriptsize\ttfamily isA requires value\_kind iri} \\
+\cod{SIG_OPERATOR_UNKNOWN} & El operador no es de ODRL ni un \cod{operator} del perfil. \\
+\cod{SIG_VALUE_KIND} & \cod{datatype} que no es \cod{xsd:}, o \cod{datatype} junto a \texttt{value\_kind: iri}. Como aviso: un valor IRI que no es operando derecho del perfil. \\
+\cod{ENFORCEMENT_WITHOUT_SIGNATURE} & Bloque \cod{enforcement} sin firma. \newline {\scriptsize\ttfamily enforcement of enr:retentionDays requires a signature (§10)} \\
+\cod{PROFILE_ID_IS_NAMESPACE} & El \cod{id} del perfil coincide con un espacio de nombres. \\
+\cod{SLOT_DUP}, \cod{VIA_CYCLE} & Del espacio, vistos en el capítulo anterior. \\
+\cod{LIFECYCLE_*} & Parámetros de ciclo de vida incoherentes. \\
+\bottomrule
+\end{longtable}
+
+Los avisos de N2 no bloquean, pero conviene no ignorarlos:
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{6.3cm}Y@{}}
+\toprule
+\textbf{Aviso} & \textbf{Qué te está diciendo} \\
+\midrule
+\cod{ACTION_INCLUDED_IN_MISSING} & Una acción sin \cod{included_in}: un motor no sabrá de qué acción es un caso. \\
+\cod{TERM_NO_REPLACEMENT} & Un término obsoleto o retirado sin \cod{replaced_by}: quien lo usa no sabe a qué migrar. \\
+\cod{SIG_OPERATOR_TYPE} & Un operador de orden sobre \cod{xsd:duration}, que solo está parcialmente ordenado. \\
+\cod{SIG_SCHEME_UNSUPPORTED} & Se usa \cod{scheme}, que hoy no es practicable. \\
+\cod{EXTRA_TURTLE_UNCHECKED} & \cod{extra_turtle} se inyecta tal cual: el compilador no puede analizarlo. \\
+\cod{GATE_SHACL_ONLY} & Un gate de un \emph{binding} obligatorio solo tiene \cod{shacl}, que nadie ejecuta: lo aceptará todo. \\
+\cod{CONFORMANCE_REQUIRED_IGNORED} & \cod{lifecycle.conformance_required} se acepta y se ignora. \\
+\bottomrule
+\end{tabularx}
+
+\section{N3: referencias}
+
+\begin{lstlisting}[style=out]
+error   ADOPTED_UNKNOWN         n3-adopted-unknown.yaml#1:22 /adopted/actions/1 odrl:pseudonymize is not in the ODRL 2.2 vocabulary
+error   ADOPTED_KIND_MISMATCH   n3-adopted-kind.yaml#1:22 /adopted/actions/1 odrl:spatial is a left_operand in ODRL, not a action
+\end{lstlisting}
+
+El primero es el error típico de quien supone que ODRL tiene un término y no lo tiene: ODRL define
+\cod{anonymize}, pero no \cod{pseudonymize}. Si lo necesitas, lo creas tú en \cod{terms}.
+
+El segundo detecta la categoría equivocada: \cod{odrl:spatial} existe, pero es un operando izquierdo, no una
+acción.
+
+De N3 son también \cod{BINDING_UNRESOLVED}, \cod{BINDING_BASE_MISMATCH} y \cod{ARTIFACT_MISSING}, del capítulo
+anterior. Este último tiene una salida reveladora:
+
+\begin{lstlisting}[style=out]
+error   ARTIFACT_MISSING   s-artifact.yaml#2:146 /bindings/0/conformance/1 https://flexgrid.example/odrl/profile/metering 1.0.0 produces no cedar-mapping artefact
+\end{lstlisting}
+
+\section{N5: salidas}
+
+N5 revisa lo que el propio compilador acaba de generar. Puede parecer redundante, pero es la red de seguridad
+contra los fallos de los emisores y contra \cod{extra_turtle}, que es texto del autor.
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{3.6cm}Y@{}}
+\toprule
+\textbf{Artefacto} & \textbf{Comprobación} \\
+\midrule
+\cod{schema.json} & Se compila como JSON Schema. \\
+Otros JSON & Son JSON válido. \\
+\cod{context.jsonld} & Se procesa sin red y cada alias se expande a la IRI de su término. \\
+Turtle & Corchetes y paréntesis equilibrados, cadenas e IRI cerradas, punto final. \\
+\bottomrule
+\end{tabularx}
+
+\begin{hallazgo}{La comprobación de Turtle es solo estructural}
+N5 no analiza el Turtle: cuenta corchetes. Tampoco ejecuta las \emph{shapes}. Un \cod{shapes.ttl} que fuera
+SHACL sin sentido, pero con los paréntesis en su sitio, pasaría. Es el hallazgo H2 del capítulo~\ref{ch:shacl}.
+\end{hallazgo}
+
+\section{N4 tiene capítulo propio}
+
+El versionado compara dos versiones y por eso necesita la anterior. Es el tema del capítulo siguiente.
+
+\begin{retos}
+\begin{enumerate}[leftmargin=*, itemsep=2pt]
+  \item Provoca los seis códigos de error de la tabla de N2 modificando una copia de
+        \cod{metering-1.0.0.yaml}. Todos se consiguen cambiando una sola línea.
+  \item Escribe \texttt{version: v1} en el perfil y localiza, entre las seis líneas de error, la única que sirve.
+\end{enumerate}
+\end{retos}

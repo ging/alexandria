@@ -1,0 +1,17 @@
+{
+  "id": "transfer-request",
+  "priority": 200,
+  "listener": "dsp-ingress",
+  "match": {
+    "method": "POST",
+    "path": "/transfers/request"
+  },
+  "message": "TransferRequestMessage",
+  "verify": {
+    "gates": [
+      "dsp_message",
+      "agreement_admission"
+    ]
+  },
+  "mode": "enforce"
+}

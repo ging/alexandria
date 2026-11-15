@@ -1,0 +1,17 @@
+{
+  "id": "contract-agreement-in",
+  "priority": 170,
+  "listener": "dsp-ingress",
+  "match": {
+    "method": "POST",
+    "path": "/negotiations/{consumerPid}/agreement"
+  },
+  "message": "ContractAgreementMessage",
+  "verify": {
+    "select": "/agreement",
+    "gates": [
+      "policy_intake"
+    ]
+  },
+  "mode": "enforce"
+}

@@ -1,0 +1,355 @@
+\chapter{Publicar una versión}
+\label{ch:release}
+
+Publicar no es subir un fichero. Es un proceso con tres estados, y cada paso deja rastro.
+
+\begin{center}
+\begin{tikzpicture}[font=\small, node distance=16mm,
+  st/.style={draw=alxNavy, fill=alxLightBlue, rounded corners=2pt, minimum height=10mm, minimum width=27mm, align=center},
+  arr/.style={-{Stealth[length=2.2mm]}, alxNavy, thick}]
+  \node[st] (d) {Borrador\\[-2pt]\scriptsize editable};
+  \node[st, right=of d] (c) {Candidato\\[-2pt]\scriptsize inmutable};
+  \node[st, right=of c, fill=alxLightTeal, draw=alxTeal] (v) {Versión\\[-2pt]\scriptsize firmada};
+  \node[st, right=of v, fill=alxLightRed, draw=alxRed] (r) {Revocada};
+  \draw[arr] (d) -- node[above]{\scriptsize\texttt{:propose}} (c);
+  \draw[arr] (c) -- node[above]{\scriptsize\texttt{:approve}} (v);
+  \draw[arr] (v) -- node[above]{\scriptsize\texttt{:revoke}} (r);
+  \draw[arr] (d) edge[loop above] node{\scriptsize\texttt{PUT}, \texttt{:validate}} (d);
+  \draw[arr] (c) -- ++(0,-11mm) node[below]{\scriptsize\texttt{:reject}};
+\end{tikzpicture}
+\end{center}
+
+\section{El borrador}
+
+Con \texttt{compiler: dsl}, un borrador es un \emph{bundle} YAML, exactamente el fichero que \cod{alexandriac} ya
+ha validado. Se avanza el reloj una hora y se sube:
+
+\begin{lstlisting}[style=sh]
+clock 2026-09-01T10:00:00Z
+curl -sk -i -X POST $HUB/v1/namespaces/flexgrid/drafts -H "Authorization: Bearer $(cat steward.token)" \
+  -H 'Content-Type: application/yaml' --data-binary @../dsl/flexgrid-1.0.0.yaml
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+HTTP/2 201
+content-type: application/ld+json
+etag: "05511c6385475d68-1"
+location: https://127.0.0.1:18443/v1/namespaces/flexgrid/drafts/05511c6385475d68
+
+{"@context":"…","id":"https://127.0.0.1:18443/v1/namespaces/flexgrid/drafts/05511c6385475d68",
+ "namespace":"https://127.0.0.1:18443/v1/namespaces/flexgrid","rev":1}
+\end{lstlisting}
+
+El borrador es lo único editable del proceso. Para reemplazarlo se usa \cod{PUT} con la cabecera \cod{If-Match}
+y el \cod{ETag} actual. Sin ella, el hub responde \cod{428}; con una desfasada, \cod{412}. Así dos
+\emph{stewards} no se pisan el trabajo.
+
+\subsection{Validar sin efectos}
+
+\begin{lstlisting}[style=sh]
+DRAFT=$HUB/v1/namespaces/flexgrid/drafts/05511c6385475d68
+curl -sk -X POST "$DRAFT:validate" -H "Authorization: Bearer $(cat steward.token)"
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+{"@context":"…","class":"initial","findings":[],"valid":true}
+\end{lstlisting}
+
+\cod{:validate} ejecuta los cinco niveles y no cambia nada. Devuelve la clase que tendría la versión y la lista
+de hallazgos. Cuando algo está mal, los hallazgos son los mismos que daría \cod{alexandriac}, con su código, su
+puntero y su línea. Por ejemplo, un borrador 2.1.0 que quita una región con un salto menor:
+
+\begin{lstlisting}[style=out]
+{ "class": "",
+  "findings": [
+    { "Code": "VERSION_BUMP_TOO_LOW",
+      "Detail": "draft.yaml#1: 2.0.0 → 2.1.0 is a MINOR bump; the changes require MAJOR: [operator added to enr:minAggregation value removed from enr:processingRegion]",
+      "Path": "/profile/version", "Line": 6 } ],
+  "valid": false }
+\end{lstlisting}
+
+Intentar proponerlo devuelve \cod{422} con el mismo código. Nótese que el hub conocía la versión anterior sin
+que nadie se la diera: la tomó de \cod{sources/draft.yaml} del paquete vigente.
+
+\begin{notaPractica}[Las claves de los hallazgos van en mayúscula]
+En \cod{findings}, los campos se llaman \cod{Code}, \cod{Detail}, \cod{Path} y \cod{Line}, con mayúscula
+inicial, mientras que el resto de la API usa minúsculas (\cod{code}, \cod{detail}). Es una asimetría de la
+implementación actual; un \emph{script} que lea ambos tiene que contar con ella.
+\end{notaPractica}
+
+\section{El candidato}
+
+\begin{lstlisting}[style=sh]
+curl -sk -X POST "$DRAFT:propose" -H "Authorization: Bearer $(cat steward.token)"
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+{
+ "class": "initial",
+ "diff": [
+  "added profile/slots.json",
+  "added profiles/dsp/vendored/2025-1/context.jsonld",
+  "added profiles/dsp/vendored/2025-1/dsp-messages.schema.json",
+  "added profiles/odrl/metering/1.0.0/context.jsonld",
+  "added profiles/odrl/metering/1.0.0/prof.ttl",
+  "added profiles/odrl/metering/1.0.0/schema.json",
+  "added profiles/odrl/metering/1.0.0/shapes.ttl",
+  "added profiles/odrl/metering/1.0.0/spec.html",
+  "added profiles/odrl/metering/1.0.0/vocab.ttl",
+  "added sources/draft.yaml",
+  "added space/prof.ttl",
+  "added space/shacl-union.ttl",
+  "added space/spec.html"
+ ],
+ "id": "https://127.0.0.1:18443/v1/namespaces/flexgrid/candidates/5e6789e09b415f9d",
+ "lifecycle": {
+  "freshness": { "ttl": "P1D", "max_staleness": "P7D" },
+  "min_grace_window": "P7D", "grace_window": "P30D", "sync_interval": "PT6H",
+  "clock_skew": "PT5S", "lease_margin": "PT10S", "propagation_window": "P2D",
+  "max_concurrent_versions": 4,
+  "degraded": { "dsp_message": "continue", "policy_intake": "reject" }
+ },
+ "planned": {
+  "version": "1.0.0", "class": "initial",
+  "published_at": "2026-09-01T10:00:00Z",
+  "new_content_from": "2026-09-03T10:00:00Z",
+  "enforced_from": "2026-09-03T10:00:00Z",
+  "revoked_from": null
+ },
+ "proposed_at": "2026-09-01T10:00:00Z",
+ "state": "open",
+ "version": "1.0.0"
+}
+\end{lstlisting}
+
+Al proponer, el hub compila el borrador y congela el resultado. El candidato es lo que una \emph{steward} revisa
+antes de aprobar, y contiene cuatro cosas:
+
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item \cod{class}: la clase de la versión.
+  \item \cod{diff}: qué ficheros se añaden, cambian o desaparecen respecto de la versión vigente.
+  \item \cod{lifecycle}: los parámetros efectivos, con los valores por defecto del hub ya rellenados.
+  \item \cod{planned}: las fechas que tendría si se aprobara en este instante.
+\end{itemize}
+
+Editar el borrador después no cambia el candidato. Un candidato solo sale de \cod{open} aprobado o rechazado.
+
+\section{Aprobar}
+
+\begin{lstlisting}[style=sh]
+curl -sk -X POST "$HUB/v1/namespaces/flexgrid/candidates/5e6789e09b415f9d:approve" \
+  -H "Authorization: Bearer $(cat steward.token)" -d '{}'
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+{
+  "@context": ["https://www.w3.org/ns/credentials/v2",
+               "https://127.0.0.1:18443/pub/_vhub/v1/context.jsonld"],
+  "type": ["VerifiableCredential", "VersionRecord"],
+  "issuer": "did:key:z6MkkfgqPKJK19zucGBNfLJQHUFwEA3mc9skvYsPDbkoNP8e",
+  "validFrom": "2026-09-01T10:00:00Z",
+  "credentialSubject": {
+    "id": "https://127.0.0.1:18443/v1/namespaces/flexgrid/versions/1.0.0",
+    "namespace": "https://127.0.0.1:18443/v1/namespaces/flexgrid",
+    "version": "1.0.0", "class": "initial",
+    "manifest": "ni:///sha-256;cCYTVfOvidDw_pxQY5o1DHnHmfRjcSzDDAp3xLmxw2k",
+    "published_at": "2026-09-01T10:00:00Z",
+    "new_content_from": "2026-09-03T10:00:00Z",
+    "enforced_from": "2026-09-03T10:00:00Z",
+    "revoked_from": null
+  },
+  "proof": {
+    "type": "DataIntegrityProof", "cryptosuite": "eddsa-jcs-2022",
+    "proofPurpose": "assertionMethod", "created": "2026-09-01T10:00:00Z",
+    "verificationMethod": "did:key:z6Mkkfgq…#z6Mkkfgq…",
+    "proofValue": "z5AkwWzBn1jYoaQJZocbagUD1fs7xWdhSLL9RiBXh6ptx39QiPy57dfeux1kJmEGeHFbnkVx1i1kdb1A63WC3VDb8"
+  }
+}
+\end{lstlisting}
+
+La respuesta es el \textbf{registro de versión}: una credencial verificable W3C~VC~2.0 firmada por el hub con
+\cod{eddsa-jcs-2022}. Quien la tenga puede comprobar, sin preguntar a nadie, que el hub dijo que la 1.0.0 de
+Flexgrid tiene ese manifiesto y esas fechas.
+
+\begin{notaPractica}[Con las funciones del laboratorio]
+Los tres pasos anteriores están envueltos en \cod{publish} y \cod{approve} de \cod{env.sh}. A partir de aquí el
+tutorial los usa:
+
+\begin{lstlisting}[style=sh]
+publish ../dsl/flexgrid-1.0.0.yaml
+approve '{}'
+\end{lstlisting}
+\end{notaPractica}
+
+\section{Las tres credenciales}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{3.1cm}L{5.4cm}Y@{}}
+\toprule
+\textbf{Credencial} & \textbf{Dónde} & \textbf{Qué afirma} \\
+\midrule
+\cod{VersionListing} & \texttt{/\allowbreak{}v1/\allowbreak{}namespaces/\allowbreak{}\{ns\}/\allowbreak{}versions} & Qué versiones existen ahora, con un número de secuencia y una caducidad. \\
+\cod{VersionRecord} & \texttt{/\allowbreak{}v1/\allowbreak{}namespaces/\allowbreak{}\{ns\}/\allowbreak{}versions/\allowbreak{}\{v\}} & Las fechas y el manifiesto de una versión. \\
+\cod{PackageManifest} & \texttt{/\allowbreak{}pub/\allowbreak{}packages/\allowbreak{}\{resumen\}/\allowbreak{}manifest.json} & Qué ficheros componen el paquete, con su resumen. \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+El \textbf{listado} es la pieza que el cliente sincroniza:
+
+\begin{lstlisting}[style=sh]
+curl -sk $HUB/v1/namespaces/flexgrid/versions
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+{ "type": ["VerifiableCredential", "VersionListing"],
+  "issuer": "did:key:z6Mkkfgq…",
+  "validFrom": "2026-09-01T10:00:00Z",
+  "validUntil": "2026-09-02T10:00:00Z",
+  "credentialSubject": {
+    "id": "https://127.0.0.1:18443/v1/namespaces/flexgrid/versions",
+    "sequence": 1,
+    "versions": [ { "version": "1.0.0", "class": "initial", "manifest": "ni:///sha-256;cCYT…",
+                    "new_content_from": "2026-09-03T10:00:00Z", "enforced_from": "2026-09-03T10:00:00Z",
+                    "revoked_from": null, … } ] },
+  "proof": { … } }
+\end{lstlisting}
+
+Dos campos sostienen la seguridad del conjunto. \cod{sequence} crece con cada emisión: un cliente que reciba una
+secuencia menor que la última aceptada sabe que le están sirviendo algo viejo. \cod{validUntil} es la caducidad:
+el hub reemite el listado al menos cada medio \cod{ttl}, y un cliente con un listado caducado sabe que ha perdido
+el contacto.
+
+\section{Dentro del paquete}
+
+\begin{lstlisting}[style=sh]
+M=$(curl -sk $HUB/v1/namespaces/flexgrid/versions/1.0.0 |
+    python3 -c "import json,sys;print(json.load(sys.stdin)['credentialSubject']['manifest'])")
+curl -sk "$HUB/pub/packages/${M#ni:///sha-256;}/manifest.json"
+\end{lstlisting}
+
+El manifiesto lista los ficheros del paquete. Resumido en una tabla:
+
+\begin{longtable}{@{}L{2.5cm}L{1.1cm}L{2.9cm}L{8.3cm}@{}}
+\toprule
+\textbf{Rol} & \textbf{Slot} & \textbf{Gates} & \textbf{Ruta} \\
+\midrule
+\endhead
+\cod{json-schema} & \cod{odrl} & \cod{policy_intake} & \cod{profiles/odrl/metering/1.0.0/schema.json} \\
+\cod{shacl} & \cod{odrl} & \cod{policy_intake} & \cod{profiles/odrl/metering/1.0.0/shapes.ttl} \\
+\cod{other} & \cod{odrl} & & \cod{profiles/odrl/metering/1.0.0/context.jsonld} \newline con \cod{url}: \cod{https://flexgrid.example/odrl/profile/metering/context.jsonld} \\
+\cod{other} & \cod{odrl} & & \cod{vocab.ttl}, \cod{prof.ttl}, \cod{spec.html} \\
+\cod{json-schema} & \cod{dsp} & \cod{dsp_message} & \cod{profiles/dsp/vendored/2025-1/dsp-messages.schema.json} \\
+\cod{context} & \cod{dsp} & & \cod{profiles/dsp/vendored/2025-1/context.jsonld} \newline con \cod{url}: \cod{https://w3id.org/dspace/2025/1/context.jsonld} \\
+\cod{other} & & & \cod{space/prof.ttl}, \cod{space/shacl-union.ttl}, \cod{space/spec.html} \\
+\cod{other} & & & \cod{profile/slots.json} \\
+\cod{other} & & & \cod{sources/draft.yaml} \\
+\bottomrule
+\end{longtable}
+
+Tres observaciones:
+
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item El manifiesto solo conoce cuatro roles: \cod{json-schema}, \cod{shacl}, \cod{context} y \cod{other}.
+        Los roles más finos del lenguaje, como \cod{vocabulary}, \cod{mapping} o \cod{prof}, se publican como
+        \cod{other}.
+  \item \cod{profile/slots.json} lleva la obligación y los gates de cada slot. Es lo que el cliente lee para
+        saber qué evaluar.
+  \item \cod{sources/draft.yaml} es el borrador tal cual. Es la «versión anterior» con la que el hub comparará
+        el siguiente.
+\end{itemize}
+
+Cada fichero se sirve inmutable bajo la versión:
+
+\begin{lstlisting}[style=sh]
+curl -sk -i $HUB/pub/flexgrid/1.0.0/profiles/odrl/metering/1.0.0/schema.json
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+HTTP/2 200
+cache-control: public, max-age=31536000, immutable
+content-type: application/schema+json
+etag: "fa70ada7f8c3e45426e804c1883da0a338d3e718425211ad86626d702cdc5e09"
+\end{lstlisting}
+
+El \cod{ETag} es el mismo SHA-256 que aparecía en el \cod{space-lock.json} que generó \cod{alexandriac} en el
+capítulo~\ref{ch:spaceprofile}. Los bytes que compilaste en local y los que publica el hub son los mismos.
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{6.4cm}Y@{}}
+\toprule
+\textbf{Ruta de \texttt{/\allowbreak{}pub}} & \textbf{Respuesta} \\
+\midrule
+\texttt{/\allowbreak{}pub/\allowbreak{}\{ns\}} & \cod{303} al primer fichero de rol \cod{context} de la versión cabeza. \cod{404} mientras ninguna versión esté vigente. \\
+\texttt{/\allowbreak{}pub/\allowbreak{}\{ns\}/\allowbreak{}\{versión\}/\allowbreak{}\{ruta\}} & Un fichero de un paquete. Inmutable. \\
+\texttt{/\allowbreak{}pub/\allowbreak{}\{ns\}/\allowbreak{}vocab/\allowbreak{}\{nombre\}} & \cod{303} a la última revisión. \\
+\texttt{/\allowbreak{}pub/\allowbreak{}\{ns\}/\allowbreak{}vocab/\allowbreak{}\{nombre\}/\allowbreak{}r/\allowbreak{}\{n\}} & Una revisión. Inmutable. \\
+\texttt{/\allowbreak{}pub/\allowbreak{}packages/\allowbreak{}\{resumen\}/\allowbreak{}manifest.json} & Manifiesto firmado. Inmutable. \\
+\texttt{/\allowbreak{}pub/\allowbreak{}blobs/\allowbreak{}sha256/\allowbreak{}\{hex\}} & Un blob por su resumen. Inmutable. \\
+\cod{/pub/_vhub/v1/context.jsonld} & El contexto JSON-LD del propio hub. \\
+\bottomrule
+\end{tabularx}
+
+\begin{trampaHabitual}[A dónde redirige \texttt{/\allowbreak{}pub/\allowbreak{}flexgrid}]
+Con una versión vigente, \cod{/pub/flexgrid} redirige a
+\cod{/pub/flexgrid/2.0.0/profiles/dsp/vendored/2025-1/context.jsonld}: el contexto de DSP, no el del perfil. El
+motivo es que el contexto del perfil se publica con rol \cod{other} (era \cod{mapping}), y el único fichero con
+rol \cod{context} es el vendorizado. Si esperabas el contexto de tu perfil en la URL del \emph{namespace}, no
+llega.
+\end{trampaHabitual}
+
+\section{Las fechas}
+\label{sec:fechas}
+
+Una versión tiene tres instantes. \cod{published_at} es cuando se aprueba. \cod{new_content_from} es cuando su
+contenido empieza a aceptarse. \cod{enforced_from} es cuando pasa a ser la única que vale.
+
+Con $P$ el instante de publicación, $pw$ la ventana de propagación y $gw$ la de gracia:
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{2.3cm}L{3.9cm}L{3.9cm}Y@{}}
+\toprule
+\textbf{Clase} & \textbf{\texttt{grace\_window} al aprobar} & \textbf{\texttt{new\_content\_from}} & \textbf{\texttt{enforced\_from}} \\
+\midrule
+\cod{initial} & No se admite & $P + pw$ & $P + pw$ \\
+\cod{compatible} & No se admite & $P + pw$ & $P + pw$ \\
+\cod{breaking} & Omitida & $P + pw$ & $P + pw + gw$ \\
+\cod{breaking} & Igual o mayor que la mínima & $P + pw$ & $P + pw + $ la pedida \\
+\cod{breaking} & Menor que la mínima & \multicolumn{2}{l}{Rechazada: \cod{DATES_GRACE_TOO_SHORT}} \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+Una versión compatible hereda la fecha de entrada en vigor de su predecesora cuando esa fecha es posterior: no
+puede adelantar a una versión que todavía está en su ventana.
+
+Para la 1.0.0, aprobada el 1 de septiembre a las 10:00 con dos días de propagación, ambas fechas son el 3 de
+septiembre a las 10:00. Entre el 1 y el 3 la versión existe y los clientes la descargan, pero todavía no vale.
+Ese es el sentido de la ventana de propagación: nadie se entera de una regla nueva en el mismo instante en que
+empieza a aplicarse.
+
+El capítulo~\ref{ch:migracion} publica una versión compatible y una de ruptura y enseña cómo se ven esas fechas
+desde el cliente.
+
+\section{La auditoría}
+
+Toda operación con efecto añade un evento con un identificador creciente. Las tablas que los guardan no
+admiten modificación ni borrado: lo impiden disparadores de la base de datos.
+
+\begin{lstlisting}[style=sh]
+curl -sk "$HUB/v1/namespaces/flexgrid/events?limit=100" -H "Authorization: Bearer $(cat steward.token)"
+\end{lstlisting}
+
+Resumido, tras publicar la 1.0.0, con el identificador, el instante, el tipo, quién lo hizo y sobre qué
+(el \emph{principal} completo es \texttt{http://127.0.0.1:19400\#lucia}):
+
+\begin{lstlisting}[style=out]
+3  2026-09-01T09:00:00Z  draft.created       lucia   05511c6385475d68
+4  2026-09-01T10:00:00Z  candidate.proposed  lucia   5e6789e09b415f9d
+5  2026-09-01T10:00:00Z  candidate.approved  lucia   5e6789e09b415f9d
+6  2026-09-01T10:00:00Z  release.published   lucia   …/versions/1.0.0
+7  2026-09-01T10:00:00Z  listing.issued      vhub    …/versions
+\end{lstlisting}
+
+Hay quince tipos de evento, entre ellos \cod{namespace.created}, \cod{steward.assigned},
+\cod{vocabulary.revised}, \cod{candidate.rejected}, \cod{release.aborted} y \cod{version.revoked}. El de un
+\emph{namespace} lo leen sus \emph{stewards}; el global, \cod{/v1/events}, la administradora.
+
+\begin{retos}
+\begin{enumerate}[leftmargin=*, itemsep=2pt]
+  \item Crea un borrador, reemplázalo con \cod{PUT} sin \cod{If-Match} y luego con un \cod{ETag} inventado.
+  \item Propón un borrador y recházalo con \cod{:reject}. ¿Qué pasa si después intentas aprobarlo?
+  \item Verifica a mano que el \cod{ETag} de un fichero de \cod{/pub} es su SHA-256 con \texttt{shasum -a 256}.
+\end{enumerate}
+\end{retos}

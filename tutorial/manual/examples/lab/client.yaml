@@ -1,0 +1,36 @@
+# Flexgrid lab edge: alexandria-client as the L7 proxy in front of fake-connector.
+# Replace HUB_DID_HERE with the hub_did the server logs on its first start (see env.sh: hubdid).
+common_config:
+  connection:
+    tls:
+      ca: "file:var/tls/hub.crt"
+
+did_config:
+  type: "key"
+  hub_did: "HUB_DID_HERE"
+  did_ttl: "PT6H"
+
+observability:
+  log_level: "info"
+  log_format: "text"
+  audit_window: 100
+  events_sink: "file:var/client/events.jsonl"
+
+client_config:
+  trust:
+    hub: "https://127.0.0.1:18443"
+    namespace: "flexgrid"
+    context: "https://127.0.0.1:18443/pub/_vhub/v1/context.jsonld"
+  upstreams:
+    dsp: "http://127.0.0.1:18282/dsp"
+  listeners:
+    dsp-ingress:
+      bind: "127.0.0.1:19080"
+    dsp-egress:
+      bind: "127.0.0.1:19081"
+    admin:
+      bind: "127.0.0.1:19090"
+  rules:
+    seed: "file:../../../../deploy/rules.seed.json"
+  default_action: "forward"
+  unknown_agreement: "forward"

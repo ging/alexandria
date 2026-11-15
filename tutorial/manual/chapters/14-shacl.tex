@@ -1,0 +1,179 @@
+\chapter{Revisión de la parte de SHACL}
+\label{ch:shacl}
+
+\section{Qué está hecho y qué no}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{5.6cm}C{1.5cm}Y@{}}
+\toprule
+\textbf{Pieza} & \textbf{Estado} & \textbf{Dónde} \\
+\midrule
+Emisión de \cod{shapes.ttl} por perfil & \si & \cod{internal/dsl/emit_shacl.go} \\
+Emisión de \cod{space/shacl-union.ttl} & \si & \cod{internal/dsl/compile.go:336} \\
+Comprobación de las \emph{shapes} al compilar & parcial & Solo estructura: \cod{internal/dsl/turtle_check.go} \\
+Ejecución de SHACL en el cliente & \no & \cod{evaluator_poc/evaluator.go:88}: expande el JSON-LD y anota un aviso \\
+Avisos de severidad \cod{sh:Warning} en el veredicto & \no & \cod{VERDICT_SHACL_WARNING} es inalcanzable; \cod{ShaclWarnings} (\cod{classify.go:43}) nunca se activa \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+En resumen: las \emph{shapes} se generan y se publican firmadas, pero \textbf{nadie las ha ejecutado nunca}, ni
+el compilador ni el cliente. Esta revisión es la primera vez que pasan por un motor SHACL.
+
+\section{Método}
+
+Se han tomado 27 ofertas ODRL compactas y cada una se ha validado dos veces: contra \cod{schema.json} con
+\cod{jsonschema}, y contra \cod{shapes.ttl} con \cod{pyshacl}~0.40.2 tras expandir el JSON-LD con el contexto
+generado. El banco de pruebas es \cod{examples/shacl/harness.py}.
+
+\begin{lstlisting}[style=sh]
+python3 -m venv /tmp/venv && /tmp/venv/bin/pip install pyshacl jsonschema
+/tmp/venv/bin/python shacl/harness.py /tmp/metering/profiles/odrl/metering/1.0.0 -v
+\end{lstlisting}
+
+El contexto de ODRL que usa el banco es una copia mínima escrita a mano, para no depender de la red.
+
+\section{Resultados}
+
+Primera conclusión, y es buena: las \emph{shapes} generadas son SHACL válido, el motor las carga sin errores y
+\textbf{coinciden con el esquema en 21 de 27 casos}. El diseño de \cod{emit_shacl.go} es correcto en lo esencial.
+
+\begin{longtable}{@{}C{0.7cm}L{7.6cm}C{1.6cm}C{2.5cm}C{1.4cm}@{}}
+\toprule
+\textbf{N.º} & \textbf{Oferta} & \textbf{Esquema} & \textbf{SHACL} & \textbf{¿Igual?} \\
+\midrule
+\endhead
+01 & Oferta válida & \pasa & \pasa & \si \\
+02 & Acción ajena (\cod{sell}) & \falla & \falla, más aviso & \si \\
+03 & Operador fuera de la firma & \falla & \falla & \si \\
+04 & Literal de tipo equivocado & \falla & \falla & \si \\
+05 & Finalidad fuera de la lista & \falla & \falla & \si \\
+06 & \cod{isAnyOf} con dos regiones & \pasa & \pasa & \si \\
+07 & Acción del núcleo (\cod{use}) & \pasa & \pasa, con aviso & \si \\
+08 & \textbf{Perfil no declarado} & \falla & \pasa & \no \\
+09 & Restricción lógica \cod{and} & \pasa & \pasa & \si \\
+10 & Restricción lógica con hoja inválida & \falla & \falla & \si \\
+11 & Fecha como cadena sin tipar & \falla & \falla & \si \\
+12 & Fecha tipada & \pasa & \pasa & \si \\
+13 & Entero como valor tipado & \pasa & \pasa & \si \\
+14 & Decimal donde va un entero & \falla & \falla & \si \\
+15 & Referencia no permitida & \falla & \falla & \si \\
+16 & Operando izquierdo ajeno & \falla & \falla & \si \\
+17 & Dos valores sin operador de conjunto & \falla & \falla & \si \\
+18 & \cod{eq} con dos finalidades & \pasa & \pasa & \si \\
+19 & Finalidad como cadena, no \cod{@id} & \falla & \falla & \si \\
+20 & Deber con acción ajena & \falla & \falla, más aviso & \si \\
+21 & Acción como objeto con \cod{@id} & \pasa & \pasa & \si \\
+22 & \textbf{Fecha tipada con forma léxica inválida} & \pasa & \falla & \no \\
+23 & Prohibición de un término obsoleto (1.1.0) & \pasa & \pasa, con aviso & \si \\
+24 & \textbf{Regla sin acción} & \pasa & \falla & \no \\
+25 & \textbf{Entero tipado con forma léxica inválida} & \pasa & \falla & \no \\
+26 & Permiso con término obsoleto (1.1.0) & \pasa & \pasa, con aviso & \si \\
+27 & Finalidad \cod{research} bajo la 1.0.0 & \falla & \falla & \si \\
+\bottomrule
+\end{longtable}
+
+A estas se suma un caso del perfil de salud: una restricción sobre \cod{dataPermit} \textbf{sin operando derecho
+ni referencia} pasa en SHACL y falla en el esquema.
+
+\section{Hallazgos}
+
+Ordenados por gravedad. H1 y H2 son la carencia; H3 a H9 son defectos que solo se ven al ejecutar.
+
+\begin{hallazgo}{H1 (alta). Un slot obligatorio validado solo con SHACL no valida nada}
+En el cliente, un artefacto de rol \cod{shacl} produce una expansión JSON-LD y un hallazgo \cod{Info}
+(\cod{evaluator.go:88-90}). Si un \emph{binding} \cod{mandatory} enlaza \emph{únicamente}
+\cod{shacl} a un gate, ese gate acepta cualquier política que use contextos del paquete. Lo confirma el propio
+test del repositorio \cod{TestShaclIsReportedAsUnsupportedInfo}, que espera \cod{Pass} verdadero.
+
+Es exactamente lo que hace \cod{internal/dsl/testdata/demo.space.yaml}: \cod{shacl} en \cod{policy_intake}.
+Compila, se publica como obligatorio y no controla nada. \emph{Propuesta inmediata}, sin motor SHACL: que el
+compilador avise cuando un \emph{binding} obligatorio no tenga ningún \cod{json-schema} en alguno de sus gates.
+\end{hallazgo}
+
+\begin{hallazgo}{H2 (alta). N5 no comprueba que las shapes sean SHACL}
+\cod{checkTurtle} cuenta corchetes, comillas e IRI. No analiza Turtle (falla con cadenas de triple comilla, que
+\cod{extra_turtle} puede traer) y no carga las \emph{shapes}. Un error en un emisor se publicaría firmado.
+\end{hallazgo}
+
+\begin{hallazgo}{H3 (media). Los dos artefactos no dicen lo mismo en cinco casos}
+\begin{itemize}[leftmargin=*, itemsep=1pt]
+  \item \textbf{Caso 08.} Ninguna \emph{shape} exige \cod{odrl:profile}. El esquema sí. Una política que no
+        declara el perfil pasaría el gate SHACL.
+  \item \textbf{Caso 24.} \cod{gen:ActionShape} exige \texttt{sh:minCount 1} en \cod{odrl:action}; el esquema no
+        marca \cod{action} como obligatorio en \cod{Rule} (\cod{emit_json.go}).
+  \item \textbf{Casos 22 y 25.} El esquema acepta cualquier cadena en \cod{@value}; SHACL comprueba la forma
+        léxica del tipo. Aquí SHACL es el estricto.
+  \item \textbf{Referencias.} Con \texttt{allow\_reference: true}, la \emph{shape} no exige «al menos uno de
+        \cod{rightOperand} o \cod{rightOperandReference}»; el esquema sí.
+\end{itemize}
+Mientras solo se ejecute el esquema no tiene efecto. El día que se ejecuten los dos, el mismo mensaje tendrá dos
+veredictos.
+\end{hallazgo}
+
+\begin{hallazgo}{H4 (media). \texttt{sh:conforms} es falso con solo avisos, y hay avisos espurios}
+En SHACL, \cod{sh:conforms} es falso si hay \emph{cualquier} resultado, también de severidad \cod{sh:Warning}
+(casos 07, 23 y 26). Quien implemente el gate tiene que clasificar por \cod{sh:resultSeverity}, no por
+\cod{sh:conforms}.
+
+Además, \cod{gen:ActionCoreShape} (\cod{emit_shacl.go:26}) avisa «las acciones del núcleo se ignoran» también
+para una acción que no es del núcleo ni del perfil (casos 02 y 20): la misma acción produce una violación y un
+aviso con un mensaje que no le corresponde.
+\end{hallazgo}
+
+\begin{hallazgo}{H5 (baja). Los mensajes de tres shapes se pierden}
+En \cod{gen:ActionShape}, \cod{gen:ActionCoreShape} y \cod{gen:LeftOperandShape}, \cod{sh:message} está en el
+\cod{NodeShape}, pero la restricción está en una \emph{property shape} anónima anidada. El resultado sale con el
+mensaje genérico del motor («Value odrl:sell not in list…») y con un nodo anónimo como \cod{sh:sourceShape}: no
+se puede saber qué \emph{shape} con nombre falló. Las \cod{gen:Sig_*} y la de obsolescencia sí conservan su
+mensaje. \emph{Arreglo}: mover \cod{sh:message} dentro de la \emph{property shape}.
+\end{hallazgo}
+
+\begin{hallazgo}{H6 (media). \texttt{shacl-union.ttl} no se puede consumir por gate}
+El gate solo figura en comentarios (\texttt{\# gate policy\_intake · slot odrl · …}), que un analizador RDF
+descarta. Un artefacto enlazado a dos gates se concatena dos veces. Y \cod{SHACL_UNION_CONFLICT}
+(\cod{compile.go:355}) es inalcanzable: solo mira el slot \cod{odrl}, y \cod{SLOT_DUP} garantiza un único
+\emph{binding} por slot. Hoy el fichero equivale a \cod{shapes.ttl} (223 tripletas ambos) y ningún componente lo
+lee.
+\end{hallazgo}
+
+\begin{hallazgo}{H7 (media). \texttt{scheme} genera una shape que nunca puede cumplirse}
+\cod{emit_shacl.go:98} emite \texttt{sh:node [ sh:property [ sh:path skos:inScheme ; sh:hasValue … ] ]}. Pero
+ningún campo del lenguaje declara la pertenencia a un esquema, \cod{vocab.ttl} no emite \cod{skos:inScheme}, y
+el grafo de datos de una política no contiene el vocabulario. El compilador ya avisa
+(\cod{SIG_SCHEME_UNSUPPORTED}); convendría que fuera un error hasta que exista el campo.
+\end{hallazgo}
+
+\begin{hallazgo}{H8 (baja). El aviso del PoC sale del sistema}
+\cod{POC_EVAL_UNSUPPORTED_ROLE} aparece en el \cod{reason} del error DSP que recibe la contraparte
+(\cod{decide.go:148}, que copia todos los hallazgos sin filtrar por severidad), y el evento \cod{vhub.sync} que
+lo anuncia lleva \texttt{"severity":"error"} aunque el hallazgo es \cod{Info}.
+\end{hallazgo}
+
+\begin{hallazgo}{H9 (baja). Detalles}
+\begin{itemize}[leftmargin=*, itemsep=1pt]
+  \item Una firma con un operador de conjunto relaja la cardinalidad para \emph{todos} sus operadores: \cod{eq}
+        con dos valores pasa (caso 18), en los dos artefactos.
+  \item \cod{profile/slots.json} repite el gate cuando dos roles lo comparten:
+        \texttt{["policy\_intake","policy\_intake"]} (\cod{compiler_dsl/compiler.go:97}).
+  \item Los objetivos de las \emph{shapes} no cubren \cod{odrl:consequence} ni \cod{odrl:remedy}.
+\end{itemize}
+\end{hallazgo}
+
+\section{Qué haría falta para cerrarlo}
+
+\begin{enumerate}[leftmargin=*, itemsep=3pt]
+  \item \textbf{Sin motor, ya.} Corregir H5 y H4 en el emisor, igualar esquema y \emph{shapes} (H3), filtrar
+        H8, y añadir el aviso de H1. Son cambios pequeños en \cod{emit_shacl.go}, \cod{emit_json.go},
+        \cod{decide.go} y \cod{space.go}.
+  \item \textbf{Una prueba de equivalencia en CI.} El banco de este capítulo, convertido en test: cada fila
+        declara el resultado esperado en ambos artefactos. Puede vivir fuera del módulo Go, con pySHACL, sin
+        tocar las dependencias permitidas.
+  \item \textbf{Elegir motor.} Las opciones que recoge \cod{PROFILES_DSL.md} siguen siendo las reales:
+        goRDFlib en Go, reciente y de un solo autor; o un proceso auxiliar con pySHACL o Jena detrás del puerto
+        \cod{app.Evaluator}. La arquitectura hexagonal ya lo permite: es un adaptador nuevo junto a
+        \cod{evaluator_poc}.
+  \item \textbf{Cablear severidades.} Violación de un slot obligatorio: violación. \cod{sh:Warning}:
+        \cod{ShaclWarnings} y \cod{VERDICT_SHACL_WARNING}. Con eso el aviso de obsolescencia del
+        capítulo~\ref{ch:evolucion} llegaría por fin a quien usa el término.
+  \item \textbf{N5 semántico.} Cargar las \emph{shapes} generadas con el mismo motor al compilar.
+\end{enumerate}

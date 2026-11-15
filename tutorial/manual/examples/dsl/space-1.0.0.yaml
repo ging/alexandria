@@ -1,0 +1,39 @@
+dsl: alexandria.profiles/v1
+kind: SpaceProfile
+
+space:
+  id: https://flexgrid.example/spaces/flexgrid
+  version: 1.0.0
+  title:
+    en: Flexgrid Energy Data Space
+    es: Espacio de datos energético Flexgrid
+  operator: https://flexgrid.example/party/authority
+  base_url: https://flexgrid.example/spaces/flexgrid
+
+lifecycle:
+  grace_window: P30D
+  propagation_window: P2D
+  freshness:
+    ttl: PT24H
+    max_staleness: P7D
+  degraded:
+    policy_intake: reject
+    dsp_message: continue
+
+bindings:
+  - slot: odrl
+    profile: https://flexgrid.example/odrl/profile/metering
+    source: internal
+    version: "^1.0"
+    obligation: mandatory
+    conformance:
+      - { role: json-schema, applies_to: policy_intake }
+      - { role: shacl, applies_to: policy_intake }
+
+  - slot: dsp
+    profile: https://w3id.org/dspace/2025/1
+    source: vendored
+    version: "=2025-1"
+    obligation: mandatory
+    conformance:
+      - { role: json-schema, applies_to: dsp_message }

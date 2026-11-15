@@ -1,0 +1,60 @@
+{
+  "@context": [
+    "https://w3id.org/dspace/2025/1/context.jsonld",
+    "https://flexgrid.example/odrl/profile/metering/context.jsonld"
+  ],
+  "@type": "ContractRequestMessage",
+  "providerPid": "urn:uuid:9c1f7a52-dso-neg-0042",
+  "consumerPid": "urn:uuid:4be0d6c1-agg-neg-0017",
+  "callbackAddress": "https://aggregator.flexgrid.example/dsp/callback",
+  "offer": {
+    "@type": "Offer",
+    "@id": "urn:uuid:offer-forecast-01",
+    "profile": "https://flexgrid.example/odrl/profile/metering",
+    "target": "urn:uuid:dataset-qh-load-madrid-2026",
+    "permission": [
+      {
+        "action": "forecastDemand",
+        "constraint": [
+          {
+            "leftOperand": "purpose",
+            "operator": "eq",
+            "rightOperand": {
+              "@id": "enr:demandForecast"
+            }
+          },
+          {
+            "leftOperand": "minAggregation",
+            "operator": "gteq",
+            "rightOperand": 50
+          },
+          {
+            "leftOperand": "retentionDays",
+            "operator": "lteq",
+            "rightOperand": 90
+          },
+          {
+            "leftOperand": "processingRegion",
+            "operator": "isAnyOf",
+            "rightOperand": [
+              {
+                "@id": "enr:regionES"
+              },
+              {
+                "@id": "enr:regionEU"
+              }
+            ]
+          },
+          {
+            "leftOperand": "dateTime",
+            "operator": "lt",
+            "rightOperand": {
+              "@value": "2027-01-01T00:00:00Z",
+              "@type": "xsd:dateTime"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
