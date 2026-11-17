@@ -27,8 +27,8 @@ func get(t *testing.T, target string, cfg Config) *httptest.ResponseRecorder {
 }
 
 func TestIndexCarriesInjectedConfiguration(t *testing.T) {
-	rec := get(t, "/ui/", Config{Workspace: "hub", Issuer: "https://idp.example", Compiler: "dsl"})
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `window.__ALEXANDRIA__={"workspace":"hub","issuer":"https://idp.example","compiler":"dsl"};`) {
+	rec := get(t, "/ui/", Config{Workspace: "hub", Issuer: "https://idp.example", Compiler: "dsl", HubDID: "did:key:z6MkTest"})
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `window.__ALEXANDRIA__={"workspace":"hub","issuer":"https://idp.example","compiler":"dsl","hub_did":"did:key:z6MkTest"};`) {
 		t.Fatalf("status %d body %s", rec.Code, rec.Body)
 	}
 }

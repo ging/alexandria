@@ -7,6 +7,7 @@ interface Injected {
   issuer?: string
   audience?: string
   compiler?: 'dsl' | 'poc'
+  hub_did?: string
 }
 
 const injected = (window as unknown as { __ALEXANDRIA__?: Injected }).__ALEXANDRIA__
@@ -25,6 +26,7 @@ export const runtime = {
   defaultIssuer: injected ? (injected.issuer ?? '') : __IDP_TARGET__,
   defaultAudience: injected?.audience ?? 'alexandria-vhub',
   compiler: injected?.compiler ?? 'dsl',
+  hubDid: injected?.hub_did ?? '',
 }
 
 // appPath strips the deployment base from a browser pathname, yielding a router path.
