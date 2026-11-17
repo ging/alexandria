@@ -33,22 +33,27 @@ func ClassOf(x semver.Version, latest *semver.Version) (Class, bool) {
 	return Compatible, true
 }
 
-// Plan computes the record dates of X following the exhaustive table of §3.3.2 (no emergency, minimum grace).
+// Plan computes the record dates of X following §3.3.2: initial versions enforce immediately at P; transitions apply propagation_window.
 func Plan(a Approval, rs []Record) (Record, *codes.Error) {
-	nc := a.P.Add(a.Params.PropagationWindow)
-	rec := Record{Version: a.Version, Class: a.Class, PublishedAt: a.P, NewContentFrom: nc}
 	switch a.Class {
-	case Initial, Compatible:
+	case Initial:
 		if a.Grace != nil {
 			return Record{}, codes.New(codes.DatesGraceOnCompatible, "grace_window is only allowed on breaking versions")
 		}
-		rec.EnforcedFrom = nc
-		if a.Class == Compatible {
-			if y, ok := predecessor(rs, a.Version); ok && y.EnforcedFrom > nc {
-				rec.EnforcedFrom = y.EnforcedFrom
-			}
+		return Record{Version: a.Version, Class: a.Class, PublishedAt: a.P, NewContentFrom: a.P, EnforcedFrom: a.P}, nil
+	case Compatible:
+		if a.Grace != nil {
+			return Record{}, codes.New(codes.DatesGraceOnCompatible, "grace_window is only allowed on breaking versions")
 		}
+		nc := a.P.Add(a.Params.PropagationWindow)
+		rec := Record{Version: a.Version, Class: a.Class, PublishedAt: a.P, NewContentFrom: nc, EnforcedFrom: nc}
+		if y, ok := predecessor(rs, a.Version); ok && y.EnforcedFrom > nc {
+			rec.EnforcedFrom = y.EnforcedFrom
+		}
+		return rec, nil
 	case Breaking:
+		nc := a.P.Add(a.Params.PropagationWindow)
+		rec := Record{Version: a.Version, Class: a.Class, PublishedAt: a.P, NewContentFrom: nc}
 		switch {
 		case a.Grace == nil:
 			rec.EnforcedFrom = nc.Add(a.Params.GraceWindow)
@@ -57,8 +62,9 @@ func Plan(a Approval, rs []Record) (Record, *codes.Error) {
 		default:
 			return Record{}, codes.New(codes.DatesGraceTooShort, "grace_window %s is below min_grace_window %s", *a.Grace, a.Params.MinGraceWindow)
 		}
+		return rec, nil
 	}
-	return rec, nil
+	return Record{}, nil
 }
 
 // predecessor returns Y: the greatest published version lower than x without revoked_from.
@@ -129,12 +135,12 @@ func CheckRecords(rs []Record, paramsOf func(semver.Version) Params) *codes.Erro
 	for _, r := range rs {
 		p := paramsOf(r.Version)
 		switch {
-		case r.NewContentFrom.Sub(r.PublishedAt) < p.PropagationWindow:
+		case r.Class == Initial && (r.NewContentFrom != r.PublishedAt || r.EnforcedFrom != r.PublishedAt):
+			return codes.New(codes.SyncDatesInvalid, "%s: an initial version must have new_content_from = enforced_from = published_at", r.Version)
+		case r.Class != Initial && r.NewContentFrom.Sub(r.PublishedAt) < p.PropagationWindow:
 			return codes.New(codes.SyncDatesInvalid, "%s: new_content_from − published_at is below propagation_window", r.Version)
 		case r.EnforcedFrom < r.NewContentFrom:
 			return codes.New(codes.SyncDatesInvalid, "%s: enforced_from is before new_content_from", r.Version)
-		case r.Class == Initial && r.EnforcedFrom != r.NewContentFrom:
-			return codes.New(codes.SyncDatesInvalid, "%s: an initial version must have enforced_from = new_content_from", r.Version)
 		case r.Class == Breaking && r.EnforcedFrom.Sub(r.NewContentFrom) < p.MinGraceWindow:
 			return codes.New(codes.SyncDatesInvalid, "%s: a breaking version needs at least min_grace_window of coexistence", r.Version)
 		}

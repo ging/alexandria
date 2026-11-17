@@ -118,7 +118,7 @@ curl -k -X POST "$HUB/v1/namespaces/demo/candidates/$CANDIDATE:approve" \
   -H "Authorization: Bearer $STEWARD" -d '{}'
 ```
 
-The answer is the signed `VersionRecord`. As an `initial` version, `new_content_from` and `enforced_from` are both the publication instant plus the propagation window (two days by default).
+The answer is the signed `VersionRecord`. As an `initial` version, `new_content_from` and `enforced_from` both equal the publication instant `published_at`, so `1.0.0` enters into force immediately (subsequent `compatible` and `breaking` transitions add the propagation window, two days by default).
 
 ### 6. Read the credentials
 

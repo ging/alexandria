@@ -22,7 +22,7 @@ var admits = map[string][]string{"1.0.0": {"odrl:use", "ex:access"}, "2.0.0": {"
 // f6Snapshot returns the snapshot of a listing valid until validUntil with both F6 versions.
 func f6Snapshot(validUntil string) *Snapshot {
 	recs := []lifecycle.Record{
-		{Version: semver.MustParse("1.0.0"), Manifest: ni.Sum([]byte("1")), Class: lifecycle.Initial, PublishedAt: at("2026-09-01T10:00:00Z"), NewContentFrom: at("2026-09-03T10:00:00Z"), EnforcedFrom: at("2026-09-03T10:00:00Z")},
+		{Version: semver.MustParse("1.0.0"), Manifest: ni.Sum([]byte("1")), Class: lifecycle.Initial, PublishedAt: at("2026-09-01T10:00:00Z"), NewContentFrom: at("2026-09-01T10:00:00Z"), EnforcedFrom: at("2026-09-01T10:00:00Z")},
 		{Version: semver.MustParse("2.0.0"), Manifest: ni.Sum([]byte("2")), Class: lifecycle.Breaking, PublishedAt: at("2026-10-01T10:00:00Z"), NewContentFrom: at("2026-10-03T10:00:00Z"), EnforcedFrom: at("2026-11-02T10:00:00Z")},
 	}
 	known := map[string]lifecycle.Record{}

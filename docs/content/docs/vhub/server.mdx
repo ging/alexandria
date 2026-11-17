@@ -96,7 +96,7 @@ With publication instant `P`, propagation window `pw`, default grace `gw` and mi
 
 | Class | `grace_window` in `:approve` | `new_content_from` | `enforced_from` |
 |:---|:---|:---|:---|
-| `initial` | not allowed | `P + pw` | `P + pw` |
+| `initial` | not allowed | `P` | `P` |
 | `compatible` | not allowed (`DATES_GRACE_ON_COMPATIBLE`) | `P + pw` | `P + pw`, or the predecessor's `enforced_from` when that is later |
 | `breaking` | omitted | `P + pw` | `P + pw + gw` |
 | `breaking` | at least `min` | `P + pw` | `P + pw + grace_window` |
