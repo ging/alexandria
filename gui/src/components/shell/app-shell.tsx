@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, Outlet, useLocation, useNavigate } from '@tanstack/react-router'
 import { Check, ChevronsUpDown, Monitor, Moon, Sun } from 'lucide-react'
 import { cn } from '@/lib/cn'
+import { shortDigest } from '@/lib/format'
 import { hubQueries } from '@/lib/hub'
 import { runtime } from '@/lib/runtime'
 import { applyTheme, setSettings, useSettings, type Theme } from '@/lib/settings'
@@ -12,6 +13,7 @@ import { CommandPalette } from '@/components/shell/command-palette'
 import { IdentityDialog, IdentityMenu } from '@/components/shell/identity'
 import { clientNav, hubGlobalNav, namespaceNav, workspaces, type NavItem } from '@/components/shell/nav'
 import { IconButton } from '@/components/ui/button'
+import { CopyButton } from '@/components/ui/misc'
 import { Menu, MenuItem, MenuLabel } from '@/components/ui/overlay'
 
 // AppShell renders the persistent chrome around every routed view.
@@ -148,12 +150,14 @@ function NavList({ items, pathname }: { items: NavItem[]; pathname: string }) {
   )
 }
 
-// HubSidebar renders hub-wide links and the namespace switcher with its scoped links.
+// HubSidebar renders hub-wide links, the namespace switcher with its scoped links and the copyable hub DID.
 function HubSidebar({ namespace, pathname }: { namespace: string | null; pathname: string }) {
   const navigate = useNavigate()
   const namespaces = useQuery(hubQueries.namespaces())
+  const listing = useQuery({ ...hubQueries.listing(namespace ?? ''), enabled: !runtime.hubDid && !!namespace })
+  const hubDid = runtime.hubDid || listing.data?.issuer || ''
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-3">
       <SidebarTitle>Governance</SidebarTitle>
       <NavList items={hubGlobalNav} pathname={pathname} />
       <SidebarTitle>Namespace</SidebarTitle>
@@ -179,6 +183,15 @@ function HubSidebar({ namespace, pathname }: { namespace: string | null; pathnam
         </Menu>
       </div>
       {namespace ? <NavList items={namespaceNav(namespace)} pathname={pathname} /> : <p className="px-3.5 text-xs leading-relaxed text-subtle">Pick a namespace to manage its vocabularies, releases and events.</p>}
+      {hubDid ? (
+        <div className="mt-auto border-t px-3.5 pt-3">
+          <p className="label-caps mb-1">Hub DID</p>
+          <div className="flex items-center justify-between gap-1.5 rounded-md border bg-bg px-2 py-1" title={hubDid}>
+            <span className="truncate font-mono text-2xs text-muted">{shortDigest(hubDid, 24)}</span>
+            <CopyButton value={hubDid} />
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
