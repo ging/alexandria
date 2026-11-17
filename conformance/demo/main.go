@@ -3,12 +3,10 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -32,7 +30,7 @@ func run(binDir string) error {
 		return err
 	}
 	defer func() { _ = os.RemoveAll(work) }()
-	actualBinDir, err := ensureBinaries(binDir, filepath.Join(work, "bin"))
+	actualBinDir, err := f6.EnsureBinaries(binDir, filepath.Join(work, "bin"))
 	if err != nil {
 		return err
 	}
@@ -66,34 +64,4 @@ func run(binDir string) error {
 	fmt.Println(strings.Repeat("-", 120))
 	fmt.Printf("F6 scenario completed: %d/%d rows verified.\n", len(r.Rows), len(want))
 	return nil
-}
-
-// ensureBinaries checks if the four binaries exist in binDir and builds them into fallbackDir if missing.
-func ensureBinaries(binDir, fallbackDir string) (string, error) {
-	targets := map[string]string{
-		"alexandria-server": "./cmd/alexandria-server",
-		"alexandria-client": "./cmd/alexandria-client",
-		"fake-idp":          "./deploy/fake-idp",
-		"fake-connector":    "./deploy/fake-connector",
-	}
-	allExist := true
-	for name := range targets {
-		if _, err := os.Stat(filepath.Join(binDir, name)); err != nil {
-			allExist = false
-			break
-		}
-	}
-	if allExist {
-		return filepath.Abs(binDir)
-	}
-	if err := os.MkdirAll(fallbackDir, 0o750); err != nil {
-		return "", err
-	}
-	for name, pkg := range targets {
-		out, err := exec.CommandContext(context.Background(), "go", "build", "-o", filepath.Join(fallbackDir, name), pkg).CombinedOutput() // #nosec G204 -- fixed package list of this repository.
-		if err != nil {
-			return "", fmt.Errorf("build %s: %w\n%s", name, err, out)
-		}
-	}
-	return fallbackDir, nil
 }

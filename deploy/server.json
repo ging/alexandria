@@ -9,6 +9,8 @@
     "admin_claim": {"claim": "roles", "value": "vhub-admin"}
   },
   "vocab": {"max_size": 10485760, "allow_insecure_localhost": true},
+  "compiler": "dsl",
+  "vendor_dir": "file:vendor",
   "storage": {"database": "file:../var/hub/hub.db", "blobs": "file:../var/hub/blobs"},
   "tls": {"cert": "file:../var/tls/hub.crt", "key": "file:../var/tls/hub.key"}
 }

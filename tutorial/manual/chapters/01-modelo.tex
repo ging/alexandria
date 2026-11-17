@@ -1,0 +1,127 @@
+\chapter{Qué resuelve Alexandria y con qué piezas}
+\label{ch:modelo}
+
+\section{El problema: una pila de especificaciones con huecos}
+
+Un espacio de datos no es una especificación: es una \textbf{pila} de ellas. ODRL para las políticas, DCAT para el
+catálogo, DSP para el protocolo, DCP para las credenciales. Cada una deja libertad a propósito. ODRL define qué es
+una restricción, pero no qué operandos existen en tu sector. DSP define un \cod{ContractRequestMessage}, pero no
+qué política es aceptable dentro.
+
+Cada una de esas libertades es un \textbf{slot}. Un espacio de datos concreto lo cierra con un \textbf{binding}:
+qué perfil manda en ese slot, en qué versión, con qué obligación y en qué punto del tráfico se comprueba, que es
+el \textbf{gate}.
+
+\begin{ideaClave}
+La autoridad del espacio escribe esa pila \emph{una sola vez}, en YAML. Todo lo demás (ontología, contexto JSON-LD,
+JSON Schema, \emph{shapes} SHACL, especificación legible) se \textbf{genera}. Nadie edita a mano dos artefactos
+que deban decir lo mismo, porque acaban diciendo cosas distintas.
+\end{ideaClave}
+
+El problema no termina al generar. Los participantes tienen que enterarse de que hay una versión nueva, fiarse de
+que viene de quien dice venir, aplicarla todos a la vez y no romper los contratos ya firmados cuando una regla
+cambia. De eso se ocupan el hub y el cliente.
+
+\section{Las tres piezas}
+
+\begin{center}
+\begin{tikzpicture}[
+  node distance=9mm and 19mm, font=\small,
+  box/.style={draw=alxNavy, fill=alxLightBlue, rounded corners=2pt, minimum height=11mm, minimum width=30mm, align=center},
+  ext/.style={draw=alxBorder, fill=alxSlate, rounded corners=2pt, minimum height=11mm, minimum width=24mm, align=center},
+  art/.style={draw=alxTeal, fill=alxLightTeal, rounded corners=2pt, minimum height=9mm, minimum width=30mm, align=center},
+  arr/.style={-{Stealth[length=2.2mm]}, alxNavy, thick}]
+  \node[ext] (yaml) {Bundle YAML\\[-1pt]\scriptsize perfil + espacio};
+  \node[box, right=of yaml] (hub) {\texttt{alexandria-server}\\[-1pt]\scriptsize hub};
+  \node[art, right=of hub] (pub) {Paquete firmado\\[-1pt]\scriptsize \texttt{/\allowbreak{}pub}, listado, registro};
+  \node[box, below=14mm of pub] (cli) {\texttt{alexandria-client}\\[-1pt]\scriptsize borde L7};
+  \node[ext, left=of cli] (conn) {Conector DSP\\[-1pt]\scriptsize sin modificar};
+  \node[ext, right=of cli] (peer) {Contraparte};
+  \node[box, below=14mm of yaml] (cc) {\texttt{alexandriac}\\[-1pt]\scriptsize compilador offline};
+  \draw[arr] (yaml) -- node[above]{\scriptsize borrador} (hub);
+  \draw[arr] (hub) -- node[above]{\scriptsize aprueba} (pub);
+  \draw[arr] (pub) -- node[right]{\scriptsize sincroniza y verifica} (cli);
+  \draw[arr] (peer) -- node[above]{\scriptsize mensaje} (cli);
+  \draw[arr] (cli) -- node[above]{\scriptsize reenvía} (conn);
+  \draw[arr, dashed] (yaml) -- node[left]{\scriptsize mismo código} (cc);
+\end{tikzpicture}
+\end{center}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{3.5cm}L{2.7cm}Y@{}}
+\toprule
+\textbf{Binario} & \textbf{Quién lo usa} & \textbf{Qué hace} \\
+\midrule
+\cod{alexandriac} & Quien escribe el perfil & Valida y compila YAML en local, sin red y sin estado. Es el bucle rápido de edición. \\
+\cod{alexandria-server} & La autoridad del espacio & Gobierna el ciclo borrador, candidato, versión y revocación. Firma lo que publica y lo sirve inmutable bajo \cod{/pub}. \\
+\cod{alexandria-client} & Cada participante & Se coloca delante del conector. Sincroniza las versiones, verifica las firmas y decide sobre cada mensaje con estado local. \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+El hub usa el mismo paquete Go que \cod{alexandriac} (\cod{internal/dsl}). Lo que compila en tu portátil compila
+igual en el hub.
+
+Hay además dos binarios de laboratorio que no son producto: \cod{fake-idp}, un emisor OAuth/OIDC que firma
+tokens, y \cod{fake-connector}, un conector DSP de mentira que responde \cod{200} a todo y recuerda lo que recibe.
+
+\section{El caso de estudio: Flexgrid}
+
+Flexgrid es un espacio de datos sectorial ficticio. Los participantes y sus intereses son estos:
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{3.3cm}Y@{}}
+\toprule
+\textbf{Participante} & \textbf{Qué quiere} \\
+\midrule
+Distribuidora (DSO) & Publica la curva de carga cuartohoraria de sus puntos de suministro. Es la proveedora y quiere limitar para qué se usa. \\
+Agregador & Entrena modelos de previsión de demanda sobre datos agregados por zona. \\
+Comercializadora & Liquida desvíos y factura. Hasta ahora también perfilaba consumidores individuales. \\
+Universidad & Quiere los datos para investigación, una finalidad que al principio no existe. \\
+Autoridad del espacio & Decide el vocabulario común y lo publica. Lucía, de la distribuidora, actúa como \emph{steward}. \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+Las reglas de negocio que la autoridad quiere poder expresar, y con qué pieza de ODRL se corresponden:
+
+\noindent\begin{tabularx}{\linewidth}{@{}Y L{2.6cm} L{4.2cm}@{}}
+\toprule
+\textbf{Regla de negocio} & \textbf{Pieza ODRL} & \textbf{Término} \\
+\midrule
+«Puedes usarlos para prever la demanda.» & Acción & \cod{enr:forecastDemand} \\
+«Puedes usarlos para liquidar desvíos.» & Acción & \cod{enr:settleImbalance} \\
+«Solo para esta finalidad.» & Operando izquierdo & \cod{odrl:purpose}, adoptado y acotado \\
+«Cada registro agrega al menos 50 puntos de suministro.» & Operando izquierdo & \cod{enr:minAggregation} \\
+«No los guardes más de 90 días.» & Operando izquierdo & \cod{enr:retentionDays} \\
+«Solo se tratan en España o en la UE.» & Operando izquierdo & \cod{enr:processingRegion} \\
+«El permiso caduca el 1 de enero.» & Operando izquierdo & \cod{odrl:dateTime}, adoptado \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+Sobre este espacio se cuenta además una historia de gobierno, que es la que da sentido al ciclo de vida:
+
+\begin{enumerate}[leftmargin=*, itemsep=2pt]
+  \item \textbf{1.0.0.} Primera versión. Incluye la acción \cod{enr:profileConsumer}, perfilar a un consumidor individual.
+  \item \textbf{1.1.0.} La universidad entra: se añade la finalidad \cod{enr:research}. A la vez el regulador avisa de
+        que el perfilado individual no va a ser admisible, y la acción se marca obsoleta. Cambio \emph{compatible}.
+  \item \textbf{2.0.0.} El perfilado se retira. Cambio de \emph{ruptura}, con una ventana de gracia para migrar.
+  \item \textbf{Revocación.} El regulador declara ilícito el perfilado. La autoridad revoca la 1.1.0, y los acuerdos
+        firmados bajo ella dejan de valer para nuevas transferencias.
+\end{enumerate}
+
+\section{Preparación}
+
+Desde la raíz del repositorio:
+
+\begin{lstlisting}[style=sh]
+make build
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+go build -o bin/alexandriac ./cmd/alexandriac
+go build -o bin/alexandria-server ./cmd/alexandria-server
+go build -o bin/alexandria-client ./cmd/alexandria-client
+go build -o bin/fake-idp ./deploy/fake-idp
+go build -o bin/fake-connector ./deploy/fake-connector
+\end{lstlisting}
+
+Los capítulos de la parte II solo necesitan \cod{bin/alexandriac}. Los de las partes III y IV usan los cinco.

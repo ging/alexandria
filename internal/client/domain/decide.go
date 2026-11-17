@@ -144,11 +144,13 @@ func item(gr GateResult, rule string) Item {
 	return it
 }
 
-// reasons lists one entry per finding, or the codes when there are none.
+// reasons lists one entry per non-informational finding, or the codes when there are none.
 func reasons(c Classification) []string {
 	out := []string{}
 	for _, f := range c.Findings {
-		out = append(out, f.Message)
+		if f.Severity != "Info" {
+			out = append(out, f.Message)
+		}
 	}
 	if len(out) == 0 {
 		for _, cd := range c.Codes {

@@ -1,0 +1,304 @@
+\chapter{El \texttt{SpaceProfile}: cerrar la pila}
+\label{ch:spaceprofile}
+
+Un \cod{OdrlProfile} define un vocabulario, pero no dice dónde se aplica. Eso lo dice el \cod{SpaceProfile}: qué
+perfil gobierna cada slot, con qué obligación y en qué gate se comprueba. Es además el documento que lleva la
+\textbf{versión del espacio}, que es la que publica el hub.
+
+\section{El documento}
+
+\begin{lstlisting}[style=yaml]
+dsl: alexandria.profiles/v1
+kind: SpaceProfile
+
+space:
+  id: https://flexgrid.example/spaces/flexgrid
+  version: 1.0.0
+  title:
+    en: Flexgrid Energy Data Space
+    es: Espacio de datos energético Flexgrid
+  operator: https://flexgrid.example/party/authority
+  base_url: https://flexgrid.example/spaces/flexgrid
+
+lifecycle:
+  grace_window: P30D
+  propagation_window: P2D
+  freshness:
+    ttl: PT24H
+    max_staleness: P7D
+  degraded:
+    policy_intake: reject
+    dsp_message: continue
+
+bindings:
+  - slot: odrl
+    profile: https://flexgrid.example/odrl/profile/metering
+    source: internal
+    version: "^1.0"
+    obligation: mandatory
+    conformance:
+      - { role: json-schema, applies_to: policy_intake }
+      - { role: shacl, applies_to: policy_intake }
+
+  - slot: dsp
+    profile: https://w3id.org/dspace/2025/1
+    source: vendored
+    version: "=2025-1"
+    obligation: mandatory
+    conformance:
+      - { role: json-schema, applies_to: dsp_message }
+\end{lstlisting}
+
+\section{La sección \texttt{lifecycle}}
+
+Estos parámetros viajan dentro del manifiesto firmado de cada versión, así que todos los clientes aplican los
+mismos valores. Lo que no se escribe toma el valor por defecto del hub.
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{5.1cm}C{1.5cm}Y@{}}
+\toprule
+\textbf{Parámetro} & \textbf{Defecto} & \textbf{Significado} \\
+\midrule
+\cod{propagation_window} & \cod{P2D} & Tiempo entre que se publica una versión y que empieza a valer. Da margen para sincronizar. \\
+\cod{grace_window} & \cod{P30D} & Cuánto convive una versión de ruptura con su predecesora. \\
+\cod{min_grace_window} & \cod{P7D} & Gracia mínima que puede pedir un \emph{steward} al aprobar. Es del hub: el \cod{SpaceProfile} no puede cambiarla. \\
+\cod{freshness.ttl} & \cod{PT24H} & Validez de un listado. El hub lo reemite al menos cada mitad de este tiempo. \\
+\cod{freshness.max_staleness} & \cod{P7D} & Cuánto aguanta un cliente con un listado caducado antes de cerrarse. \\
+\cod{sync_interval} & \cod{PT6H} & Intervalo máximo entre sincronizaciones del cliente. \\
+\cod{clock_skew} & \cod{PT5S} & Diferencia de reloj tolerada. \\
+\cod{lease_margin} & \cod{PT10S} & Margen que el cliente añade alrededor de cada frontera de vigencia. \\
+\cod{max_concurrent_versions} & \cod{4} & Máximo de versiones vigentes a la vez. \\
+\cod{degraded} & \texttt{\{\}} & Por gate, qué hacer con el listado caducado: \cod{continue} o \cod{reject}. \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+En Flexgrid, \cod{degraded} dice que si el cliente pierde el contacto con el hub sigue validando la envoltura
+DSP con lo último que tenía, pero deja de admitir políticas nuevas. El capítulo~\ref{ch:resiliencia} lo provoca.
+
+El compilador comprueba los invariantes entre parámetros. Por ejemplo, con una gracia de tres días y un
+\cod{max_staleness} de una hora:
+
+\begin{lstlisting}[style=out]
+error   LIFECYCLE_GRACE_TOO_SHORT     s-lifecycle.yaml#2:129 /lifecycle/grace_window grace_window must be at least min_grace_window
+error   LIFECYCLE_STALENESS_LT_TTL    s-lifecycle.yaml#2:133 /lifecycle/freshness/max_staleness max_staleness must be greater than ttl
+\end{lstlisting}
+
+\section{Los \emph{bindings}}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{2.6cm}Y@{}}
+\toprule
+\textbf{Campo} & \textbf{Significado} \\
+\midrule
+\cod{slot} & \cod{odrl}, \cod{dcat}, \cod{dsp} o \cod{dcp}. Solo un \emph{binding} por slot. \\
+\cod{profile} & IRI del perfil que gobierna el slot. \\
+\cod{source} & \cod{internal}: un \cod{OdrlProfile} del mismo \emph{bundle}. \cod{vendored}: una copia local de una especificación externa. \\
+\cod{version} & Rango SemVer si es interno; versión exacta con \cod{=} si es vendorizado. \\
+\cod{obligation} & \cod{mandatory}, \cod{recommended} u \cod{optional}. \\
+\cod{via} & Cadena de perfiles intermedios, para perfiles de perfiles. \\
+\cod{conformance} & Lista de pares \cod{role} y \cod{applies_to}: qué artefacto se usa en qué gate. \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Obligación}
+
+La obligación decide qué pasa cuando un mensaje no conforma:
+
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item \cod{mandatory}: el gate falla. Un \emph{binding} obligatorio tiene que tener al menos un gate; si no,
+        no habría forma de verificarlo.
+  \item \cod{recommended}: el gate pasa, y el veredicto lleva el código informativo
+        \cod{VERDICT_RECOMMENDED_NONCONFORMANT}.
+  \item \cod{optional}: no se evalúa.
+\end{itemize}
+
+\subsection{Rangos de versión}
+
+Un \emph{binding} interno no fija una versión del perfil: da un rango, y el compilador elige la mayor versión
+del \emph{bundle} que lo cumple.
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{2.6cm}Y L{4.6cm}@{}}
+\toprule
+\textbf{Rango} & \textbf{Acepta} & \textbf{Ejemplo} \\
+\midrule
+\cod{=1.2.3} & Exactamente esa versión. & \\
+\texttt{\textasciicircum{}1.0} & Misma versión mayor, igual o superior. & \cod{1.0.0}, \cod{1.4.2}; no \cod{2.0.0} \\
+\texttt{\textasciicircum{}0.3} & Con mayor 0, misma versión menor. & \cod{0.3.0}, \cod{0.3.9}; no \cod{0.4.0} \\
+\texttt{\textasciitilde{}1.2} & Misma mayor y menor. & \cod{1.2.0}, \cod{1.2.7}; no \cod{1.3.0} \\
+\cod{1} & Sin operador, las partes que faltan son comodines. & cualquier \cod{1.x.y} \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+Las versiones preliminares, como \cod{1.1.0-rc1}, no satisfacen ningún rango.
+
+\subsection{Roles y gates}
+
+\cod{conformance} une un \textbf{rol} de artefacto con un \textbf{gate}. Un perfil interno ofrece los roles
+\cod{json-schema} y \cod{shacl}. Un perfil vendorizado ofrece los que declare su \cod{vendor.json}.
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{5.2cm}Y C{2.4cm}@{}}
+\toprule
+\textbf{Gate} & \textbf{Qué se valida} & \textbf{¿Lo aplica el cliente?} \\
+\midrule
+\cod{dsp_message} & La envoltura del mensaje DSP. & \si \\
+\cod{policy_intake} & La política de una oferta, una petición o un acuerdo. & \si \\
+\cod{catalog_entry} & Las respuestas de catálogo. & \si \\
+\cod{pdp_load} & La política al cargarse en el motor de decisión. & \no \\
+\cod{credential_presentation} & Las credenciales presentadas. & \no \\
+\bottomrule
+\end{tabularx}
+
+\begin{trampaHabitual}[Dos gates del lenguaje no los aplica nadie]
+El lenguaje admite \cod{pdp_load} y \cod{credential_presentation}, y un \emph{binding} en ellos compila. Pero
+\cod{alexandria-client} solo conoce \cod{dsp_message}, \cod{policy_intake}, \cod{catalog_entry} y
+\cod{agreement_admission}. Un gate que ningún componente evalúa es documentación, no control.
+\end{trampaHabitual}
+
+\begin{trampaHabitual}[Un gate obligatorio cubierto solo por SHACL]
+Hoy ningún gate ejecuta SHACL: el cliente solo ejecuta \cod{json-schema}. Si un \emph{binding} \cod{mandatory}
+enlaza \emph{únicamente} \cod{shacl} a un gate, ese gate acepta cualquier mensaje. El compilador lo avisa:
+
+\begin{lstlisting}[style=out]
+warning GATE_SHACL_ONLY   shacl-only.yaml#2:145 /bindings/0/conformance gate policy_intake of mandatory slot odrl is covered only by shacl, which no gate executes yet: it will accept any message
+\end{lstlisting}
+
+Por eso Flexgrid enlaza los dos roles a \cod{policy_intake}: el esquema valida hoy, y las \emph{shapes} quedan
+publicadas para cuando haya motor.
+\end{trampaHabitual}
+
+\section{Perfiles vendorizados}
+
+DSP no es un perfil que escriba Flexgrid: es una especificación externa que el espacio \textbf{fija}. Como nada se
+resuelve contra la red, hay que tener una copia local. El compilador la busca en
+\texttt{<vendor>/\allowbreak{}<slot>/\allowbreak{}<versión>/\allowbreak{}vendor.json}:
+
+\begin{lstlisting}[style=json]
+{
+  "profile": "https://w3id.org/dspace/2025/1",
+  "version": "2025-1",
+  "artifacts": [
+    { "path": "dsp-messages.schema.json", "role": "json-schema",
+      "media_type": "application/schema+json" },
+    { "path": "context.jsonld", "role": "context",
+      "media_type": "application/ld+json",
+      "url": "https://w3id.org/dspace/2025/1/context.jsonld" }
+  ]
+}
+\end{lstlisting}
+
+El campo \cod{profile} tiene que coincidir con el del \emph{binding}. Cada artefacto declara su ruta, su rol y
+su tipo. El campo \cod{url} es importante en los contextos JSON-LD: es la URL con la que los mensajes los citan,
+y el cliente solo resolverá las URL que el paquete declare.
+
+\begin{notaPractica}[La copia de este tutorial es reducida]
+Los dos ficheros de \cod{examples/vendor/dsp/2025-1/} están escritos a mano para el laboratorio: un esquema que
+comprueba los campos obligatorios de tres mensajes y un contexto con los términos que usan los ejemplos. En un
+espacio real se copian ahí los ficheros oficiales de DSP y se fija su versión.
+\end{notaPractica}
+
+Sin la opción \cod{-vendor}, el \emph{binding} no resuelve:
+
+\begin{lstlisting}[style=sh]
+../../../bin/alexandriac validate dsl/flexgrid-1.0.0.yaml
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+error   BINDING_UNRESOLVED   flexgrid-1.0.0.yaml#2:148 /bindings/1 no vendored copy of https://w3id.org/dspace/2025/1 2025-1 for slot dsp
+alexandriac: 1 errors
+\end{lstlisting}
+
+\section{El \emph{bundle} y su compilación}
+
+Un \textbf{bundle} es un flujo YAML: un \cod{SpaceProfile} y los \cod{OdrlProfile} que enlaza, separados por
+\cod{---}. \cod{examples/dsl/flexgrid-1.0.0.yaml} es exactamente el perfil del capítulo anterior seguido del
+espacio de este.
+
+\begin{lstlisting}[style=sh]
+../../../bin/alexandriac compile -o /tmp/flexgrid -vendor vendor dsl/flexgrid-1.0.0.yaml | sort
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+/tmp/flexgrid/profiles/dsp/vendored/2025-1/context.jsonld
+/tmp/flexgrid/profiles/dsp/vendored/2025-1/dsp-messages.schema.json
+/tmp/flexgrid/profiles/odrl/metering/1.0.0/context.jsonld
+/tmp/flexgrid/profiles/odrl/metering/1.0.0/prof.ttl
+/tmp/flexgrid/profiles/odrl/metering/1.0.0/schema.json
+/tmp/flexgrid/profiles/odrl/metering/1.0.0/shapes.ttl
+/tmp/flexgrid/profiles/odrl/metering/1.0.0/spec.html
+/tmp/flexgrid/profiles/odrl/metering/1.0.0/vocab.ttl
+/tmp/flexgrid/space/prof.ttl
+/tmp/flexgrid/space/shacl-union.ttl
+/tmp/flexgrid/space/space-lock.json
+/tmp/flexgrid/space/spec.html
+\end{lstlisting}
+
+Aparecen dos cosas nuevas: los ficheros vendorizados, copiados bajo \texttt{profiles/\allowbreak{}<slot>/\allowbreak{}vendored/\allowbreak{}<versión>/\allowbreak{}}, y
+cuatro artefactos del espacio.
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{4.8cm}Y@{}}
+\toprule
+\textbf{Artefacto del espacio} & \textbf{Contenido} \\
+\midrule
+\cod{space/space-lock.json} & La resolución: versión elegida de cada \emph{binding}, sus artefactos con SHA-256 y gates, los parámetros de ciclo de vida y los perfiles declarables. \\
+\cod{space/prof.ttl} & Manifiesto PROF del espacio: un \cod{prof:isProfileOf} por \emph{binding} y un descriptor por artefacto. \\
+\cod{space/shacl-union.ttl} & Las \emph{shapes} de los \emph{bindings} obligatorios, concatenadas por gate. \\
+\cod{space/spec.html} & Tabla legible de \emph{bindings}. \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+El \cod{space-lock.json} es el equivalente a un fichero de bloqueo de dependencias. Donde el YAML decía
+\texttt{"\textasciicircum{}1.0"}, el bloqueo dice qué se eligió y con qué bytes:
+
+\begin{lstlisting}[style=json]
+{ "slot": "odrl", "source": "internal", "obligation": "mandatory",
+  "profile": "https://flexgrid.example/odrl/profile/metering",
+  "version": "1.0.0",
+  "artifacts": [
+    { "path": "profiles/odrl/metering/1.0.0/schema.json", "role": "json-schema",
+      "media_type": "application/schema+json", "applies_to": ["policy_intake"],
+      "sha256": "fa70ada7f8c3e45426e804c1883da0a338d3e718425211ad86626d702cdc5e09" },
+    { "path": "profiles/odrl/metering/1.0.0/shapes.ttl", "role": "shacl",
+      "media_type": "text/turtle", "applies_to": ["policy_intake"],
+      "sha256": "43d5fb036d58eea976c45b4af11575ec0e012162ce2b29ad35185900eb4929c8" },
+    … ] }
+\end{lstlisting}
+
+\begin{ideaClave}
+Cada artefacto lleva los gates de su \emph{binding}. \cod{schema.json} del slot \cod{odrl} se aplica en
+\cod{policy_intake} porque el \cod{SpaceProfile} lo dice, no porque el artefacto lo sepa. Cambiar dónde se valida
+algo es editar una línea del espacio, sin tocar el perfil.
+\end{ideaClave}
+
+\section{Errores propios del espacio}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{4.6cm}Y@{}}
+\toprule
+\textbf{Código} & \textbf{Causa} \\
+\midrule
+\cod{SLOT_DUP} & Dos \emph{bindings} para el mismo slot. \\
+\cod{BINDING_UNRESOLVED} & Ninguna versión del \emph{bundle} cumple el rango, o falta la copia vendorizada. \\
+\cod{BINDING_BASE_MISMATCH} & Un slot distinto de \cod{odrl} declarado como \cod{internal}: el lenguaje solo tiene documentos \cod{OdrlProfile}. \\
+\cod{ARTIFACT_MISSING} & Se pide un rol que el perfil no produce, como \cod{cedar-mapping}. \\
+\cod{MANDATORY_UNVERIFIABLE} & Un \emph{binding} obligatorio sin gates. El esquema lo detiene antes, como error \cod{SCHEMA}. \\
+\cod{VIA_CYCLE} & \cod{via} contiene el propio perfil. \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+Las salidas reales de los dos primeros:
+
+\begin{lstlisting}[style=out]
+error   SLOT_DUP             s-slot-dup.yaml#2:156 /bindings/2/slot slot odrl has more than one binding
+error   BINDING_UNRESOLVED   s-unresolved.yaml#2:139 /bindings/0 no release of https://flexgrid.example/odrl/profile/metering satisfies ^2.0 in the bundle
+\end{lstlisting}
+
+En todos los mensajes, \texttt{\#2} es el número de documento dentro del flujo YAML, y lo que sigue a los dos puntos
+es la línea del fichero.
+
+\begin{retos}
+\begin{enumerate}[leftmargin=*, itemsep=2pt]
+  \item Cambia la obligación del slot \cod{odrl} a \cod{recommended} y compara el \cod{space-lock.json}.
+  \item Añade un \emph{binding} \cod{dcat} vendorizado sin crear su directorio y lee el error. Después crea
+        \cod{vendor/dcat/3.0.0/vendor.json} con un artefacto de rol \cod{shacl} y enlázalo a \cod{catalog_entry}.
+  \item Sube \cod{max_concurrent_versions} a 1 y piensa qué implicaría para una versión de ruptura.
+\end{enumerate}
+\end{retos}

@@ -1,0 +1,400 @@
+\chapter{Reglas, gates y tráfico real}
+\label{ch:reglas}
+
+El cliente no sabe nada de DSP por sí mismo. Lo que sabe está en su \textbf{conjunto de reglas}: cada regla
+dice qué peticiones cubre, qué parte del mensaje se valida, con qué gates y qué se hace con el resultado.
+
+\section{Una regla}
+
+\begin{lstlisting}[style=sh]
+curl -s $ADMINAPI/rules/contract-request
+\end{lstlisting}
+\begin{lstlisting}[style=json]
+{
+  "id": "contract-request",
+  "priority": 110,
+  "listener": "dsp-ingress",
+  "match": {
+    "method": "POST",
+    "path": "/negotiations/{providerPid}/request",
+    "body": [ { "pointer": "/@type",
+                "one_of": ["ContractRequestMessage", "dspace:ContractRequestMessage"] } ]
+  },
+  "message": "ContractRequestMessage",
+  "verify": { "gates": ["dsp_message", "policy_intake"] },
+  "mode": "enforce"
+}
+\end{lstlisting}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{4cm}Y@{}}
+\toprule
+\textbf{Campo} & \textbf{Significado} \\
+\midrule
+\cod{priority} & Las de valor más bajo se prueban antes. Única por \emph{listener}. \\
+\cod{listener} & En qué \emph{listener} aplica. \\
+\cod{match.method}, \cod{match.path} & Método y plantilla de ruta. Una variable entre llaves casa con un segmento no vacío. \\
+\cod{match.body} & Condiciones opcionales sobre el cuerpo, por puntero JSON. \\
+\cod{message} & El tipo de mensaje DSP que la regla espera. \\
+\cod{verify.gates} & De uno a cuatro gates. \\
+\cod{verify.select} & Puntero JSON al nodo que se valida. Vacío, el cuerpo entero. \\
+\cod{mode} & \cod{observe}, por defecto, \cod{shadow} o \cod{enforce}. \\
+\cod{validate_response} & Validación pasiva de respuestas de catálogo. \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Cómo se elige la regla}
+
+Para una petición, los candidatos son las reglas del \emph{listener} cuyo método y ruta casan, en orden de
+prioridad. Se elige la primera cuyas condiciones de cuerpo se cumplen. Si no casa ninguna, se aplica
+\cod{default_action}.
+
+Se elige \textbf{una sola regla} por mensaje, y cada mensaje se decide con una única revisión del conjunto.
+
+\subsection{Los tres modos}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{2.6cm}Y Y Y@{}}
+\toprule
+\textbf{Clasificación} & \textbf{\texttt{observe}} & \textbf{\texttt{shadow}} & \textbf{\texttt{enforce}} \\
+\midrule
+\ok & reenvía & reenvía & reenvía \\
+\warn & reenvía & reenvía y emite evento & reenvía con \cod{VHub-Verdict} y emite evento \\
+\viol & reenvía & reenvía y emite evento & \textbf{rechaza} con \cod{400} y emite evento \\
+\bottomrule
+\end{tabularx}
+
+\begin{ideaClave}
+Los tres modos son un camino de despliegue. \cod{observe} no evalúa nada: la regla existe, pero está callada.
+\cod{shadow} evalúa y cuenta lo que \emph{se habría} rechazado, sin tocar el tráfico. \cod{enforce} actúa. Una
+regla se mueve entre ellos en caliente, y el cambio vale para el mensaje siguiente.
+\end{ideaClave}
+
+\subsection{La semilla}
+
+La semilla trae las 16 reglas del enlace DSP 2025-1. Solo \cod{contract-request} viene en \cod{enforce}; las
+otras quince, en \cod{observe}.
+
+\begin{longtable}{@{}L{4.5cm}L{6.2cm}L{4.3cm}@{}}
+\toprule
+\textbf{Regla} & \textbf{Ruta} & \textbf{Gates} \\
+\midrule
+\endhead
+\cod{catalog-request} & \texttt{POST /\allowbreak{}catalog/\allowbreak{}request} & \cod{dsp_message} \\
+\cod{dataset-request} & \texttt{GET /\allowbreak{}catalog/\allowbreak{}datasets/\allowbreak{}\{id\}} & \cod{dsp_message} \\
+\cod{contract-request-initial} & \texttt{POST /\allowbreak{}negotiations/\allowbreak{}request} & \cod{dsp_message}, \cod{policy_intake} \\
+\cod{contract-request} & \texttt{POST /\allowbreak{}negotiations/\allowbreak{}\{providerPid\}/\allowbreak{}request} & \cod{dsp_message}, \cod{policy_intake} \\
+\cod{contract-offer-initial} & \texttt{POST /\allowbreak{}negotiations/\allowbreak{}offers} & \cod{dsp_message}, \cod{policy_intake} \\
+\cod{contract-offer} & \texttt{POST /\allowbreak{}negotiations/\allowbreak{}\{consumerPid\}/\allowbreak{}offers} & \cod{dsp_message}, \cod{policy_intake} \\
+\cod{contract-agreement-in} & \texttt{POST /\allowbreak{}negotiations/\allowbreak{}\{consumerPid\}/\allowbreak{}agreement} & \cod{dsp_message}, \cod{policy_intake} \\
+\cod{contract-agreement-out} & La misma, en \cod{dsp-egress} & \cod{dsp_message}, \cod{policy_intake} \\
+\cod{agreement-verification} & \texttt{POST …/\allowbreak{}agreement/\allowbreak{}verification} & \cod{dsp_message} \\
+\cod{negotiation-event} & \texttt{POST /\allowbreak{}negotiations/\allowbreak{}\{pid\}/\allowbreak{}events} & \cod{dsp_message} \\
+\cod{negotiation-termination} & \texttt{POST /\allowbreak{}negotiations/\allowbreak{}\{pid\}/\allowbreak{}termination} & \cod{dsp_message} \\
+\cod{transfer-request} & \texttt{POST /\allowbreak{}transfers/\allowbreak{}request} & \cod{dsp_message}, \cod{agreement_admission} \\
+\cod{transfer-start} y otras tres & \texttt{POST /\allowbreak{}transfers/\allowbreak{}\{pid\}/\allowbreak{}…} & \cod{dsp_message} \\
+\bottomrule
+\end{longtable}
+
+\section{El mensaje}
+
+Este es \cod{examples/msgs/m1-forecast.json}: el agregador pide a la distribuidora la oferta del
+capítulo~\ref{ch:compilar}, ahora dentro de un mensaje DSP.
+
+\begin{lstlisting}[style=json]
+{
+  "@context": ["https://w3id.org/dspace/2025/1/context.jsonld",
+               "https://flexgrid.example/odrl/profile/metering/context.jsonld"],
+  "@type": "ContractRequestMessage",
+  "providerPid": "urn:uuid:9c1f7a52-dso-neg-0042",
+  "consumerPid": "urn:uuid:4be0d6c1-agg-neg-0017",
+  "callbackAddress": "https://aggregator.flexgrid.example/dsp/callback",
+  "offer": {
+    "@type": "Offer",
+    "@id": "urn:uuid:offer-forecast-01",
+    "profile": "https://flexgrid.example/odrl/profile/metering",
+    "target": "urn:uuid:dataset-qh-load-madrid-2026",
+    "permission": [ { "action": "forecastDemand", "constraint": [ … las cinco restricciones … ] } ]
+  }
+}
+\end{lstlisting}
+
+Las dos URL de \cod{@context} son las que el paquete declara con \cod{url}: el contexto de DSP, vendorizado, y
+el del perfil, generado. Ninguna se descarga: el cliente las resuelve dentro del paquete.
+
+\section{Preguntar antes de enviar: \texttt{:explain}}
+
+\texttt{POST /\allowbreak{}rules:explain} responde qué haría el proxy con una petición descrita, \textbf{sin efectos}: no
+reenvía, no registra y no emite eventos. Recibe \cod{listener}, \cod{method}, \cod{path} y \cod{body}. La
+función \cod{ex} lo construye a partir de un fichero de mensaje, y \cod{short} condensa la respuesta.
+
+Con la regla de la semilla:
+
+\begin{lstlisting}[style=sh]
+ex m1-forecast | short
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+rule=contract-request state=Active action=reject code=VERDICT_VIOLATION
+  gate=dsp_message    class=ok        codes=[] matched=1.0.0
+  gate=policy_intake  class=violation codes=['VERDICT_VIOLATION'] matched=None
+     - Violation json-schema  missing property 'profile'
+     - Info loader  POC_EVAL_UNSUPPORTED_ROLE: shacl artefact profiles/odrl/metering/1.0.0/shapes.ttl is not evaluated
+  verdict: violation;gate=policy_intake;code="VERDICT_VIOLATION";rule="contract-request"
+\end{lstlisting}
+
+Se rechaza un mensaje que es correcto. El hallazgo dice por qué: falta la propiedad \cod{profile}. Pero el
+mensaje la tiene; está dentro de \cod{offer}.
+
+\begin{trampaHabitual}[Una regla, un nodo]
+\cod{schema.json} valida \textbf{una política}. La regla de la semilla no tiene \cod{verify.select}, así que el
+gate \cod{policy_intake} recibe el mensaje entero, y un \cod{ContractRequestMessage} no es una política: la
+política está en \cod{/offer}.
+
+La solución es \texttt{"select": "/\allowbreak{}offer"}. Pero \cod{select} es \textbf{uno por regla} y vale para todos sus
+gates, y solo se elige una regla por mensaje. Con \texttt{select: "/\allowbreak{}offer"}, el gate \cod{dsp_message} recibiría
+también la oferta en lugar de la envoltura. Hoy no se pueden validar en un mismo mensaje la envoltura con un
+esquema y la política con otro: hay que elegir.
+\end{trampaHabitual}
+
+Para una petición de contrato, lo que importa es la política. La regla adaptada está en
+\cod{examples/rules/contract-request.json}:
+
+\begin{lstlisting}[style=json]
+  "verify": { "select": "/offer", "gates": ["policy_intake"] },
+  "mode": "enforce"
+\end{lstlisting}
+
+\section{Cambiar una regla}
+
+Todo cambio de reglas exige \cod{If-Match} con la revisión actual, que es el \cod{ETag} de \texttt{GET /\allowbreak{}rules}.
+
+\begin{lstlisting}[style=sh]
+curl -s -i -X PUT $ADMINAPI/rules/contract-request --data-binary @../rules/contract-request.json | head -1
+curl -s -i -X PUT $ADMINAPI/rules/contract-request -H 'If-Match: "1"' \
+  --data-binary @../rules/contract-request.json | grep -i -E '^HTTP|^etag'
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+HTTP/1.1 428 Precondition Required
+
+HTTP/1.1 200 OK
+Etag: "2"
+\end{lstlisting}
+
+Sin la cabecera, \cod{428}. Con una revisión desfasada sería \cod{412}. El conjunto entero se revalida en cada
+cambio, y un cambio rechazado deja intacto el conjunto anterior.
+
+\noindent\begin{tabularx}{\linewidth}{@{}C{1.8cm}Y L{5.7cm}@{}}
+\toprule
+\textbf{Invariante} & \textbf{Comprobación} & \textbf{Código} \\
+\midrule
+RULE-1 & El conjunto valida contra su esquema. & \cod{RULES_SCHEMA} \\
+RULE-2 & Los identificadores son únicos. & \cod{RULES_DUPLICATE_ID} \\
+RULE-3 & Las prioridades son únicas por \emph{listener}. & \cod{RULES_DUPLICATE_PRIORITY} \\
+RULE-4 & \cod{agreement_admission} solo en peticiones de transferencia; \cod{validate_response} solo en catálogo. & \cod{RULES_GATE_MESSAGE_MISMATCH} \\
+RULE-5 & Las reglas de \cod{mgmt-ingress} necesitan \cod{upstreams.management}. & \cod{RULES_UPSTREAM_MISSING} \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+De paso se adaptan las otras dos reglas que usará el capítulo siguiente. \cod{setrule} lee la revisión actual y
+hace el \cod{PUT}:
+
+\begin{lstlisting}[style=sh]
+setrule contract-agreement-in
+setrule transfer-request
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+contract-agreement-in -> 200
+transfer-request -> 200
+\end{lstlisting}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{4.7cm}Y@{}}
+\toprule
+\textbf{Regla} & \textbf{Cambio respecto de la semilla} \\
+\midrule
+\cod{contract-request} & \texttt{select: /\allowbreak{}offer}, solo \cod{policy_intake}. Ya estaba en \cod{enforce}. \\
+\cod{contract-agreement-in} & \texttt{select: /\allowbreak{}agreement}, solo \cod{policy_intake}, pasa a \cod{enforce}. \\
+\cod{transfer-request} & Pasa a \cod{enforce}. Conserva \cod{dsp_message} y \cod{agreement_admission} sobre el cuerpo entero. \\
+\bottomrule
+\end{tabularx}
+
+\section{Seis mensajes}
+
+Con la regla adaptada, estos son los veredictos a 3 de septiembre, con la 1.0.0 vigente:
+
+\begin{lstlisting}[style=sh]
+for m in m1-forecast m2-profiling m3-research m4-invalid m5-foreign-context m6-no-callback; do
+  echo "--- $m"; ex $m | short
+done
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+--- m1-forecast
+rule=contract-request state=Active action=forward code=None
+  gate=policy_intake  class=ok        codes=[] matched=1.0.0
+--- m2-profiling
+rule=contract-request state=Active action=forward code=None
+  gate=policy_intake  class=ok        codes=[] matched=1.0.0
+--- m3-research
+rule=contract-request state=Active action=reject code=VERDICT_VIOLATION
+  gate=policy_intake  class=violation codes=['VERDICT_VIOLATION'] matched=None
+     - Violation json-schema /permission/0/constraint/0 validation failed
+--- m4-invalid
+rule=contract-request state=Active action=reject code=VERDICT_VIOLATION
+  gate=policy_intake  class=violation codes=['VERDICT_VIOLATION'] matched=None
+     - Violation json-schema /permission/0/action validation failed
+     - Violation json-schema /permission/1/constraint/0 validation failed
+--- m5-foreign-context
+rule=contract-request state=Active action=reject code=CONTEXT_NOT_IN_PACKAGE
+  gate=policy_intake  class=violation codes=['CONTEXT_NOT_IN_PACKAGE'] matched=None
+     - Violation loader  @context https://schema.org/ is not in the package
+--- m6-no-callback
+rule=contract-request state=Active action=forward code=None
+  gate=policy_intake  class=ok        codes=[] matched=1.0.0
+\end{lstlisting}
+
+En todas las respuestas aparece además la línea informativa \cod{POC_EVAL_UNSUPPORTED_ROLE}, omitida aquí.
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{3.9cm}Y C{1.9cm}@{}}
+\toprule
+\textbf{Mensaje} & \textbf{Qué lleva} & \textbf{Resultado} \\
+\midrule
+\cod{m1-forecast} & Previsión de demanda con cinco restricciones válidas. & \ok \\
+\cod{m2-profiling} & Perfilado de consumidores. En la 1.0.0 es una acción activa. & \ok \\
+\cod{m3-research} & Finalidad \cod{enr:research}, que la 1.0.0 no conoce. & \viol \\
+\cod{m4-invalid} & Acción \cod{odrl:sell} y \texttt{minAggregation lt 5}. Dos fallos, dos hallazgos. & \viol \\
+\cod{m5-foreign-context} & Un tercer contexto, \cod{https://schema.org/}. & \viol \\
+\cod{m6-no-callback} & Sin \cod{callbackAddress}, obligatorio en DSP. & \ok \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+Tres comentarios.
+
+\textbf{m3} es una violación \emph{hoy}. El capítulo siguiente publica la 1.1.0 y el mismo mensaje pasa.
+
+\textbf{m5} no se rechaza por su política, que es válida, sino por citar un contexto que el paquete no contiene.
+El cliente nunca descarga un contexto para validar: si lo hiciera, quien controlara esa URL podría cambiar el
+significado de un mensaje después de firmado el vocabulario. Esta comprobación la dispara el artefacto
+\cod{shacl} del \emph{binding}: con solo \cod{json-schema}, los contextos no se miran.
+
+\textbf{m6} pasa aunque le falta un campo obligatorio de DSP. Es el precio de la trampa anterior: esta regla ya
+no evalúa \cod{dsp_message}.
+
+\section{Tráfico de verdad}
+
+\cod{row} envía un mensaje por \cod{dsp-ingress} e imprime el estado y la cabecera de veredicto.
+
+\begin{lstlisting}[style=sh]
+curl -s -i -X POST "$INGRESS/negotiations/$NEG/request" -H 'Content-Type: application/json' \
+  --data-binary @../msgs/m1-forecast.json
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+HTTP/1.1 200 OK
+Content-Length: 90
+Content-Type: application/json
+
+{"@type":"Ack","received":"POST /dsp/negotiations/urn:uuid:9c1f7a52-dso-neg-0042/request"}
+\end{lstlisting}
+
+Es la respuesta del conector, sin tocar. El conector de laboratorio recuerda lo que recibe:
+
+\begin{lstlisting}[style=sh]
+curl -s $CONNECTOR/_received
+\end{lstlisting}
+
+El cuerpo que aparece ahí tiene los mismos 1627 bytes que el fichero enviado.
+
+Ahora el mensaje inválido:
+
+\begin{lstlisting}[style=sh]
+curl -s -i -X POST "$INGRESS/negotiations/$NEG/request" -H 'Content-Type: application/json' \
+  --data-binary @../msgs/m4-invalid.json
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+HTTP/1.1 400 Bad Request
+Content-Type: application/json
+VHub-Verdict: violation;gate=policy_intake;code="VERDICT_VIOLATION";rule="contract-request"
+
+{"@context":["https://w3id.org/dspace/2025/1/context.jsonld"],
+ "@type":"ContractNegotiationError","code":"VERDICT_VIOLATION",
+ "consumerPid":"urn:uuid:4be0d6c1-agg-neg-0017","providerPid":"urn:uuid:9c1f7a52-dso-neg-0042",
+ "reason":["validation failed","validation failed"]}
+\end{lstlisting}
+
+El conector no ha recibido nada. La respuesta es el mensaje de error que DSP define para ese intercambio, un
+\cod{ContractNegotiationError} con los identificadores del proceso copiados de la petición. Un conector al otro
+lado lo entiende sin saber que existe Alexandria.
+
+\cod{reason} lleva un elemento por hallazgo, dos en este caso. Los hallazgos informativos, como el aviso de que
+el artefacto \cod{shacl} no se ejecuta, no se envían a la contraparte: quedan en \cod{:explain} y en el evento.
+
+\subsection{La cabecera \texttt{VHub-Verdict}}
+
+Es una lista de campos estructurados (RFC~9651), con un elemento por cada gate en \cod{enforce} cuya
+clasificación no es \ok:
+
+\begin{lstlisting}[style=out]
+VHub-Verdict: violation;gate=policy_intake;code="VERDICT_VIOLATION";rule="contract-request"
+VHub-Verdict: warning;gate=policy_intake;code="VERDICT_NOT_IN_HEAD";rule="contract-request";version="1.1.0";sunset=@1793613600
+\end{lstlisting}
+
+\section{Eventos y métricas}
+
+Cada decisión que merece contarse se añade al fichero de eventos:
+
+\begin{lstlisting}[style=sh]
+tail -n 1 var/client/events.jsonl
+\end{lstlisting}
+\begin{lstlisting}[style=json]
+{"type":"vhub.verdict","ts":"2026-09-03T12:00:00Z","listener":"dsp-ingress",
+ "rule":"contract-request","rules_revision":2,"message":"ContractRequestMessage",
+ "gate":"policy_intake","mode":"enforce","state":"Active",
+ "classification":"violation","action":"reject","evaluated":["1.0.0"],"matched":null,
+ "codes":["VERDICT_VIOLATION"],
+ "findings":[
+   {"slot":"odrl","source":"json-schema","severity":"Violation","path":"/permission/0/action","message":"validation failed"},
+   {"slot":"odrl","source":"json-schema","severity":"Violation","path":"/permission/1/constraint/0","message":"validation failed"},
+   … ]}
+\end{lstlisting}
+
+El evento dice qué regla, en qué revisión, contra qué versiones se evaluó, cuál aceptó el mensaje y, por
+hallazgo, el slot, el artefacto y el puntero al nodo culpable.
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{3cm}Y@{}}
+\toprule
+\textbf{Tipo} & \textbf{Cuándo} \\
+\midrule
+\cod{vhub.verdict} & Un gate produce una clasificación que hay que contar. \\
+\cod{vhub.sync} & Falla una sincronización. También lleva los avisos del evaluador. \\
+\cod{vhub.state} & Cambia el estado, o el desfase de reloj supera el tolerado. \\
+\cod{vhub.agreement} & Se programa la revocación de la versión de un acuerdo capturado. \\
+\cod{vhub.rules} & Cambia el conjunto de reglas. \\
+\cod{vhub.audit} & Se produce un informe de auditoría pasiva. \\
+\cod{vhub.gc} & Pasa el recolector de paquetes. \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+Y las métricas, en formato OpenMetrics:
+
+\begin{lstlisting}[style=sh]
+curl -s $ADMINAPI/metrics | grep -v '^#'
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+vhub_classifications_total{rule="contract-request",gate="policy_intake",version="",result="violation"} 1
+vhub_classifications_total{rule="contract-request",gate="policy_intake",version="1.0.0",result="ok"} 1
+vhub_listing_age_seconds 0
+vhub_request_latency_seconds_sum 0.058964584
+vhub_request_latency_seconds_count 2
+\end{lstlisting}
+
+\cod{vhub_listing_age_seconds} es la métrica sobre la que poner una alerta: si crece, el cliente ha dejado de
+hablar con el hub, y cuando pase de \cod{ttl} entrará en \cod{Degraded}.
+
+\begin{retos}
+\begin{enumerate}[leftmargin=*, itemsep=2pt]
+  \item Pasa \cod{contract-request} a \cod{shadow} y envía \cod{m4-invalid}. ¿Qué recibe el emisor? ¿Qué queda
+        en el fichero de eventos?
+  \item Añade con \texttt{POST /\allowbreak{}rules} una copia de una regla existente. ¿Qué invariante salta?
+  \item Cambia \cod{default_action} a \cod{reject} en la configuración, reinicia el cliente y envía una petición
+        a una ruta sin regla.
+\end{enumerate}
+\end{retos}

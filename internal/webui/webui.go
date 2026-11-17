@@ -19,6 +19,7 @@ type Config struct {
 	Workspace string `json:"workspace"`
 	Issuer    string `json:"issuer,omitempty"`
 	Audience  string `json:"audience,omitempty"`
+	Compiler  string `json:"compiler,omitempty"`
 }
 
 // Enabled reports whether the console assets were compiled into this binary.

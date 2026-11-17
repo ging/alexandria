@@ -1,0 +1,93 @@
+dsl: alexandria.profiles/v1
+kind: OdrlProfile
+
+profile:
+  id: https://salud.example/odrl/profile/secondary-use
+  version: 0.3.0
+  title:
+    en: Health Data Secondary Use Profile
+    es: Perfil de uso secundario de datos de salud
+  publisher: Consorcio Salud Digital
+  license: https://creativecommons.org/licenses/by/4.0/
+  base_url: https://salud.example/odrl/profile/secondary-use
+
+namespaces:
+  hds: https://salud.example/ns/secondary-use#
+
+adopted:
+  actions: [odrl:anonymize, odrl:aggregate]
+  left_operands:
+    - term: odrl:purpose
+      signature:
+        value_kind: iri
+        values: [hds:publicHealth, hds:research, hds:statistics]
+        operators: [isAnyOf]
+    - term: odrl:elapsedTime
+      signature:
+        datatype: xsd:duration
+        operators: [lteq]
+
+terms:
+  - id: linkRecords
+    kind: action
+    included_in: odrl:use
+    label: { en: Link records, es: Enlazar registros }
+    definition: { en: To link the pseudonymised records with another dataset held by the data user. }
+
+  - id: reidentify
+    kind: action
+    label: { en: Re-identify, es: Reidentificar }
+    definition: { en: To attempt to identify the natural persons behind the records. }
+
+  - id: withinPermit
+    kind: operator
+    label: { en: Within permit }
+    definition: { en: The left operand is covered by the data permit given as right operand. }
+
+  - id: dataPermit
+    kind: left_operand
+    label: { en: Data permit, es: Permiso de datos }
+    definition: { en: Data permit issued by the health data access body that covers the use. }
+    signature:
+      datatype: xsd:anyURI
+      operators: [eq, hds:withinPermit]
+      allow_reference: true
+
+  - id: kAnonymity
+    kind: left_operand
+    label: { en: k-anonymity }
+    definition: { en: Minimum size of every equivalence class in the released data. }
+    signature:
+      datatype: xsd:integer
+      operators: [gteq]
+
+  - id: environment
+    kind: left_operand
+    label: { en: Processing environment, es: Entorno de tratamiento }
+    definition: { en: Kind of environment in which the data may be processed. }
+    signature:
+      values: [secure-processing-environment, federated-node]
+      operators: [eq]
+
+  - id: SecondaryUsePermission
+    kind: rule_subclass
+    subclass_of: odrl:Permission
+    label: { en: Secondary use permission }
+    definition: { en: A permission granted under a data permit for secondary use. }
+
+  - id: publicHealth
+    kind: right_operand
+    label: { en: Public health }
+    definition: { en: Public interest in the area of public and occupational health. }
+  - id: research
+    kind: right_operand
+    label: { en: Scientific research }
+    definition: { en: Scientific research related to the health or care sectors. }
+  - id: statistics
+    kind: right_operand
+    label: { en: Official statistics }
+    definition: { en: Production of official statistics related to health. }
+
+rules:
+  actions: closed
+  left_operands: open

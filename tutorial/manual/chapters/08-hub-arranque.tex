@@ -1,0 +1,291 @@
+\chapter{Arrancar el hub y gobernar un \emph{namespace}}
+\label{ch:hub}
+
+\cod{alexandria-server} es el hub. Tiene dos caras: una API de gestión autenticada bajo \cod{/v1} y un árbol de
+publicación público e inmutable bajo \cod{/pub}. Este capítulo lo arranca, crea el \emph{namespace} de Flexgrid
+y le asigna una \emph{steward}.
+
+\section{El laboratorio}
+
+Todo ocurre en \cod{tutorial/manual/examples/lab}. El fichero \cod{env.sh} define las variables y unas pocas
+funciones que envuelven a \cod{curl}; ninguna esconde una llamada.
+
+\begin{lstlisting}[style=sh]
+cd tutorial/manual/examples/lab
+source env.sh
+\end{lstlisting}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{3.3cm}L{5.1cm}Y@{}}
+\toprule
+\textbf{Variable} & \textbf{Valor} & \textbf{Qué es} \\
+\midrule
+\texttt{\$BIN} & \cod{../../../../bin} & Los binarios compilados. \\
+\texttt{\$HUB} & \cod{https://127.0.0.1:18443} & El hub. \\
+\texttt{\$IDP} & \cod{http://127.0.0.1:19400} & El emisor de tokens. \\
+\texttt{\$CONNECTOR} & \cod{http://127.0.0.1:18282} & El conector de mentira. \\
+\texttt{\$INGRESS} & \cod{http://127.0.0.1:19080} & La entrada de tráfico del cliente. \\
+\texttt{\$ADMINAPI} & \cod{http://127.0.0.1:19090} & La API de administración del cliente. \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Un reloj que se puede mover}
+
+El ciclo de vida de una versión dura semanas. Para recorrerlo en minutos, todos los procesos aceptan
+\cod{-clock-file}: leen la hora de un fichero en lugar del reloj del sistema. La función \cod{clock} escribe en
+él.
+
+\begin{lstlisting}[style=sh]
+clock 2026-09-01T09:00:00Z
+\end{lstlisting}
+
+\begin{trampaHabitual}[Todos con el mismo reloj]
+El hub, el cliente y el emisor de tokens tienen que leer el \textbf{mismo} fichero. Un token emitido con la hora
+real del sistema está, para un hub que cree vivir en septiembre, caducado o aún no vigente, y la respuesta es
+\cod{401}. Por eso \cod{tok} pasa también \cod{--clock-file}.
+\end{trampaHabitual}
+
+\section{La configuración del hub}
+
+\cod{lab/server.yaml} usa la disposición por secciones. Lo que lo distingue de \cod{config/server.yaml} son tres
+cosas: los puertos, el compilador y el directorio de copias vendorizadas. Aquí se muestra condensado.
+
+\begin{lstlisting}[style=yaml]
+common_config:
+  hosts:
+    http: { protocol: "https", url: "127.0.0.1", port: "18443", internal_port: "18443" }
+  db:
+    db_type: "SQLite"
+    database: "file:var/hub/hub.db"
+    blobs: "file:var/hub/blobs"
+  connection:
+    tls: { cert: "file:var/tls/hub.crt", key: "file:var/tls/hub.key" }
+
+auth_config:
+  enabled: true
+  issuer: "http://127.0.0.1:19400"
+  audience: "alexandria-vhub"
+  roles_claim: "roles"
+  admin_role: "vhub-admin"
+
+did_config:
+  type: "key"
+  signing_key: "file:var/hub/hub.key"
+
+vhub_config:
+  rdf_context: "self-hosted"
+  compiler: "dsl"
+  vendor_dir: "file:../vendor"
+\end{lstlisting}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{5.3cm}Y@{}}
+\toprule
+\textbf{Campo} & \textbf{Significado} \\
+\midrule
+\cod{common_config.hosts.http} & Dirección pública y puerto. De aquí sale la URL base, prefijo de toda IRI que emite el hub. \\
+\cod{common_config.db} & Base de datos SQLite y directorio de blobs direccionados por contenido. \\
+\cod{connection.tls} & Certificado y clave. Si no existen, se genera un certificado de laboratorio. \\
+\cod{auth_config} & El hub es un servidor de recursos OAuth 2.0: emisor aceptado, audiencia y la reclamación que marca al administrador. \\
+\cod{did_config.signing_key} & Clave Ed25519 con la que se firma. Si no existe, se genera. El DID del hub es por defecto el \cod{did:key} de esa clave. \\
+\cod{vhub_config.compiler} & \cod{poc}, por defecto: borradores JSON. \cod{dsl}: borradores YAML del lenguaje de perfiles. \\
+\cod{vhub_config.vendor_dir} & Copias locales para los \emph{bindings} vendorizados. \\
+\cod{vhub_config.rdf_context} & \cod{self-hosted}: el hub sirve su propio contexto JSON-LD en \cod{/pub/_vhub/v1/context.jsonld}. \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+Las rutas \cod{file:} se resuelven desde el directorio del fichero de configuración. El documento se valida al
+arrancar contra \cod{deploy/server.schema.json}; con un error, el hub no arranca.
+
+\begin{notaPractica}[Dos disposiciones, el mismo contenido]
+Los dos binarios aceptan YAML o JSON, y dos disposiciones equivalentes: la de secciones, que usa este tutorial,
+y la plana de la especificación (\cod{deploy/server.json}), donde los mismos campos se llaman \cod{listen},
+\cod{base}, \cod{signing.key}, \cod{auth.issuers} o \cod{storage.database}. En la plana, \cod{compiler} y
+\cod{vendor_dir} van en la raíz.
+\end{notaPractica}
+
+\section{Arrancar}
+
+\begin{lstlisting}[style=sh]
+$BIN/fake-idp serve --addr 127.0.0.1:19400 --issuer $IDP --key idp.key --clock-file clock > idp.log 2>&1 &
+$BIN/fake-connector -listen 127.0.0.1:18282 > connector.log 2>&1 &
+$BIN/alexandria-server -config server.yaml -clock-file clock > server.log 2>&1 &
+\end{lstlisting}
+
+En el primer arranque, el hub crea lo que le falta y lo dice:
+
+\begin{lstlisting}[style=out]
+time=2026-09-01T09:00:00.000Z level=INFO msg="generated lab TLS certificate" … cert_path=var/tls/hub.crt note="PoC: not for production"
+time=2026-09-01T09:00:00.000Z level=INFO msg="signing key verified in hub DID document" … hub_did=did:key:z6Mkkfgq…
+time=2026-09-01T09:00:00.000Z level=INFO msg="server listening" … listen=127.0.0.1:18443 base=https://127.0.0.1:18443 tls_enabled=true
+\end{lstlisting}
+
+Tres cosas a notar. Las marcas de tiempo son las del reloj de fichero. El hub comprueba que su clave de firma
+es un método de aserción de su propio documento DID antes de aceptar tráfico: nunca firma con una clave que no
+haya publicado. Y el \cod{hub_did} hay que apuntarlo, porque el cliente solo aceptará credenciales de ese DID.
+
+\begin{lstlisting}[style=sh]
+hubdid
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+did:key:z6MkkfgqPKJK19zucGBNfLJQHUFwEA3mc9skvYsPDbkoNP8e
+\end{lstlisting}
+
+El tuyo será distinto: la clave se genera en cada laboratorio nuevo.
+
+\section{Quién puede hacer qué}
+
+\subsection{Tokens}
+
+\texttt{fake-idp token} firma un token de acceso. Con \cod{--admin} añade el rol de administrador del hub.
+
+\begin{lstlisting}[style=sh]
+tok --sub ana --admin > admin.token
+tok --sub lucia > steward.token
+\end{lstlisting}
+
+Ana es la administradora del hub. Lucía, de la distribuidora, será la \emph{steward} de Flexgrid. Por ahora su
+token solo dice quién es; el hub decidirá qué puede hacer.
+
+El hub valida cada token en cinco pasos, y el primero que falla responde \cod{401}:
+
+\noindent\begin{tabularx}{\linewidth}{@{}C{1.1cm}Y@{}}
+\toprule
+\textbf{Paso} & \textbf{Comprobación} \\
+\midrule
+A1 & Es un JWT de tipo \cod{at+jwt} firmado con un algoritmo asimétrico permitido. \\
+A2 & Su emisor es uno de los configurados. \\
+A3 & La firma verifica contra las claves públicas del emisor, que se descubren por OIDC. \\
+A4 & La audiencia incluye la del hub. \\
+A5 & Está dentro de su periodo de validez, con la tolerancia de reloj. \\
+\bottomrule
+\end{tabularx}
+
+\subsection{La tabla de autorización}
+
+\noindent\begin{tabularx}{\linewidth}{@{}Y C{1.6cm} C{2.3cm} C{1.5cm} C{1.2cm}@{}}
+\toprule
+\textbf{Operación} & \textbf{Anónimo} & \textbf{Autenticado} & \textbf{Steward} & \textbf{Admin} \\
+\midrule
+Leer \emph{namespaces}, vocabularios, listado y registros; todo \cod{/pub} & \si & \si & \si & \si \\
+Crear un \emph{namespace}; asignar o quitar \emph{stewards}; leer el registro de eventos global & 401 & 403 & 403 & \si \\
+Listar los \emph{stewards} de un \emph{namespace} & 401 & 403 & \si & \si \\
+Vocabularios, borradores, candidatos, aprobación, revocación y eventos de un \emph{namespace} & 401 & 403 & \si & 403 \\
+\bottomrule
+\end{tabularx}
+
+\begin{trampaHabitual}[El administrador no gobierna el vocabulario]
+La última fila sorprende: el administrador recibe \cod{403} en las operaciones de un \emph{namespace}. Ser
+administrador del hub no da poder sobre el contenido de un espacio. Si Ana quisiera publicar versiones de
+Flexgrid, tendría que asignarse como \emph{steward}.
+\end{trampaHabitual}
+
+Las respuestas reales de los dos casos de error:
+
+\begin{lstlisting}[style=sh]
+curl -sk -X POST $HUB/v1/namespaces -d '{"slug":"x"}'
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+{"@context":"https://127.0.0.1:18443/pub/_vhub/v1/context.jsonld",
+ "type":"https://w3id.org/alexandria-vhub/problems#API_UNAUTHENTICATED","title":"API_UNAUTHENTICATED",
+ "status":401,"detail":"this operation requires a bearer token","code":"API_UNAUTHENTICATED","severity":"error"}
+\end{lstlisting}
+
+Un administrador intentando crear un borrador devuelve la misma forma con \cod{API_FORBIDDEN_ROLE} y \cod{403}.
+Toda respuesta de \cod{/v1}, errores incluidos, es JSON-LD compacto con un \cod{code} del catálogo cerrado.
+
+\section{Crear el \emph{namespace} y su \emph{steward}}
+
+\begin{lstlisting}[style=sh]
+curl -sk -X POST $HUB/v1/namespaces -H "Authorization: Bearer $(cat admin.token)" \
+  -d '{"slug":"flexgrid","title":"Flexgrid Energy Data Space"}'
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+{"@context":"https://127.0.0.1:18443/pub/_vhub/v1/context.jsonld","created_at":"2026-09-01T09:00:00Z",
+ "id":"https://127.0.0.1:18443/v1/namespaces/flexgrid","slug":"flexgrid",
+ "title":"Flexgrid Energy Data Space","type":"Namespace"}
+\end{lstlisting}
+
+El \cod{slug} es único e inmutable y forma parte de todas las URL. \cod{_vhub} está reservado.
+
+\begin{lstlisting}[style=sh]
+curl -sk -X POST $HUB/v1/namespaces/flexgrid/stewards -H "Authorization: Bearer $(cat admin.token)" \
+  -d '{"iss":"http://127.0.0.1:19400","sub":"lucia","label":"Lucía (DSO)"}'
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+{"@context":"…","assigned_at":"2026-09-01T09:00:00Z","assigned_by":"http://127.0.0.1:19400#ana",
+ "id":"https://127.0.0.1:18443/v1/namespaces/flexgrid/stewards/ed6edbdc291414db",
+ "iss":"http://127.0.0.1:19400","label":"Lucía (DSO)","sub":"lucia","type":"Steward"}
+\end{lstlisting}
+
+Una \emph{steward} se identifica por el par emisor y sujeto, no por un nombre. La pertenencia se evalúa en cada
+petición: el token de Lucía no ha cambiado, pero desde este instante el hub le deja operar Flexgrid.
+
+\section{El registro de vocabularios}
+
+Además de versiones, un \emph{namespace} puede alojar documentos sueltos con revisiones inmutables: una lista de
+códigos, un contexto de terceros fijado, una ontología auxiliar. Hay dos tipos.
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{2cm}Y@{}}
+\toprule
+\textbf{Tipo} & \textbf{Comportamiento} \\
+\midrule
+\cod{hosted} & El contenido se sube. Cada subida distinta crea una revisión nueva; subir los mismos bytes no crea nada. \\
+\cod{proxy} & El hub descarga un documento externo al crear el vocabulario y al pedir \cod{:refresh}. Nunca contacta con el origen al servir \cod{/pub}. \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+Flexgrid aloja su esquema de regiones, \cod{examples/dsl/regions.ttl}:
+
+\begin{lstlisting}[style=sh]
+S=$(cat steward.token)
+curl -sk -X POST $HUB/v1/namespaces/flexgrid/vocabularies -H "Authorization: Bearer $S" \
+  -d '{"name":"regions","kind":"hosted","media_type":"text/turtle"}'
+
+curl -sk -i -X PUT $HUB/v1/namespaces/flexgrid/vocabularies/regions/content \
+  -H "Authorization: Bearer $S" -H 'Content-Type: text/turtle' --data-binary @../dsl/regions.ttl
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+HTTP/2 201
+{"@context":"…","created_at":"…","created_by":"http://127.0.0.1:19400#lucia",
+ "digest":"ni:///sha-256;zmzyAQLYqxTjnY6aXPy_HRSkqmgxrO7MhJsJkU6ohOI",
+ "id":"https://127.0.0.1:18443/pub/flexgrid/vocab/regions/r/1","n":1,"size":432,"type":"Revision"}
+\end{lstlisting}
+
+Repetir la misma subida devuelve \cod{200} y no crea revisión. Subir algo que no es Turtle se rechaza:
+
+\begin{lstlisting}[style=out]
+{"…","title":"VOCAB_UNPARSEABLE","status":422,"detail":"content is not valid text/turtle","code":"VOCAB_UNPARSEABLE","severity":"error"}
+\end{lstlisting}
+
+La revisión es pública de inmediato. La URL sin revisión redirige a la última; la URL con revisión es inmutable:
+
+\begin{lstlisting}[style=sh]
+curl -sk -i $HUB/pub/flexgrid/vocab/regions
+curl -sk -i $HUB/pub/flexgrid/vocab/regions/r/1
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+HTTP/2 303
+cache-control: no-cache
+location: /pub/flexgrid/vocab/regions/r/1
+
+HTTP/2 200
+cache-control: public, max-age=31536000, immutable
+content-type: text/turtle
+etag: "ce6cf20102d8ab14e39d8e9a5cfcbf1d14a4aa6831aceecc849b09914ea884e2"
+\end{lstlisting}
+
+\begin{ideaClave}
+Este patrón se repite en todo el hub: una URL \textbf{estable} que redirige y no se cachea, y una URL
+\textbf{inmutable} que se cachea para siempre y cuyo \cod{ETag} es el SHA-256 del contenido. Quien quiera «lo
+último» usa la primera; quien necesite reproducibilidad cita la segunda.
+\end{ideaClave}
+
+\begin{retos}
+\begin{enumerate}[leftmargin=*, itemsep=2pt]
+  \item Emite un token para un tercero, \texttt{tok -{}-sub eve}, e intenta crear un vocabulario. ¿Qué código devuelve?
+  \item Sube una segunda versión de \cod{regions.ttl} con una región más y comprueba que
+        \cod{/pub/flexgrid/vocab/regions} redirige ahora a \cod{r/2} mientras que \cod{r/1} sigue igual.
+  \item Intenta crear el \emph{namespace} \cod{flexgrid} otra vez, y luego uno llamado \cod{Flexgrid!}.
+\end{enumerate}
+\end{retos}

@@ -1,0 +1,259 @@
+\chapter{Arrancar el cliente y entender su estado}
+\label{ch:cliente}
+
+\cod{alexandria-client} se coloca delante del conector de un participante. Hace dos cosas, y conviene verlas
+por separado: \textbf{sincroniza} las versiones del \emph{namespace}, verificando cada firma, y \textbf{decide}
+sobre cada mensaje con lo que tiene en local. La segunda nunca depende de que el hub responda.
+
+\section{La configuración}
+
+\begin{lstlisting}[style=yaml]
+common_config:
+  connection:
+    tls:
+      ca: "file:var/tls/hub.crt"
+
+did_config:
+  type: "key"
+  hub_did: "HUB_DID_HERE"
+  did_ttl: "PT6H"
+
+observability:
+  events_sink: "file:var/client/events.jsonl"
+  audit_window: 100
+
+client_config:
+  trust:
+    hub: "https://127.0.0.1:18443"
+    namespace: "flexgrid"
+    context: "https://127.0.0.1:18443/pub/_vhub/v1/context.jsonld"
+  upstreams:
+    dsp: "http://127.0.0.1:18282/dsp"
+  listeners:
+    dsp-ingress: { bind: "127.0.0.1:19080" }
+    dsp-egress:  { bind: "127.0.0.1:19081" }
+    admin:       { bind: "127.0.0.1:19090" }
+  rules:
+    seed: "file:../../../../deploy/rules.seed.json"
+  default_action: "forward"
+  unknown_agreement: "forward"
+\end{lstlisting}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{4.4cm}Y@{}}
+\toprule
+\textbf{Campo} & \textbf{Significado} \\
+\midrule
+\cod{trust.hub} & URL del hub. \\
+\cod{trust.namespace} & El \emph{namespace} que sigue. Un cliente sigue exactamente uno. \\
+\cod{did_config.hub_did} & El DID cuyas claves se aceptan para firmar listados y manifiestos. Es el ancla de confianza. \\
+\cod{trust.context} & Contexto JSON-LD esperado en las credenciales. Con un hub \cod{self-hosted}, la URL del propio hub. \\
+\cod{connection.tls.ca} & Raíz TLS del hub. Solo en laboratorio, donde el certificado es autofirmado. \\
+\cod{upstreams.dsp} & El punto DSP del conector que se protege. \\
+\cod{listeners} & Dónde escucha cada tipo de tráfico. \\
+\cod{rules.seed} & Reglas iniciales. Solo se cargan si el almacén de reglas está vacío. \\
+\cod{default_action} & Qué hacer con una petición que ninguna regla cubre: \cod{forward} o \cod{reject}. \\
+\cod{unknown_agreement} & Qué hacer con una transferencia cuyo acuerdo nunca se capturó. \\
+\cod{events_sink} & Fichero de eventos, una línea JSON por evento. \\
+\bottomrule
+\end{tabularx}
+
+\begin{ideaClave}
+Toda la confianza del cliente cuelga de un solo dato: \cod{hub_did}. El cliente no confía en el servidor que le
+responde, ni en el certificado TLS, ni en la URL. Confía en que el listado y los manifiestos estén firmados por
+una clave de ese DID. Un hub suplantado no puede hacerle aceptar nada.
+\end{ideaClave}
+
+\subsection{Los cuatro \emph{listeners}}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{2.8cm}L{2.8cm}Y@{}}
+\toprule
+\textbf{\emph{Listener}} & \textbf{Tipo} & \textbf{Tráfico} \\
+\midrule
+\cod{dsp-ingress} & Proxy inverso & Mensajes DSP entrantes, hacia \cod{upstreams.dsp}. \\
+\cod{dsp-egress} & Proxy directo & Mensajes DSP salientes del conector hacia otros participantes. \\
+\cod{mgmt-ingress} & Proxy inverso & La API de gestión del conector. Opcional. \\
+\cod{admin} & API & Estado, reglas, acuerdos, auditoría, salud y métricas. Nunca se monta en un \emph{listener} de tráfico. \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+Peticiones y respuestas se reenvían byte a byte. Lo único que el cliente añade jamás es la cabecera
+\cod{VHub-Verdict}.
+
+\section{Arrancar}
+
+Primero se escribe el DID del hub en la configuración, y después se arranca con el mismo reloj:
+
+\begin{lstlisting}[style=sh]
+sed "s/HUB_DID_HERE/$(hubdid)/" client.yaml > client.local.yaml
+$BIN/alexandria-client -config client.local.yaml -state-dir var/client/state \
+  -clock-file clock > client.log 2>&1 &
+\end{lstlisting}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{4.4cm}Y@{}}
+\toprule
+\textbf{Opción} & \textbf{Para qué} \\
+\midrule
+\texttt{-config <ruta>} & Fichero de configuración. \\
+\texttt{-state-dir <dir>} & Estado persistente: continuidad, paquetes y acuerdos. \\
+\texttt{-clock-file <ruta>} & Reloj de fichero. Solo laboratorio. \\
+\texttt{-hub-ca <ruta>} & Alternativa a \cod{tls.ca} para dar la raíz TLS del hub. \\
+\cod{-log-level}, \cod{-log-format} & Sobrescriben la configuración de registro. \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+El registro cuenta lo que ha pasado en el primer segundo:
+
+\begin{lstlisting}[style=out]
+level=INFO msg="ruleset initialized" … component=rules revision=1 rules=16 seeded=true
+level=INFO msg="listener started" … listener=dsp-ingress bind=127.0.0.1:19080
+level=INFO msg="listener started" … listener=admin bind=127.0.0.1:19090
+level=INFO msg="listener started" … listener=dsp-egress bind=127.0.0.1:19081
+level=INFO msg="hub listing accepted" … component=sync sequence=1 versions=1 fresh_packages=1
+\end{lstlisting}
+
+Ha cargado las 16 reglas de la semilla, ha abierto sus \emph{listeners} y ha aceptado el listado de secuencia 1,
+descargando un paquete.
+
+\section{El estado}
+
+\begin{lstlisting}[style=sh]
+curl -s $ADMINAPI/status
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+{
+  "namespace": "https://127.0.0.1:18443/v1/namespaces/flexgrid",
+  "state": "Active",
+  "versions": [
+    { "version": "1.0.0", "manifest": "ni:///sha-256;cCYTVfOvidDw_pxQY5o1DHnHmfRjcSzDDAp3xLmxw2k",
+      "local_role": "scheduled" }
+  ],
+  "last_accepted_listing": {
+    "sequence": 1, "valid_from": "2026-09-01T10:00:00Z", "valid_until": "2026-09-02T10:00:00Z" },
+  "hub_did": { "did": "did:key:z6Mkkfgq…", "resolved_at": "2026-09-01T10:00:00Z" },
+  "rules": { "revision": 1, "count": 16 },
+  "clock_skew_estimate_ms": 0
+}
+\end{lstlisting}
+
+El estado es \cod{Active} y la 1.0.0 tiene el papel \cod{scheduled}: el cliente la conoce y tiene su paquete,
+pero todavía no está vigente. Estamos a 1 de septiembre y empieza a valer el 3.
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{2.4cm}Y@{}}
+\toprule
+\textbf{Papel local} & \textbf{Significado} \\
+\midrule
+\cod{scheduled} & Conocida, aún no vigente. \\
+\cod{head} & Vigente y la más reciente: contra ella se evalúa primero. \\
+\cod{in_force} & Vigente pero no la más reciente. Solo ocurre durante una ventana de gracia. \\
+\cod{retained} & Ya no vigente; su paquete se conserva porque un acuerdo la referencia. \\
+\bottomrule
+\end{tabularx}
+
+\subsection{La máquina de estados}
+
+El estado es una función pura del último listado aceptado y del instante local.
+
+\begin{center}
+\begin{tikzpicture}[font=\small,
+  st/.style={draw=alxNavy, fill=alxLightBlue, rounded corners=2pt, minimum height=9mm, minimum width=22mm, align=center},
+  bad/.style={st, fill=alxLightAmber, draw=alxAmber},
+  dead/.style={st, fill=alxLightRed, draw=alxRed},
+  lab/.style={font=\scriptsize, align=center},
+  arr/.style={-{Stealth[length=2.2mm]}, alxNavy, thick}]
+  \node[st, fill=alxSlate, draw=alxBorder] (on) at (0,0) {Onboarding};
+  \node[st] (ac) at (4.4,0) {Active};
+  \node[st] (tr) at (4.4,2.1) {Transition};
+  \node[bad] (dg) at (8.8,0) {Degraded};
+  \node[dead] (fc) at (13.2,0) {FailClosed};
+  \draw[arr] (on) -- node[lab, above]{primer\\listado} (ac);
+  \draw[arr] ([xshift=-3mm]ac.north) -- node[lab, left]{varias\\vigentes} ([xshift=-3mm]tr.south);
+  \draw[arr] ([xshift=3mm]tr.south) -- node[lab, right]{una\\vigente} ([xshift=3mm]ac.north);
+  \draw[arr] (ac) -- node[lab, above]{listado\\caducado} (dg);
+  \draw[arr] (dg) -- node[lab, above]{pasa\\\texttt{max\_staleness}} (fc);
+  \draw[arr, dashed] (fc.south) to[bend left=22] node[lab, below]{listado nuevo aceptado} (ac.south);
+\end{tikzpicture}
+\end{center}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{2.4cm}L{5.2cm}Y@{}}
+\toprule
+\textbf{Estado} & \textbf{Condición} & \textbf{Efecto en los gates} \\
+\midrule
+\cod{Onboarding} & Ningún listado aceptado todavía. & \cod{CLIENT_NOT_READY}. \\
+\cod{Active} & Listado válido, como mucho una versión vigente. & Clasificación normal. \\
+\cod{Transition} & Listado válido, varias versiones vigentes. & Clasificación normal; puede haber avisos. \\
+\cod{Degraded} & Listado caducado desde hace menos de \cod{max_staleness}. & Por gate, según \cod{degraded}: rechazar o seguir. \\
+\cod{FailClosed} & Listado caducado desde hace \cod{max_staleness} o más. & \cod{CLIENT_FAIL_CLOSED} en todos. \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+\texttt{GET /\allowbreak{}readyz} responde \cod{200} en \cod{Active}, \cod{Transition} y \cod{Degraded}, y \cod{503} en los otros
+dos. Es lo que debe consultar un orquestador.
+
+\section{La sincronización}
+
+El cliente sincroniza al arrancar y, como mínimo, cada \cod{sync_interval}. Tras un fallo reintenta al minuto.
+Cada pasada son seis fases, y cualquiera puede descartar el listado entero:
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{2.2cm}Y L{5.7cm}@{}}
+\toprule
+\textbf{Fase} & \textbf{Qué se comprueba} & \textbf{Códigos} \\
+\midrule
+Descarga & Se pide el listado. & \cod{SYNC_UNREACHABLE}, \cod{SYNC_NAMESPACE_NOT_FOUND} \\
+Forma y firma & Esquema, contexto, emisor y \emph{namespace} esperados; la firma verifica contra el DID del hub. & \cod{SYNC_MALFORMED}, \cod{SYNC_SIGNATURE_INVALID}, \cod{SYNC_DID_UNRESOLVABLE} \\
+Frescura & El instante local es anterior a \cod{validUntil}. & \cod{SYNC_EXPIRED} \\
+Continuidad & La secuencia no retrocede; con igual secuencia, bytes idénticos; las revocaciones no desaparecen; las fechas emitidas no cambian. & \cod{SYNC_ROLLBACK}, \cod{SYNC_SEQUENCE_CONFLICT}, \cod{SYNC_REVOCATION_DROPPED}, \cod{SYNC_DATES_CHANGED} \\
+Paquetes & Por cada versión nueva: el resumen del manifiesto coincide con el listado, su firma verifica y cada fichero coincide con su resumen. & \cod{SYNC_MANIFEST_DIGEST_MISMATCH}, \cod{SYNC_FILE_HASH_MISMATCH}, \cod{SYNC_FILE_SET_MISMATCH} \\
+Fechas & Cada registro respeta la ventana de propagación y la gracia mínima. & \cod{SYNC_DATES_INVALID} \\
+\bottomrule
+\end{tabularx}
+
+\begin{ideaClave}
+\textbf{Todo o nada.} Si una sola versión del listado falla, se descarta el listado completo y sigue en uso la
+instantánea anterior. Un paquete se usa entero o no se usa. Y un fallo de sincronización nunca cambia el estado
+por sí mismo: lo que lo cambia es el paso del tiempo sobre el último listado bueno.
+\end{ideaClave}
+
+\begin{lstlisting}[style=sh]
+curl -s $ADMINAPI/versions
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+[ { "version": "1.0.0", "class": "initial",
+    "published_at": "2026-09-01T10:00:00Z",
+    "new_content_from": "2026-09-03T10:00:00Z", "enforced_from": "2026-09-03T10:00:00Z",
+    "revoked_from": null, "state": "Scheduled", "retained": true, … } ]
+\end{lstlisting}
+
+\section{Mover el tiempo}
+
+Para que la 1.0.0 entre en vigor se avanza el reloj. El hub reemite el listado al ver que ha pasado más de medio
+\cod{ttl}, y el cliente lo recoge. \cod{syncat} mueve el reloj y espera a que el cliente haya aceptado un
+listado emitido en ese instante:
+
+\begin{lstlisting}[style=sh]
+syncat 2026-09-03T12:00:00Z
+curl -s $ADMINAPI/status | python3 -c "import json,sys;d=json.load(sys.stdin);print(d['state'], d['versions'], d['last_accepted_listing'])"
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+Active [{'version': '1.0.0', 'manifest': 'ni:///sha-256;cCYT…', 'local_role': 'head'}]
+       {'sequence': 2, 'valid_from': '2026-09-03T12:00:00Z', 'valid_until': '2026-09-04T12:00:00Z'}
+\end{lstlisting}
+
+La 1.0.0 es ahora \cod{head}, y la secuencia del listado ha subido a 2.
+
+\begin{trampaHabitual}[Mover el reloj no basta: hay que esperar al listado]
+Si se escribe una fecha en el fichero y se envía un mensaje en el mismo instante, el cliente puede decidir con
+el listado anterior, que para la hora nueva está caducado, y responder en estado \cod{Degraded}. Tras cada salto
+de reloj grande hay que esperar a la sincronización. Para eso existe \cod{syncat}.
+\end{trampaHabitual}
+
+\begin{retos}
+\begin{enumerate}[leftmargin=*, itemsep=2pt]
+  \item Arranca un segundo cliente con un \cod{hub_did} inventado y otro \cod{-state-dir}. ¿En qué estado se
+        queda? Busca el código en su fichero de eventos.
+  \item Consulta \cod{/readyz} y \cod{/healthz}. ¿En qué se diferencian?
+  \item Para el cliente, bórrale el directorio de estado y arráncalo otra vez. ¿Qué vuelve a hacer?
+\end{enumerate}
+\end{retos}

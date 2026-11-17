@@ -1,0 +1,181 @@
+\chapter{Chuleta}
+\label{ch:chuleta}
+
+\section{El laboratorio completo, de un tirón}
+
+Desde \cod{tutorial/manual/examples/lab}, con los binarios compilados. Es la secuencia exacta que se ha
+ejecutado para este documento.
+
+\begin{lstlisting}[style=sh]
+source env.sh
+clock 2026-09-01T09:00:00Z
+$BIN/fake-idp serve --addr 127.0.0.1:19400 --issuer $IDP --key idp.key --clock-file clock > idp.log 2>&1 &
+$BIN/fake-connector -listen 127.0.0.1:18282 > connector.log 2>&1 &
+$BIN/alexandria-server -config server.yaml -clock-file clock > server.log 2>&1 &
+sleep 3
+
+# Gobierno
+tok --sub ana --admin > admin.token
+tok --sub lucia > steward.token
+curl -sk -X POST $HUB/v1/namespaces -H "Authorization: Bearer $(cat admin.token)" \
+  -d '{"slug":"flexgrid","title":"Flexgrid Energy Data Space"}'
+curl -sk -X POST $HUB/v1/namespaces/flexgrid/stewards -H "Authorization: Bearer $(cat admin.token)" \
+  -d '{"iss":"http://127.0.0.1:19400","sub":"lucia","label":"Lucia (DSO)"}'
+
+# 1.0.0
+clock 2026-09-01T10:00:00Z
+publish ../dsl/flexgrid-1.0.0.yaml && approve '{}'
+
+# Cliente
+sed "s/HUB_DID_HERE/$(hubdid)/" client.yaml > client.local.yaml
+$BIN/alexandria-client -config client.local.yaml -state-dir var/client/state -clock-file clock > client.log 2>&1 &
+sleep 3
+setrule contract-request; setrule contract-agreement-in; setrule transfer-request
+syncat 2026-09-03T12:00:00Z && rows
+
+# 1.1.0, compatible
+syncat 2026-09-20T10:00:00Z
+publish ../dsl/flexgrid-1.1.0.yaml && approve '{}'
+syncat 2026-09-23T12:00:00Z && rows
+
+# 2.0.0, ruptura
+syncat 2026-10-01T10:00:00Z
+publish ../dsl/flexgrid-2.0.0.yaml && approve '{}'
+syncat 2026-10-10T12:00:00Z && rows
+post /negotiations/urn:uuid:7d2a9f10-ret-neg-0007/agreement a1-agreement
+syncat 2026-11-05T12:00:00Z && rows
+post /transfers/request t1-transfer
+
+# Revocación
+syncat 2026-11-10T00:00:00Z
+curl -sk -X POST "$HUB/v1/namespaces/flexgrid/versions/1.1.0:revoke" \
+  -H "Authorization: Bearer $(cat steward.token)" \
+  -d '{"justification":"Individual consumer profiling was ruled unlawful by the regulator"}'
+sleep 2; clock 2026-11-12T00:00:10Z; sleep 2
+post /transfers/request t1-transfer
+\end{lstlisting}
+
+\section{\texttt{alexandriac}}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{9cm}Y@{}}
+\toprule
+\textbf{Comando} & \textbf{Para qué} \\
+\midrule
+\texttt{alexandriac validate f.yaml} & Validar, sin escribir nada. \\
+\texttt{alexandriac compile -o out f.yaml} & Validar y generar los artefactos. \\
+\texttt{… -vendor vendor/\allowbreak{} bundle.yaml} & Resolver \emph{bindings} vendorizados. \\
+\texttt{… -previous v1.yaml v2.yaml} & Comprobar el versionado contra la versión anterior. \\
+\bottomrule
+\end{tabularx}
+
+\section{API del hub}
+
+\begin{longtable}{@{}L{8.8cm}L{6.6cm}@{}}
+\toprule
+\textbf{Operación} & \textbf{Quién} \\
+\midrule
+\endhead
+\texttt{POST /\allowbreak{}v1/\allowbreak{}namespaces} & Admin \\
+\texttt{POST /\allowbreak{}v1/\allowbreak{}namespaces/\allowbreak{}\{ns\}/\allowbreak{}stewards} & Admin \\
+\texttt{DELETE /\allowbreak{}v1/\allowbreak{}namespaces/\allowbreak{}\{ns\}/\allowbreak{}stewards/\allowbreak{}\{id\}} & Admin \\
+\texttt{GET /\allowbreak{}v1/\allowbreak{}events} & Admin \\
+\texttt{POST /\allowbreak{}v1/\allowbreak{}namespaces/\allowbreak{}\{ns\}/\allowbreak{}vocabularies} & Steward \\
+\texttt{PUT /\allowbreak{}v1/\allowbreak{}namespaces/\allowbreak{}\{ns\}/\allowbreak{}vocabularies/\allowbreak{}\{nombre\}/\allowbreak{}content} & Steward \\
+\texttt{POST /\allowbreak{}v1/\allowbreak{}namespaces/\allowbreak{}\{ns\}/\allowbreak{}vocabularies/\allowbreak{}\{nombre\}:refresh} & Steward \\
+\texttt{POST /\allowbreak{}v1/\allowbreak{}namespaces/\allowbreak{}\{ns\}/\allowbreak{}drafts} & Steward \\
+\texttt{PUT /\allowbreak{}v1/\allowbreak{}namespaces/\allowbreak{}\{ns\}/\allowbreak{}drafts/\allowbreak{}\{id\}}, con \cod{If-Match} & Steward \\
+\texttt{POST /\allowbreak{}v1/\allowbreak{}namespaces/\allowbreak{}\{ns\}/\allowbreak{}drafts/\allowbreak{}\{id\}:validate} & Steward \\
+\texttt{POST /\allowbreak{}v1/\allowbreak{}namespaces/\allowbreak{}\{ns\}/\allowbreak{}drafts/\allowbreak{}\{id\}:propose} & Steward \\
+\texttt{POST /\allowbreak{}v1/\allowbreak{}namespaces/\allowbreak{}\{ns\}/\allowbreak{}candidates/\allowbreak{}\{id\}:approve} & Steward \\
+\texttt{POST /\allowbreak{}v1/\allowbreak{}namespaces/\allowbreak{}\{ns\}/\allowbreak{}candidates/\allowbreak{}\{id\}:reject} & Steward \\
+\texttt{POST /\allowbreak{}v1/\allowbreak{}namespaces/\allowbreak{}\{ns\}/\allowbreak{}versions/\allowbreak{}\{v\}:revoke} & Steward \\
+\texttt{GET /\allowbreak{}v1/\allowbreak{}namespaces/\allowbreak{}\{ns\}/\allowbreak{}events} & Steward \\
+\texttt{GET /\allowbreak{}v1/\allowbreak{}namespaces/\allowbreak{}\{ns\}/\allowbreak{}versions} & Cualquiera: el listado firmado \\
+\texttt{GET /\allowbreak{}v1/\allowbreak{}namespaces/\allowbreak{}\{ns\}/\allowbreak{}versions/\allowbreak{}\{v\}} & Cualquiera: el registro firmado \\
+\texttt{GET /\allowbreak{}pub/\allowbreak{}…} & Cualquiera \\
+\bottomrule
+\end{longtable}
+
+\section{API de administración del cliente}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{5.6cm}Y@{}}
+\toprule
+\textbf{Ruta} & \textbf{Para qué} \\
+\midrule
+\texttt{GET /\allowbreak{}status} & Estado, versiones locales con su papel, último listado, DID del hub y revisión de reglas. \\
+\texttt{GET /\allowbreak{}versions} & Registros conocidos con su estado y si se conserva el paquete. \\
+\texttt{GET /\allowbreak{}rules} & El conjunto de reglas; su revisión es el \cod{ETag}. \\
+\texttt{PUT /\allowbreak{}rules}, \texttt{POST /\allowbreak{}rules} & Reemplazar el conjunto o añadir una regla. Con \cod{If-Match}. \\
+\cod{GET}, \cod{PUT}, \texttt{DELETE /\allowbreak{}rules/\allowbreak{}\{id\}} & Leer, reemplazar o borrar una regla. \\
+\texttt{POST /\allowbreak{}rules:explain} & Qué haría el proxy con una petición, sin efectos. \\
+\texttt{GET /\allowbreak{}agreements/\allowbreak{}\{id\}} & Un acuerdo capturado y si es utilizable. \\
+\texttt{GET /\allowbreak{}audit/\allowbreak{}reports/\allowbreak{}latest} & Último informe de auditoría pasiva. \\
+\texttt{GET /\allowbreak{}healthz}, \texttt{GET /\allowbreak{}readyz} & Vida y disponibilidad. \\
+\texttt{GET /\allowbreak{}metrics} & OpenMetrics. \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+La API de administración no tiene autenticación: su \emph{listener} no debe ser alcanzable desde fuera.
+
+\section{Códigos vistos en este tutorial}
+
+\begin{longtable}{@{}L{6.9cm}L{2.5cm}L{6cm}@{}}
+\toprule
+\textbf{Código} & \textbf{Quién} & \textbf{Cuándo} \\
+\midrule
+\endhead
+\cod{API_UNAUTHENTICATED} & Hub, 401 & Operación protegida sin token. \\
+\cod{API_FORBIDDEN_ROLE} & Hub, 403 & Token válido sin el papel necesario. \\
+\cod{VOCAB_UNPARSEABLE} & Hub, 422 & Contenido que no es del tipo declarado. \\
+\cod{VERSION_BUMP_TOO_LOW} & Compilador & El salto de versión no cubre los cambios. \\
+\cod{TERM_RETIRED_WITHOUT_DEPRECATION} & Compilador & Retirar sin haber marcado obsoleto antes. \\
+\cod{TERM_REMOVED} & Compilador & Un término ha desaparecido. \\
+\cod{PROFILE_VERSION_CHANGED} & Compilador & Misma versión, otro contenido. \\
+\cod{GATE_SHACL_ONLY} & Compilador, aviso & Gate obligatorio cubierto solo por \cod{shacl}. \\
+\cod{BINDING_UNRESOLVED} & Compilador & Rango sin versión, o falta la copia vendorizada. \\
+\cod{DATES_GRACE_ON_COMPATIBLE} & Hub, 422 & Gracia en una versión compatible. \\
+\cod{DATES_GRACE_TOO_SHORT} & Hub, 422 & Gracia por debajo de la mínima. \\
+\cod{DATES_JUSTIFICATION_REQUIRED} & Hub, 422 & Revocación sin justificación. \\
+\cod{DATES_REVOKE_LEAVES_NO_HEAD} & Hub, 422 & Revocar la única versión vigente. \\
+\cod{NO_VERSION_IN_FORCE} & Cliente & Aún no hay versión vigente. \\
+\cod{VERDICT_VIOLATION} & Cliente & El mensaje no conforma con ninguna versión vigente. \\
+\cod{VERDICT_NOT_IN_HEAD} & Cliente & Conforma con una versión anterior aún vigente. \\
+\cod{CONTEXT_NOT_IN_PACKAGE} & Cliente & Contexto JSON-LD ajeno al paquete. \\
+\cod{AGREEMENT_REVOCATION_SCHEDULED} & Cliente, evento & La versión de un acuerdo va a revocarse. \\
+\cod{AGREEMENT_VERSION_REVOKED} & Cliente & Transferencia bajo un acuerdo de versión revocada. \\
+\cod{SYNC_UNREACHABLE} & Cliente, evento & El hub no responde. \\
+\cod{CLIENT_DEGRADED_REJECT} & Cliente & Listado caducado y gate en \cod{reject}. \\
+\cod{CLIENT_FAIL_CLOSED} & Cliente & Listado caducado más de \cod{max_staleness}. \\
+\cod{POC_EVAL_UNSUPPORTED_ROLE} & Cliente, aviso & Artefacto \cod{shacl} que no se ejecuta. \\
+\bottomrule
+\end{longtable}
+
+\section{Lo que conviene recordar}
+
+\begin{enumerate}[leftmargin=*, itemsep=3pt]
+  \item \textbf{Un \emph{binding} obligatorio necesita un \cod{json-schema} en cada gate.} Con solo \cod{shacl}
+        compila, se publica y no valida nada; el compilador avisa con \cod{GATE_SHACL_ONLY}.
+  \item \textbf{Una regla valida un nodo.} Para la política de una petición de contrato, \texttt{select: /\allowbreak{}offer}; y
+        entonces esa regla no puede validar la envoltura.
+  \item \textbf{El artefacto \cod{shacl} activa la comprobación de contextos.} Si lo enlazas, todo contexto que
+        citen los mensajes tiene que estar en el paquete con su \cod{url}, incluido el de DSP.
+  \item \textbf{Nada se borra y nada publicado cambia.} Obsoleto, luego retirado; y una errata es una versión
+        de parche.
+  \item \textbf{Retirar no rompe acuerdos; revocar sí}, con dos días de aviso.
+  \item \textbf{Con reloj de fichero, todo espera al reloj}: los tokens, la reemisión del listado y los
+        reintentos.
+\end{enumerate}
+
+\section{Recompilar este documento}
+
+Las fuentes están en \cod{tutorial/manual/}: \cod{main.tex} y un fichero por capítulo en \cod{chapters/}.
+
+\begin{lstlisting}[style=sh]
+cd tutorial/manual
+make            # con latexmk, tectonic o pdflatex en el PATH
+make docker     # con la imagen texlive/texlive:latest-small
+\end{lstlisting}
+
+La imagen \cod{latest-small} no trae \cod{tcolorbox}, \cod{titlesec} ni \cod{xurl}; el objetivo \cod{docker}
+los instala con \cod{tlmgr} antes de compilar.

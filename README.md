@@ -63,6 +63,7 @@ alexandria/
 ├── conformance/              # Conformance battery, negative corpus (N-*), F6 E2E, demo & trace generator
 ├── deploy/                   # server.yaml/.json, client.yaml/.json, rules.seed.json, fake-idp/ & fake-connector/
 ├── docs/                     # Documentation portal (Fumadocs + Next.js)
+├── examples/                 # Deployment examples: client as L7 proxy (proxy/) and Envoy + client as validator (envoy/)
 ├── internal/
 │   ├── archtest/             # Hexagonal architecture, DP-1 dependency & DP-8 clock enforcement tests
 │   ├── client/               # Bounded context: alexandria-client (module.go, domain, app, config, adapters)

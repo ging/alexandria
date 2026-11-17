@@ -1,4 +1,4 @@
-.PHONY: all build build-gui fmt lint test conformance e2e demo trace \
+.PHONY: all build build-gui fmt lint test conformance e2e demo trace example-proxy example-envoy \
 	tutorial tutorial-exec tutorial\:exec \
 	docs-dev docs\:dev docs-build docs\:build \
 	gui-dev gui\:dev gui-build gui\:build \
@@ -42,6 +42,13 @@ e2e:
 
 demo: build
 	go run ./conformance/demo -bin-dir $(BIN_DIR)
+
+# Deployment examples: the client as L7 proxy, and Envoy as proxy with the client as validator (needs envoy or Docker).
+example-proxy: build
+	go run ./examples/proxy -bin-dir $(BIN_DIR)
+
+example-envoy: build
+	go run ./examples/envoy -bin-dir $(BIN_DIR)
 
 trace:
 	go run ./conformance/trace

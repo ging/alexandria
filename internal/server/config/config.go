@@ -414,7 +414,7 @@ func (c *Server) applyDefaults() {
 	set(&c.Auth.JWKSCache, "PT10M")
 	set(&c.Vocab.ProxyTimeout, "PT30S")
 	set(&c.ClockSkew, "PT5S")
-	set(&c.Compiler, "poc")
+	set(&c.Compiler, "dsl")
 	set(&c.Observability.LogLevel, "info")
 	set(&c.Observability.LogFormat, "auto")
 	if len(c.Auth.Algorithms) == 0 {

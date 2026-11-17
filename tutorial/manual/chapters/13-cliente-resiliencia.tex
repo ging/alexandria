@@ -1,0 +1,286 @@
+\chapter{Cuando algo falla, y dónde se despliega}
+\label{ch:resiliencia}
+
+\section{El hub desaparece}
+
+El cliente decide con estado local, así que un hub caído no detiene el tráfico. Lo que cambia con el tiempo es
+cuánto se fía el cliente de lo último que supo.
+
+Se para el hub, y solo el hub:
+
+\begin{lstlisting}[style=sh]
+kill $(lsof -nP -iTCP:18443 -sTCP:LISTEN -t)
+\end{lstlisting}
+
+\subsection{Primera fase: no pasa nada}
+
+El último listado aceptado vale hasta el 13 de noviembre a las 00:00:05. Doce horas antes:
+
+\begin{lstlisting}[style=sh]
+clock 2026-11-12T12:00:00Z; sleep 2
+curl -s $ADMINAPI/status | python3 -c "import json,sys;d=json.load(sys.stdin);print(d['state'], d['last_accepted_listing'])"
+row m1-forecast
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+Active {'sequence': 15, 'valid_from': '2026-11-12T00:00:05Z', 'valid_until': '2026-11-13T00:00:05Z'}
+m1-forecast   HTTP/1.1 200 OK | -
+\end{lstlisting}
+
+El estado sigue siendo \cod{Active}. El fallo de sincronización queda registrado, pero no cambia nada:
+
+\begin{lstlisting}[style=json]
+{"type":"vhub.sync","ts":"2026-11-12T12:00:00Z","code":"SYNC_UNREACHABLE","severity":"error",
+ "detail":"Get \"https://127.0.0.1:18443/v1/namespaces/flexgrid/versions\": dial tcp 127.0.0.1:18443: connect: connection refused"}
+\end{lstlisting}
+
+\subsection{Segunda fase: \texttt{Degraded}}
+
+Pasada la caducidad del listado:
+
+\begin{lstlisting}[style=sh]
+clock 2026-11-13T06:00:00Z; sleep 2
+row m1-forecast -b
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+m1-forecast   HTTP/1.1 400 Bad Request | VHub-Verdict: violation;gate=policy_intake;code="CLIENT_DEGRADED_REJECT";rule="contract-request"
+    {"@context":["https://w3id.org/dspace/2025/1/context.jsonld"],"@type":"ContractNegotiationError",
+     "code":"CLIENT_DEGRADED_REJECT", … ,"reason":["CLIENT_DEGRADED_REJECT"]}
+\end{lstlisting}
+
+El estado es \cod{Degraded} y \cod{/readyz} sigue respondiendo \cod{200}. Un mensaje que ayer era válido hoy se
+rechaza, y el código explica que no es culpa del mensaje.
+
+Es exactamente lo que el \cod{SpaceProfile} pidió en el capítulo~\ref{ch:spaceprofile}:
+
+\begin{lstlisting}[style=yaml]
+  degraded:
+    policy_intake: reject
+    dsp_message: continue
+\end{lstlisting}
+
+Sin contacto con el hub, Flexgrid deja de admitir \textbf{políticas nuevas}, porque podría haberse revocado
+algo sin que el cliente lo sepa. Pero un gate con \cod{continue} sigue clasificando con normalidad. Una
+transferencia mal formada lo demuestra, porque se sigue evaluando contra el esquema de DSP:
+
+\begin{lstlisting}[style=out]
+t2-transfer-no-format   HTTP/1.1 400 Bad Request | VHub-Verdict: violation;gate=dsp_message;code="VERDICT_VIOLATION";rule="transfer-request", violation;gate=agreement_admission;code="AGREEMENT_VERSION_REVOKED";rule="transfer-request"
+\end{lstlisting}
+
+La cabecera lleva aquí dos elementos, uno por gate. Cuando una regla tiene varios gates se toma la acción más
+restrictiva, y cada gate que no es \ok\ aporta su veredicto.
+
+\begin{ideaClave}
+\cod{degraded} es una decisión de negocio que toma la autoridad, no cada participante: viaja en el manifiesto
+firmado. Responde a la pregunta «si no sé si las reglas han cambiado, ¿qué es peor: parar o seguir?», y la
+respuesta puede ser distinta para cada gate.
+\end{ideaClave}
+
+\subsection{Tercera fase: \texttt{FailClosed}}
+
+Pasado \cod{max_staleness}, siete días, desde la caducidad:
+
+\begin{lstlisting}[style=sh]
+clock 2026-11-21T06:00:00Z; sleep 2
+row m1-forecast
+curl -s -o /dev/null -w '%{http_code}\n' $ADMINAPI/readyz
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+m1-forecast   HTTP/1.1 400 Bad Request | VHub-Verdict: violation;gate=policy_intake;code="CLIENT_FAIL_CLOSED";rule="contract-request"
+503
+\end{lstlisting}
+
+Ahora todos los gates rechazan, digan lo que digan sus ajustes, y \cod{/readyz} pasa a \cod{503}. Los cambios de
+estado quedan como eventos:
+
+\begin{lstlisting}[style=json]
+{"type":"vhub.state","ts":"2026-11-13T06:00:00Z","severity":"info","detail":"state changed","from":"Active","to":"Degraded"}
+{"type":"vhub.state","ts":"2026-11-21T06:00:00Z","severity":"info","detail":"state changed","from":"Degraded","to":"FailClosed"}
+\end{lstlisting}
+
+\subsection{La recuperación}
+
+\begin{lstlisting}[style=sh]
+$BIN/alexandria-server -config server.yaml -clock-file clock >> server.log 2>&1 &
+clock 2026-11-21T06:10:00Z; sleep 3
+curl -s $ADMINAPI/status | python3 -c "import json,sys;d=json.load(sys.stdin);print(d['state'], d['last_accepted_listing'])"
+row m1-forecast
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+Active {'sequence': 16, 'valid_from': '2026-11-21T06:00:00Z', 'valid_until': '2026-11-22T06:00:00Z'}
+m1-forecast   HTTP/1.1 200 OK | -
+\end{lstlisting}
+
+Al volver, el hub emite un listado nuevo, de secuencia 16. El cliente reintenta un minuto después del último
+fallo, lo acepta y vuelve a \cod{Active} sin intervención. No hay que reiniciar nada.
+
+\begin{trampaHabitual}[Con reloj de fichero, el reintento también espera al reloj]
+El reintento se cuenta en tiempo del reloj, no de pared. Si arrancas el hub y no mueves el fichero, el cliente
+no reintenta nunca: para él no ha pasado ni un segundo. Por eso el comando anterior avanza diez minutos.
+\end{trampaHabitual}
+
+\begin{center}
+\begin{tikzpicture}[font=\scriptsize, x=1.45cm, y=1cm]
+  \draw[alxBorder, -{Stealth[length=2mm]}] (0,0) -- (9.6,0);
+  \fill[alxTeal!35] (0,0.15) rectangle (3,0.75);    \node at (1.5,0.45) {\texttt{Active}};
+  \fill[alxAmber!40] (3,0.15) rectangle (7,0.75);   \node at (5,0.45) {\texttt{Degraded}};
+  \fill[alxRed!30] (7,0.15) rectangle (8.6,0.75);   \node at (7.8,0.45) {\texttt{FailClosed}};
+  \fill[alxTeal!35] (8.6,0.15) rectangle (9.5,0.75);
+  \draw (1,0.1) -- (1,-0.1) node[below] {hub cae};
+  \draw (3,0.1) -- (3,-0.1) node[below] {\texttt{validUntil}};
+  \draw (7,0.1) -- (7,-0.1) node[below] {+ \texttt{max\_staleness}};
+  \draw (8.6,0.1) -- (8.6,-0.1) node[below] {listado nuevo};
+  \node[above] at (5,0.78) {por gate: \texttt{continue} o \texttt{reject}};
+  \node[above] at (7.8,0.78) {todo se rechaza};
+\end{tikzpicture}
+\end{center}
+
+\section{Cuando el hub responde, pero mal}
+
+Un hub que no contesta es un problema de disponibilidad. Uno que contesta algo incorrecto es un problema de
+seguridad, y el cliente lo trata con más dureza: descarta el listado entero y sigue con la instantánea anterior.
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{6.7cm}Y@{}}
+\toprule
+\textbf{Código} & \textbf{Qué ha visto el cliente} \\
+\midrule
+\cod{SYNC_SIGNATURE_INVALID} & La firma del listado no verifica contra el DID del hub. \\
+\cod{SYNC_ROLLBACK} & Una secuencia menor que la última aceptada: alguien sirve un listado antiguo. \\
+\cod{SYNC_SEQUENCE_CONFLICT} & La misma secuencia con otro contenido. \\
+\cod{SYNC_REVOCATION_DROPPED} & Una revocación que estaba ha desaparecido. \\
+\cod{SYNC_DATES_CHANGED} & Una fecha ya emitida ha cambiado. \\
+\cod{SYNC_MANIFEST_DIGEST_MISMATCH}, \cod{SYNC_FILE_HASH_MISMATCH} & Un paquete o un fichero no coincide con su resumen. \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+Estos casos no se han provocado en este tutorial, porque exigen un hub que mienta. La batería de conformidad
+del repositorio tiene un caso negativo mínimo para cada uno:
+
+\begin{lstlisting}[style=sh]
+go test ./conformance -run 'TestN_' -v
+\end{lstlisting}
+
+\section{Mensajes problemáticos}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{5.5cm}L{5.9cm}C{2.2cm}@{}}
+\toprule
+\textbf{Mensaje} & \textbf{Código, con la regla en \texttt{enforce}} & \textbf{¿Ejecutado?} \\
+\midrule
+Política fuera del esquema & \cod{VERDICT_VIOLATION} & \si \\
+Contexto JSON-LD que no está en el paquete & \cod{CONTEXT_NOT_IN_PACKAGE} & \si \\
+Envoltura DSP incompleta & \cod{VERDICT_VIOLATION} en \cod{dsp_message} & \si \\
+Ninguna versión vigente todavía & \cod{NO_VERSION_IN_FORCE} & \si \\
+Acuerdo de una versión revocada & \cod{AGREEMENT_VERSION_REVOKED} & \si \\
+Listado caducado, gate en \cod{reject} & \cod{CLIENT_DEGRADED_REJECT} & \si \\
+Listado caducado más de \cod{max_staleness} & \cod{CLIENT_FAIL_CLOSED} & \si \\
+Cuerpo que no es JSON, o sin el nodo de \cod{select} & \cod{MESSAGE_UNPARSEABLE} & no \\
+Petición sin regla, con \texttt{default\_action: reject} & \cod{RULE_DEFAULT_REJECT} & no \\
+\bottomrule
+\end{tabularx}
+
+\section{Dos formas de desplegar el cliente}
+
+El cliente decide sobre cada mensaje. \emph{Quién reenvía} el mensaje es una decisión de despliegue, que se
+elige con \cod{mode}.
+
+\begin{center}
+\begin{tikzpicture}[font=\small, node distance=7mm and 13mm,
+  box/.style={draw=alxNavy, fill=alxLightBlue, rounded corners=2pt, minimum height=9mm, minimum width=29mm, align=center},
+  ext/.style={draw=alxBorder, fill=alxSlate, rounded corners=2pt, minimum height=9mm, minimum width=24mm, align=center},
+  arr/.style={-{Stealth[length=2.2mm]}, alxNavy, thick}]
+  \node[ext] (p1) {Contraparte};
+  \node[box, right=of p1] (c1) {\texttt{alexandria-client}};
+  \node[ext, right=of c1] (k1) {Conector};
+  \draw[arr] (p1) -- (c1); \draw[arr] (c1) -- (k1);
+  \node[left=3mm of p1, anchor=east] {\texttt{proxy}};
+
+  \node[ext, below=17mm of p1] (p2) {Contraparte};
+  \node[box, right=of p2, fill=alxSlate, draw=alxBorder] (e2) {Envoy};
+  \node[ext, right=of e2] (k2) {Conector};
+  \node[box, below=8mm of e2] (c2) {\texttt{alexandria-client}};
+  \draw[arr] (p2) -- (e2); \draw[arr] (e2) -- (k2);
+  \draw[arr] (e2) to[bend right=18] node[left]{\scriptsize\texttt{ext\_authz}} (c2);
+  \draw[arr] (c2) to[bend right=18] node[right]{\scriptsize 200 o rechazo} (e2);
+  \node[left=3mm of p2, anchor=east] {\texttt{validator}};
+\end{tikzpicture}
+\end{center}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{3.3cm}Y Y@{}}
+\toprule
+ & \textbf{\texttt{mode: proxy}}, por defecto & \textbf{\texttt{mode: validator}} \\
+\midrule
+Quién reenvía & El cliente. & Un proxy externo, como Envoy. \\
+Papel del cliente & Decide y reenvía. & Solo decide; nunca toca el conector. \\
+\cod{upstreams} & Obligatorio. & No se usa. \\
+\emph{Listeners} de tráfico & Proxies inverso y directo. & Puntos de consulta a los que llama el proxy. \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+El camino de decisión es el mismo código en los dos modos: reglas, gates, clasificación, cabecera, eventos,
+métricas y API de administración. En modo \cod{validator}, el cliente responde \cod{200} para permitir y el
+rechazo habitual, con cuerpo y cabecera, para denegar. Es el contrato del filtro \cod{ext_authz} de Envoy.
+
+\begin{lstlisting}[style=yaml]
+mode: validator
+trust:
+  hub: "https://127.0.0.1:8443"
+  namespace: "demo"
+  hub_did: "did:key:z6Mk…"
+listeners:
+  dsp-ingress: { bind: "127.0.0.1:9085" }   # solo debe alcanzarlo el proxy
+  admin: { bind: "127.0.0.1:9090" }
+rules:
+  seed: "file:deploy/rules.seed.json"
+events:
+  sink: "file:var/client/events.jsonl"
+\end{lstlisting}
+
+Lo que cambia en modo \cod{validator}, porque el cliente ya no ve la respuesta del conector:
+
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item La \textbf{captura de acuerdos} ocurre cuando el mensaje se permite, no cuando el conector responde
+        \cod{2xx}.
+  \item Las reglas con \cod{validate_response} no se evalúan.
+  \item El \textbf{reenvío byte a byte} pasa a ser responsabilidad del proxy.
+  \item La \textbf{disponibilidad} es un ajuste del proxy: el ejemplo de Envoy cierra el paso si el validador
+        no responde.
+\end{itemize}
+
+El repositorio trae un ejemplo ejecutable de cada topología, que levanta su propio laboratorio y repite el
+escenario F6 comprobando la misma tabla de 29 veredictos:
+
+\begin{lstlisting}[style=sh]
+go run ./examples/proxy -bin-dir bin
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+…
+2026-11-12T00:00:10Z F6.4 A1 transfer    400 AGREEMENT_VERSION_REVOKED    violation;gate=agreement_admission;code="AGREEMENT_VERSION_REVOKED";rule="transfer-request"
+F6 scenario completed: 29/29 rows verified.
+\end{lstlisting}
+
+\begin{notaPractica}[Qué no se ha ejecutado]
+\texttt{go run ./\allowbreak{}examples/\allowbreak{}envoy} necesita Envoy en el \cod{PATH} o descargar su imagen de Docker, y no se ha
+ejecutado para este documento. Lo que se dice aquí del modo \cod{validator} procede de \cod{examples/README.md},
+de \cod{examples/envoy/README.md} y del código de configuración.
+\end{notaPractica}
+
+\section{Cerrar el laboratorio}
+
+\begin{lstlisting}[style=sh]
+for port in 18443 19400 18282 19090; do kill $(lsof -nP -iTCP:$port -sTCP:LISTEN -t) 2>/dev/null; done
+rm -rf var clock *.token *.log last-candidate.* client.local.yaml idp.key
+\end{lstlisting}
+
+Borrar \cod{var/} elimina la base de datos, las claves y el estado del cliente. El siguiente arranque genera un
+DID nuevo.
+
+\begin{retos}
+\begin{enumerate}[leftmargin=*, itemsep=2pt]
+  \item Cambia \cod{degraded.policy_intake} a \cod{continue}, publícalo como una versión nueva y repite la caída
+        del hub. ¿Qué cambia en la segunda fase? ¿Y en la tercera?
+  \item Con el hub caído, intenta cambiar una regla del cliente. ¿Depende del hub?
+  \item Ejecuta \texttt{go run ./\allowbreak{}examples/\allowbreak{}proxy -keep} y envía \cod{m1-forecast} a su \emph{ingress}. ¿Por qué se
+        rechaza con ese laboratorio y no con el tuyo?
+\end{enumerate}
+\end{retos}

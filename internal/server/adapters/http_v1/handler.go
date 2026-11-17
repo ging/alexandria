@@ -311,14 +311,18 @@ func (h Handler) replaceDraft(w http.ResponseWriter, r *http.Request, p *domain.
 	h.draftOut(w, http.StatusOK, d, err)
 }
 
-// draftOut writes a draft with its ETag.
+// draftOut writes a draft with its ETag, preserving JSON objects raw and encoding YAML streams as strings.
 func (h Handler) draftOut(w http.ResponseWriter, status int, d domain.Draft, err error) {
 	if err == nil {
 		w.Header().Set("ETag", d.ETag)
 	}
 	doc := map[string]any{"id": h.nsIRI(d.Namespace) + "/drafts/" + d.ID, "namespace": h.nsIRI(d.Namespace), "rev": d.Rev}
-	if json.Valid(d.Doc) {
+	trimmed := strings.TrimSpace(string(d.Doc))
+	switch {
+	case strings.HasPrefix(trimmed, "{") && json.Valid(d.Doc):
 		doc["document"] = json.RawMessage(d.Doc)
+	case len(d.Doc) > 0:
+		doc["document"] = string(d.Doc)
 	}
 	h.out(w, status, h.doc(doc), err)
 }

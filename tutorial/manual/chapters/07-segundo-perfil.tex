@@ -1,0 +1,188 @@
+\chapter{Un segundo perfil: uso secundario de datos de salud}
+\label{ch:salud}
+
+El perfil de medida es deliberadamente regular. Este segundo ejemplo, \cod{examples/dsl/health-0.3.0.yaml},
+enseña las piezas del lenguaje que aquel no necesita. El dominio es el uso secundario de datos de salud: un
+organismo de acceso emite un permiso de datos, y los datos se tratan en un entorno seguro, seudonimizados y con
+finalidades tasadas.
+
+\section{Las piezas nuevas}
+
+\subsection{Un operador propio}
+
+Los doce operadores de ODRL comparan valores. Aquí hace falta decir algo distinto: que un uso está \emph{cubierto}
+por un permiso. Eso es un operador nuevo:
+
+\begin{lstlisting}[style=yaml]
+  - id: withinPermit
+    kind: operator
+    label: { en: Within permit }
+    definition: { en: The left operand is covered by the data permit given as right operand. }
+\end{lstlisting}
+
+Y se usa en una firma citándolo por su CURIE, junto a un operador estándar:
+
+\begin{lstlisting}[style=yaml]
+  - id: dataPermit
+    kind: left_operand
+    label: { en: Data permit, es: Permiso de datos }
+    definition: { en: Data permit issued by the health data access body that covers the use. }
+    signature:
+      datatype: xsd:anyURI
+      operators: [eq, hds:withinPermit]
+      allow_reference: true
+\end{lstlisting}
+
+El compilador comprueba que \cod{hds:withinPermit} exista y sea de tipo \cod{operator}. Si no, falla con
+\cod{SIG_OPERATOR_UNKNOWN}.
+
+\subsection{Referencias en el operando derecho}
+
+\texttt{allow\_reference: true} permite que la restricción no lleve un valor, sino una referencia a un recurso
+externo con \cod{rightOperandReference}. Tiene sentido para un permiso de datos, que es un documento que vive en
+otro sitio. La \emph{shape} generada pierde entonces dos restricciones: el operando derecho deja de ser
+obligatorio y la referencia deja de estar prohibida. Que haya al menos uno de los dos lo exige una
+\emph{shape} general, \cod{gen:ConstraintShape}, igual que hace el esquema.
+
+\begin{lstlisting}[style=ttl]
+gen:Sig_dataPermit a sh:NodeShape ;
+  sh:targetSubjectsOf odrl:leftOperand ;
+  sh:message "Constraint hds:dataPermit: signature not respected." ;
+  sh:or (
+    [ sh:not [ sh:path odrl:leftOperand ; sh:hasValue hds:dataPermit ] ]
+    [
+      sh:property [ sh:path odrl:operator ; sh:minCount 1 ; sh:maxCount 1 ; sh:in ( odrl:eq hds:withinPermit ) ] ;
+      sh:property [ sh:path odrl:rightOperand ; sh:maxCount 1 ; sh:nodeKind sh:Literal ; sh:datatype xsd:anyURI ]
+    ]
+  ) .
+\end{lstlisting}
+
+\subsection{Una enumeración de literales}
+
+En el perfil de medida las enumeraciones eran de IRI. Cuando los valores no son CURIE, el compilador deduce que
+son literales:
+
+\begin{lstlisting}[style=yaml]
+  - id: environment
+    kind: left_operand
+    label: { en: Processing environment, es: Entorno de tratamiento }
+    definition: { en: Kind of environment in which the data may be processed. }
+    signature:
+      values: [secure-processing-environment, federated-node]
+      operators: [eq]
+\end{lstlisting}
+
+En la política, el valor es entonces una cadena: \texttt{"rightOperand": "federated-node"}.
+
+\begin{notaPractica}[¿IRI o literal?]
+Una enumeración de IRI obliga a definir cada valor como término, con etiqueta y definición, y eso es lo que la
+hace interoperable: otro espacio puede adoptar tus valores. Una enumeración de literales es más rápida de
+escribir y no significa nada fuera de tu esquema. Para finalidades, regiones o categorías de datos, IRI. Para
+etiquetas internas, literales.
+\end{notaPractica}
+
+\subsection{Una subclase de regla}
+
+\begin{lstlisting}[style=yaml]
+  - id: SecondaryUsePermission
+    kind: rule_subclass
+    subclass_of: odrl:Permission
+    label: { en: Secondary use permission }
+    definition: { en: A permission granted under a data permit for secondary use. }
+\end{lstlisting}
+
+Los tres tipos \cod{*_subclass} exigen \cod{subclass_of} y generan una clase OWL:
+
+\begin{lstlisting}[style=ttl]
+hds:SecondaryUsePermission
+    a owl:Class ;
+    rdfs:subClassOf odrl:Permission ;
+    rdfs:isDefinedBy <https://salud.example/odrl/profile/secondary-use> ;
+    rdfs:label "Secondary use permission"@en ;
+    skos:definition "A permission granted under a data permit for secondary use."@en .
+\end{lstlisting}
+
+\subsection{Una lista abierta}
+
+\begin{lstlisting}[style=yaml]
+rules:
+  actions: closed
+  left_operands: open
+\end{lstlisting}
+
+Las acciones siguen cerradas, pero una política puede llevar operandos izquierdos que el perfil no conoce. Los
+que sí conoce se siguen validando contra su firma. En \cod{shapes.ttl} desaparece \cod{gen:LeftOperandShape}, y
+en \cod{schema.json} desaparece la enumeración de \cod{leftOperand}.
+
+Es la opción razonable para un perfil joven, versión \cod{0.3.0}, que todavía no sabe qué restricciones va a
+necesitar. Cerrar la lista más adelante será un cambio mayor.
+
+\section{Los avisos}
+
+\begin{lstlisting}[style=sh]
+../../../bin/alexandriac validate dsl/health-0.3.0.yaml
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+warning SIG_OPERATOR_TYPE            health-0.3.0.yaml#1:28 /adopted/left_operands/1/signature/operators/0 lteq on xsd:duration is only partially ordered
+warning ACTION_INCLUDED_IN_MISSING   health-0.3.0.yaml#1:37 /terms/1 action reidentify has no included_in
+ok: 1 documents valid
+\end{lstlisting}
+
+Los dos son deliberados y los dos merecen leerse.
+
+El primero viene de adoptar \cod{odrl:elapsedTime} con \cod{xsd:duration} y \cod{lteq}. Las duraciones solo
+están parcialmente ordenadas: no hay respuesta a si \cod{P1M} es menor o igual que \cod{P30D}, porque depende del
+mes. Si el motor que evalúa la política va a comparar duraciones, conviene restringirse a días y segundos, o
+cambiar a un entero con unidad fija, como hizo Flexgrid con \cod{retentionDays}.
+
+El segundo viene de la acción \cod{reidentify}, que no tiene \cod{included_in}. Aquí es intencionado: es una
+acción que solo aparecerá en prohibiciones, y no se quiere que un permiso general de \cod{odrl:use} la cubra.
+
+\section{Una política contra este perfil}
+
+\begin{lstlisting}[style=json]
+{
+  "@type": "Offer",
+  "@id": "urn:uuid:offer-cohort-diabetes-01",
+  "profile": "https://salud.example/odrl/profile/secondary-use",
+  "target": "urn:uuid:dataset-primary-care-2019-2024",
+  "permission": [{
+    "action": "linkRecords",
+    "constraint": [
+      {"leftOperand": "purpose", "operator": "isAnyOf",
+       "rightOperand": [{"@id": "hds:research"}, {"@id": "hds:publicHealth"}]},
+      {"leftOperand": "dataPermit", "operator": "hds:withinPermit",
+       "rightOperandReference": {"@id": "https://hdab.salud.example/permits/2026/0417"}},
+      {"leftOperand": "kAnonymity", "operator": "gteq", "rightOperand": 10},
+      {"leftOperand": "environment", "operator": "eq", "rightOperand": "secure-processing-environment"}
+    ]
+  }],
+  "prohibition": [{ "action": "reidentify" }]
+}
+\end{lstlisting}
+
+\section{Qué enseña la comparación}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{4.2cm}Y Y@{}}
+\toprule
+\textbf{Decisión} & \textbf{Medida (Flexgrid)} & \textbf{Salud} \\
+\midrule
+Madurez & 1.0.0, vocabulario estable & 0.3.0, aún en exploración \\
+Lista de operandos & Cerrada & Abierta \\
+Enumeraciones & De IRI, con términos definidos & De IRI y de literales \\
+Operadores & Solo los de ODRL & Uno propio \\
+Referencias & No & Sí, para el permiso \\
+Avisos del compilador & Ninguno & Dos, ambos asumidos \\
+\bottomrule
+\end{tabularx}
+
+\begin{retos}
+\begin{enumerate}[leftmargin=*, itemsep=2pt]
+  \item Compila el perfil y busca en \cod{schema.json} cómo se valida \cod{environment}. ¿Qué dos formas admite
+        el valor?
+  \item Añade \texttt{included\_in: odrl:use} a \cod{reidentify} y piensa qué significaría para una oferta que
+        permite \cod{odrl:use} y prohíbe \cod{reidentify}.
+  \item Escribe un \cod{SpaceProfile} para este perfil. Recuerda que \texttt{"\textasciicircum{}0.3"} con versión mayor 0 fija la
+        versión menor.
+\end{enumerate}
+\end{retos}

@@ -1,0 +1,154 @@
+dsl: alexandria.profiles/v1
+kind: OdrlProfile
+
+profile:
+  id: https://flexgrid.example/odrl/profile/metering
+  version: 1.0.0
+  title:
+    en: Smart Metering Data Usage Profile
+    es: Perfil de uso de datos de medida inteligente
+  description:
+    en: ODRL profile for sharing quarter-hourly smart meter data between DSOs, retailers and aggregators.
+  publisher: Flexgrid Data Space Authority
+  license: https://creativecommons.org/licenses/by/4.0/
+  base_url: https://flexgrid.example/odrl/profile/metering
+
+namespaces:
+  enr: https://flexgrid.example/ns/metering#
+
+adopted:
+  actions:
+    - odrl:aggregate
+    - odrl:anonymize
+  left_operands:
+    - term: odrl:purpose
+      signature:
+        value_kind: iri
+        values: [enr:gridBalancing, enr:billing, enr:demandForecast]
+        operators: [eq, isAnyOf]
+    - term: odrl:dateTime
+      signature:
+        datatype: xsd:dateTime
+        operators: [lt, lteq, gt, gteq]
+
+terms:
+  # --- Actions -------------------------------------------------------------
+  - id: forecastDemand
+    kind: action
+    included_in: odrl:use
+    label: { en: Forecast demand, es: Predecir la demanda }
+    definition:
+      en: To train or run load-forecasting models on the metering data.
+
+  - id: settleImbalance
+    kind: action
+    included_in: odrl:use
+    label: { en: Settle imbalance, es: Liquidar desvíos }
+    definition:
+      en: To use the metering data in the imbalance settlement between market parties.
+
+  - id: profileConsumer
+    kind: action
+    included_in: odrl:use
+    label: { en: Profile consumer, es: Perfilar al consumidor }
+    definition:
+      en: To derive a behavioural profile of an individual supply point.
+
+  # --- Left operands -------------------------------------------------------
+  - id: minAggregation
+    kind: left_operand
+    label: { en: Minimum aggregation, es: Agregación mínima }
+    definition:
+      en: Minimum number of supply points that every delivered record must aggregate.
+    signature:
+      datatype: xsd:integer
+      operators: [gteq, gt]
+
+  - id: retentionDays
+    kind: left_operand
+    label: { en: Retention in days, es: Retención en días }
+    definition:
+      en: Maximum number of days the consumer may keep the data.
+    signature:
+      datatype: xsd:integer
+      operators: [lteq, lt]
+
+  - id: processingRegion
+    kind: left_operand
+    label: { en: Processing region, es: Región de tratamiento }
+    definition:
+      en: Jurisdiction where the data may be stored and processed.
+    signature:
+      value_kind: iri
+      values: [enr:regionES, enr:regionEU, enr:regionEEA]
+      operators: [eq, isAnyOf]
+
+  # --- Right operands ------------------------------------------------------
+  - id: gridBalancing
+    kind: right_operand
+    label: { en: Grid balancing }
+    definition: { en: Operating the distribution grid and its flexibility markets. }
+  - id: billing
+    kind: right_operand
+    label: { en: Billing }
+    definition: { en: Invoicing the energy supplied to a supply point. }
+  - id: demandForecast
+    kind: right_operand
+    label: { en: Demand forecast }
+    definition: { en: Forecasting the aggregated demand of a portfolio. }
+  - id: regionES
+    kind: right_operand
+    label: { en: Spain }
+    definition: { en: Processing inside Spain. }
+  - id: regionEU
+    kind: right_operand
+    label: { en: European Union }
+    definition: { en: Processing inside the European Union. }
+  - id: regionEEA
+    kind: right_operand
+    label: { en: European Economic Area }
+    definition: { en: Processing inside the European Economic Area. }
+
+rules:
+  actions: closed
+  left_operands: closed
+---
+dsl: alexandria.profiles/v1
+kind: SpaceProfile
+
+space:
+  id: https://flexgrid.example/spaces/flexgrid
+  version: 1.0.0
+  title:
+    en: Flexgrid Energy Data Space
+    es: Espacio de datos energético Flexgrid
+  operator: https://flexgrid.example/party/authority
+  base_url: https://flexgrid.example/spaces/flexgrid
+
+lifecycle:
+  grace_window: P30D
+  propagation_window: P2D
+  freshness:
+    ttl: PT24H
+    max_staleness: P7D
+  degraded:
+    policy_intake: reject
+    dsp_message: continue
+
+bindings:
+  - slot: odrl
+    profile: https://flexgrid.example/odrl/profile/metering
+    source: internal
+    version: "^1.0"
+    obligation: mandatory
+    conformance:
+      - { role: json-schema, applies_to: policy_intake }
+      - { role: shacl, applies_to: policy_intake }
+
+  - slot: dsp
+    profile: https://w3id.org/dspace/2025/1
+    source: vendored
+    version: "=2025-1"
+    obligation: mandatory
+    conformance:
+      - { role: json-schema, applies_to: dsp_message }

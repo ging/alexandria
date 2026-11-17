@@ -3,6 +3,7 @@
 package compiler_dsl_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"os"
@@ -83,5 +84,34 @@ func TestDraftWithoutSpaceIsRejected(t *testing.T) {
 	var f app.Findings
 	if !errors.As(err, &f) || len(f) == 0 {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestSlotsListEachGateOnce(t *testing.T) {
+	doc := bytes.Replace(draft(t, "v1.0.0.yaml"), []byte("      - { role: json-schema, applies_to: policy_intake }"),
+		[]byte("      - { role: json-schema, applies_to: policy_intake }\n      - { role: shacl, applies_to: policy_intake }"), 1)
+	c, err := compiler_dsl.Compiler{}.Compile(doc, app.CompileContext{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var slots []pkgv.Slot
+	if err := json.Unmarshal(c.Files[pkgv.SlotsPath], &slots); err != nil || len(slots) != 1 {
+		t.Fatalf("slots %s: %v", c.Files[pkgv.SlotsPath], err)
+	}
+	if got := slots[0].AppliesTo; len(got) != 1 || got[0] != "policy_intake" {
+		t.Fatalf("applies_to %v", got)
+	}
+}
+
+// TestCompilerAppliesServerLifecycleDefaults verifies that server lifecycle defaults fill an absent space lifecycle.
+func TestCompilerAppliesServerLifecycleDefaults(t *testing.T) {
+	defs := lifecycle.Defaults()
+	defs.GraceWindow *= 2
+	c, err := compiler_dsl.Compiler{Defaults: defs}.Compile(draft(t, "v1.0.0.yaml"), app.CompileContext{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Params.GraceWindow != defs.GraceWindow {
+		t.Fatalf("got grace_window %v, want %v", c.Params.GraceWindow, defs.GraceWindow)
 	}
 }

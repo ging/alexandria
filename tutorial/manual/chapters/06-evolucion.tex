@@ -1,0 +1,265 @@
+\chapter{Evolucionar un perfil sin romper a nadie}
+\label{ch:evolucion}
+
+Un vocabulario publicado es un contrato. Hay políticas escritas contra él, acuerdos firmados con él y
+conectores configurados para él. El nivel N4 existe para que cambiarlo sea una decisión consciente y no un
+accidente.
+
+\section{Las tres reglas}
+
+\begin{ideaClave}
+\begin{enumerate}[leftmargin=*, itemsep=1pt]
+  \item Una versión publicada \textbf{no cambia nunca}. Mismo número, mismo contenido.
+  \item Un término \textbf{no se borra}. Pasa de activo a obsoleto y, en una versión posterior, a retirado.
+  \item El número de versión tiene que \textbf{decir la verdad}: ampliar es un cambio menor, restringir es uno mayor.
+\end{enumerate}
+\end{ideaClave}
+
+Para comprobarlas, el compilador necesita la fuente de la versión anterior. En la línea de comandos se le da con
+\cod{-previous}. En el hub no hay que hacer nada: cada paquete publicado guarda su fuente en
+\cod{sources/draft.yaml}, y el hub compara el borrador nuevo con ella.
+
+\section{Qué salto exige cada cambio}
+
+\subsection{En un perfil}
+
+\begin{longtable}{@{}L{9.4cm}C{2cm}@{}}
+\toprule
+\textbf{Cambio} & \textbf{Salto mínimo} \\
+\midrule
+\endhead
+Título, descripción o editor del perfil & PARCHE \\
+Etiqueta, definición, nota o \cod{replaced_by} de un término & PARCHE \\
+\midrule
+Término nuevo, creado o adoptado & MENOR \\
+Un término pasa de activo a obsoleto & MENOR \\
+Operador añadido a una firma & MENOR \\
+Valor añadido a una enumeración & MENOR \\
+Se permiten referencias donde no se permitían & MENOR \\
+Se quita la firma de un operando & MENOR \\
+Se abre una lista cerrada & MENOR \\
+Cambia \cod{included_in}, \cod{subclass_of} o \cod{extra_turtle} & MENOR \\
+Cambia la licencia o \cod{base_url} & MENOR \\
+\midrule
+Un término obsoleto pasa a retirado & MAYOR \\
+Operador quitado de una firma & MAYOR \\
+Valor quitado de una enumeración & MAYOR \\
+Cambia el tipo de dato o el tipo de valor de una firma & MAYOR \\
+Se prohíben referencias que se permitían & MAYOR \\
+Se añade una firma a un operando que no la tenía & MAYOR \\
+Se cierra una lista abierta & MAYOR \\
+Se deja de adoptar un término & MAYOR \\
+Cambia el tipo (\cod{kind}) de un término & MAYOR \\
+\bottomrule
+\end{longtable}
+
+La lógica es siempre la misma: si toda política que antes era válida lo sigue siendo, el cambio es menor. Si
+alguna deja de serlo, es mayor.
+
+\subsection{En un espacio}
+
+\begin{longtable}{@{}L{9.4cm}C{2cm}@{}}
+\toprule
+\textbf{Cambio} & \textbf{Salto mínimo} \\
+\midrule
+\endhead
+Título o descripción del espacio & PARCHE \\
+\midrule
+Operador, \cod{base_url} o cualquier parámetro de \cod{lifecycle} & MENOR \\
+\emph{Binding} no obligatorio añadido o quitado & MENOR \\
+Se baja una obligación que no era \cod{mandatory} & MENOR \\
+Cambian los gates de un \emph{binding} & MENOR \\
+\midrule
+\emph{Binding} obligatorio añadido o quitado & MAYOR \\
+Cambia el perfil o el origen de un slot & MAYOR \\
+Se sube una obligación, o se baja desde \cod{mandatory} & MAYOR \\
+Se añade un gate a un slot obligatorio & MAYOR \\
+Cambia la versión de un perfil vendorizado & MAYOR \\
+\bottomrule
+\end{longtable}
+
+Además, cuando el perfil interno de un slot cambia de versión, el espacio tiene que saltar \textbf{al menos lo
+mismo}. Si el perfil pasa de 1.1.0 a 2.0.0, el espacio no puede quedarse en un salto menor.
+
+\section{La versión 1.1.0: ampliar y avisar}
+
+La universidad entra en Flexgrid y hace falta una finalidad nueva. Al mismo tiempo, el regulador anuncia que el
+perfilado individual dejará de ser admisible. Son cuatro cambios sobre el 1.0.0:
+
+\begin{lstlisting}[style=out]
+6c6
+<   version: 1.0.0
+---
+>   version: 1.1.0
+27c27
+<         values: [enr:gridBalancing, enr:billing, enr:demandForecast]
+---
+>         values: [enr:gridBalancing, enr:billing, enr:demandForecast, enr:research]
+55a56,57
+>     status: deprecated
+>     replaced_by: enr:forecastDemand
+98a101,104
+>   - id: research
+>     kind: right_operand
+>     label: { en: Research }
+>     definition: { en: Non-commercial scientific research on energy systems. }
+121c127
+<   version: 1.0.0
+---
+>   version: 1.1.0
+\end{lstlisting}
+
+Un valor añadido, un término nuevo y una obsolescencia: los tres son cambios menores, y 1.0.0 a 1.1.0 es un
+salto menor. El \emph{binding} del espacio no se toca, porque \texttt{"\textasciicircum{}1.0"} ya admite el 1.1.0.
+
+\begin{lstlisting}[style=sh]
+../../../bin/alexandriac validate -vendor vendor \
+  -previous dsl/flexgrid-1.0.0.yaml dsl/flexgrid-1.1.0.yaml
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+ok: 2 documents valid
+\end{lstlisting}
+
+En los artefactos, la obsolescencia aparece en dos sitios. En \cod{vocab.ttl}:
+
+\begin{lstlisting}[style=ttl]
+enr:profileConsumer
+    a odrl:Action, skos:Concept ;
+    odrl:includedIn odrl:use ;
+    rdfs:isDefinedBy <https://flexgrid.example/odrl/profile/metering> ;
+    rdfs:label "Profile consumer"@en, "Perfilar al consumidor"@es ;
+    skos:definition "To derive a behavioural profile of an individual supply point."@en ;
+    dct:isReplacedBy enr:forecastDemand ;
+    owl:deprecated true ;
+    alx:status "deprecated" .
+\end{lstlisting}
+
+Y en \cod{shapes.ttl}, como una \emph{shape} de severidad \cod{sh:Warning}:
+
+\begin{lstlisting}[style=ttl]
+gen:DeprecatedActionShape a sh:NodeShape ;
+  sh:targetObjectsOf odrl:permission, odrl:prohibition, odrl:obligation, odrl:duty ;
+  sh:property [ sh:path odrl:action ; sh:severity sh:Warning ;
+    sh:message "Deprecated term of profile metering." ;
+    sh:not [ sh:in ( enr:profileConsumer ) ] ] .
+\end{lstlisting}
+
+\begin{trampaHabitual}[El aviso de obsolescencia solo existe en SHACL]
+\cod{schema.json} no distingue un término obsoleto de uno activo: la acción sigue en la enumeración y la
+política pasa sin más. El aviso vive solo en \cod{shapes.ttl}.
+
+Como el cliente no ejecuta SHACL, hoy \textbf{nadie recibe ese aviso}. Una comercializadora que siga usando
+\cod{profileConsumer} bajo la 1.1.0 no ve nada hasta que la 2.0.0 la rechaza. Es la consecuencia más visible de
+la parte de SHACL sin hacer, y el motivo de que el código \cod{VERDICT_SHACL_WARNING} sea inalcanzable.
+\end{trampaHabitual}
+
+\section{La versión 2.0.0: retirar}
+
+\begin{lstlisting}[style=out]
+6c6
+<   version: 1.1.0
+---
+>   version: 2.0.0
+56c56
+<     status: deprecated
+---
+>     status: retired
+127c127
+<   version: 1.1.0
+---
+>   version: 2.0.0
+148c148
+<     version: "^1.0"
+---
+>     version: "^2.0"
+\end{lstlisting}
+
+Retirar es un cambio mayor: una política con \cod{profileConsumer} deja de ser válida. El perfil sube a 2.0.0,
+el \emph{binding} pasa a \texttt{"\textasciicircum{}2.0"} y, como el perfil ha dado un salto mayor, el espacio también.
+
+El término retirado sigue en \cod{vocab.ttl}, con \texttt{alx:status "retired"}: su IRI no se reutiliza y quien
+encuentre una política antigua puede seguir sabiendo qué significaba. Lo que desaparece es su presencia en las
+listas cerradas de \cod{schema.json} y \cod{shapes.ttl}.
+
+\begin{lstlisting}[style=sh]
+../../../bin/alexandriac validate -vendor vendor \
+  -previous dsl/flexgrid-1.1.0.yaml dsl/flexgrid-2.0.0.yaml
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+ok: 2 documents valid
+\end{lstlisting}
+
+\section{Lo que el compilador no deja hacer}
+
+\subsection{Retirar sin haber avisado}
+
+Si se intenta validar la 2.0.0 directamente contra la 1.0.0, saltándose la 1.1.0:
+
+\begin{lstlisting}[style=sh]
+../../../bin/alexandriac validate -vendor vendor \
+  -previous dsl/flexgrid-1.0.0.yaml dsl/flexgrid-2.0.0.yaml
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+error   TERM_RETIRED_WITHOUT_DEPRECATION   flexgrid-2.0.0.yaml#1:56 /terms/2/status enr:profileConsumer must be deprecated in a previous release before it is retired
+alexandriac: 1 errors
+\end{lstlisting}
+
+Hay dos formas correctas de llegar a la 2.0.0. La primera es publicar antes la 1.1.0, que es lo que hace este
+tutorial. La segunda, si no se quiere publicar una versión intermedia del espacio, es \textbf{incluir el perfil
+1.1.0 en el mismo \emph{bundle}} que el 2.0.0. El \emph{binding} elige el 2.0.0, el 1.1.0 no genera artefactos,
+pero su presencia demuestra que la obsolescencia existió. Así lo hace el escenario F6 del repositorio
+(\cod{conformance/f6/drafts/v2.0.0.yaml}).
+
+\subsection{Restringir con un salto menor}
+
+Se quita una región de la enumeración y se sube solo la versión menor:
+
+\begin{lstlisting}[style=out]
+error   VERSION_BUMP_TOO_LOW   bad-bump.yaml#1:6 /profile/version 1.0.0 → 1.1.0 is a MINOR bump; the changes require MAJOR: [value removed from enr:processingRegion]
+\end{lstlisting}
+
+El mensaje dice el salto que se ha hecho, el que hacía falta y por qué. Cuando hay varios motivos, los lista
+todos.
+
+\subsection{Borrar un término}
+
+\begin{lstlisting}[style=out]
+error   TERM_REMOVED   bad-removed.yaml#1:36 /terms term enr:profileConsumer was removed; terms are deprecated and retired, never removed
+\end{lstlisting}
+
+\subsection{Cambiar una versión ya publicada}
+
+Se corrige una errata en una definición sin cambiar el número de versión:
+
+\begin{lstlisting}[style=out]
+error   PROFILE_VERSION_CHANGED   changed.yaml#1:6 /profile/version https://flexgrid.example/odrl/profile/metering 1.0.0 is already released with other content
+\end{lstlisting}
+
+Una errata es un cambio de PARCHE: 1.0.1.
+
+\section{Las clases de versión del hub}
+
+El hub clasifica cada versión \textbf{del espacio} por su número, y la clase decide sus fechas:
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{2.6cm}L{4.4cm}Y@{}}
+\toprule
+\textbf{Clase} & \textbf{Cuándo} & \textbf{Efecto} \\
+\midrule
+\cod{initial} & La primera versión. & Entra en vigor tras la ventana de propagación. \\
+\cod{compatible} & Salto menor o de parche. & Sustituye a la anterior tras la ventana de propagación. No hay convivencia porque no hace falta. \\
+\cod{breaking} & Salto mayor. & Convive con la anterior durante la ventana de gracia. \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+N4 es lo que garantiza que esa clasificación sea honesta. Sin él, alguien podría retirar un término en una
+versión «compatible» y dejar a los participantes sin ventana de gracia.
+
+\begin{retos}
+\begin{enumerate}[leftmargin=*, itemsep=2pt]
+  \item Sobre la 2.0.0, añade el operador \cod{neq} a \cod{odrl:purpose}. ¿Qué número de versión toca? Compruébalo.
+  \item Ahora quita \cod{isAnyOf} de \cod{processingRegion} y vuelve a preguntarte lo mismo.
+  \item Cambia \cod{degraded.policy_intake} a \cod{continue} en el espacio. ¿Es un cambio menor o mayor? ¿Estás
+        de acuerdo con el compilador?
+\end{enumerate}
+\end{retos}

@@ -5,6 +5,7 @@ package dsl
 import (
 	"bytes"
 	"encoding/json"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -42,6 +43,14 @@ func (r *Resolved) Roles() map[string]bool {
 
 // SpaceLifecycle reads the space lifecycle on top of the §2.10 defaults; conformance_required is ignored.
 func SpaceLifecycle(sp *SpaceProfile) (lifecycle.Params, error) {
+	return spaceLifecycleWith(lifecycle.Defaults(), sp)
+}
+
+// spaceLifecycleWith overlays the space lifecycle onto defaults, ignoring conformance_required.
+func spaceLifecycleWith(defaults lifecycle.Params, sp *SpaceProfile) (lifecycle.Params, error) {
+	if defaults.Freshness.TTL == 0 {
+		defaults = lifecycle.Defaults()
+	}
 	raw := sp.Lifecycle
 	if len(raw) > 0 {
 		var m map[string]json.RawMessage
@@ -51,16 +60,16 @@ func SpaceLifecycle(sp *SpaceProfile) (lifecycle.Params, error) {
 		delete(m, "conformance_required")
 		raw, _ = json.Marshal(m)
 	}
-	return lifecycle.ParseOver(lifecycle.Defaults(), raw)
+	return lifecycle.ParseOver(defaults, raw)
 }
 
 // validateSpace runs N2 and N3 on the space and returns its resolved bindings.
-func validateSpace(d *Document, profiles []*Index, vendor Vendor, fs *Findings) []*Resolved {
+func validateSpace(d *Document, profiles []*Index, opt Options, fs *Findings) []*Resolved {
 	sp := d.Space
 	if len(sp.Lifecycle) > 0 && bytes.Contains(sp.Lifecycle, []byte(`"conformance_required"`)) {
 		fs.add(d, "N2", Warning, CodeComplianceIgnored, "/lifecycle/conformance_required", "conformance is out of scope of this compiler; the value is ignored")
 	}
-	if p, err := SpaceLifecycle(sp); err != nil {
+	if p, err := spaceLifecycleWith(opt.Defaults, sp); err != nil {
 		fs.add(d, "N2", Error, CodeSchema, "/lifecycle", "%v", err)
 	} else {
 		for _, e := range p.Validate() {
@@ -79,16 +88,39 @@ func validateSpace(d *Document, profiles []*Index, vendor Vendor, fs *Findings) 
 		if b.Obligation == "mandatory" && len(b.Conformance) == 0 {
 			fs.add(d, "N2", Error, CodeMandatoryUnverifiable, ptr, "a mandatory binding needs at least one gate")
 		}
+		if b.Obligation == "mandatory" {
+			for _, g := range shaclOnlyGates(b) {
+				fs.add(d, "N2", Warning, CodeGateShaclOnly, ptr+"/conformance", "gate %s of mandatory slot %s is covered only by shacl, which no gate executes yet: it will accept any message", g, b.Slot)
+			}
+		}
 		for _, v := range b.Via {
 			if v == b.Profile {
 				fs.add(d, "N2", Error, CodeViaCycle, ptr+"/via", "via contains the bound profile itself")
 			}
 		}
-		if r := resolve(d, ptr, b, profiles, vendor, fs); r != nil {
+		if r := resolve(d, ptr, b, profiles, opt.Vendor, fs); r != nil {
 			out = append(out, r)
 		}
 	}
 	return out
+}
+
+// shaclOnlyGates returns, in order, the gates of a binding whose only artefact role is shacl.
+func shaclOnlyGates(b Binding) []string {
+	other := map[string]bool{}
+	for _, c := range b.Conformance {
+		if c.Role != "shacl" {
+			other[c.AppliesTo] = true
+		}
+	}
+	var out []string
+	for _, c := range b.Conformance {
+		if c.Role == "shacl" && !other[c.AppliesTo] {
+			out = append(out, c.AppliesTo)
+		}
+	}
+	sort.Strings(out)
+	return dedupe(out)
 }
 
 // resolve is N3 for one binding.

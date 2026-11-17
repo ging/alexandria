@@ -52,8 +52,15 @@ type LogConfig struct {
 	Environment  string
 }
 
+// Deployment modes: the client forwards traffic itself, or only answers the checks of an external proxy.
+const (
+	ModeProxy     = "proxy"
+	ModeValidator = "validator"
+)
+
 // Config is the client configuration document.
 type Config struct {
+	Mode      string              `json:"mode,omitempty"`
 	Trust     Trust               `json:"trust"`
 	Upstreams Upstreams           `json:"upstreams"`
 	Listeners map[string]Listener `json:"listeners"`
@@ -123,6 +130,7 @@ type NodeConfig struct {
 	Client struct {
 		ClassID   string              `json:"class_id,omitempty"`
 		Display   *string             `json:"display,omitempty"`
+		Mode      string              `json:"mode,omitempty"`
 		Trust     Trust               `json:"trust"`
 		Upstreams Upstreams           `json:"upstreams"`
 		Listeners map[string]Listener `json:"listeners,omitempty"`
@@ -269,8 +277,13 @@ func convertNodeConfig(b []byte) ([]byte, string, LogConfig, error) {
 	}
 	out := map[string]any{
 		"trust":     trust,
-		"upstreams": nc.Client.Upstreams,
 		"listeners": listeners,
+	}
+	if nc.Client.Mode != "" {
+		out["mode"] = nc.Client.Mode
+	}
+	if nc.Client.Mode != ModeValidator || nc.Client.Upstreams != (Upstreams{}) {
+		out["upstreams"] = nc.Client.Upstreams
 	}
 	if nc.Client.Rules.Seed != "" {
 		out["rules"] = map[string]string{"seed": nc.Client.Rules.Seed}
@@ -319,6 +332,7 @@ func (c *Config) applyDefaults() {
 			*p = v
 		}
 	}
+	set(&c.Mode, ModeProxy)
 	set(&c.Trust.Context, DefaultContext)
 	set(&c.Trust.DIDTTL, "PT6H")
 	set(&c.DefaultAction, "forward")
@@ -330,6 +344,9 @@ func (c *Config) applyDefaults() {
 		c.Audit.Window = 100
 	}
 }
+
+// Validator reports whether an external proxy forwards the traffic and the client only decides.
+func (c *Config) Validator() bool { return c.Mode == ModeValidator }
 
 // NamespaceIRI is the expected namespace IRI {trust.hub}/v1/namespaces/{trust.namespace}.
 func (c *Config) NamespaceIRI() string {

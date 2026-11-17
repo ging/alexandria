@@ -40,7 +40,8 @@ observability:
 
 vhub_config:
   rdf_context: "self-hosted"
-  compiler: "poc"
+  compiler: "dsl"
+  vendor_dir: "file:vendor"
   vocab:
     max_size: 10485760
     allow_insecure_localhost: true

@@ -20,8 +20,20 @@ func TestDemoConfigLoads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Context() != c.Base+"/pub/_vhub/v1/context.jsonld" || c.Auth.AdminClaim.Value != "vhub-admin" || c.Compiler != "poc" {
+	if c.Context() != c.Base+"/pub/_vhub/v1/context.jsonld" || c.Auth.AdminClaim.Value != "vhub-admin" || c.Compiler != "dsl" {
 		t.Fatalf("got %+v", c)
+	}
+}
+
+// TestExplicitPoCCompilerPreserved verifies that setting compiler to poc overrides the dsl default.
+func TestExplicitPoCCompilerPreserved(t *testing.T) {
+	raw := []byte(`{"listen":"127.0.0.1:8443","base":"https://127.0.0.1:8443","signing":{"key":"file:k"},"auth":{"issuers":[{"iss":"i","discovery_url":"http://i"}],"audience":"a"},"storage":{"database":"file:d","blobs":"file:b"},"compiler":"poc"}`)
+	c, err := Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Compiler != "poc" {
+		t.Fatalf("got compiler %q, want poc", c.Compiler)
 	}
 }
 
@@ -36,6 +48,7 @@ func TestYAMLAndNodeLayoutMatchJSON(t *testing.T) {
 			t.Fatalf("%s: %v", path, err)
 		}
 		if c.Listen != baseCfg.Listen || c.Base != baseCfg.Base || c.Context() != baseCfg.Context() ||
+			c.Compiler != baseCfg.Compiler || c.VendorDir != baseCfg.VendorDir ||
 			c.Auth.Audience != baseCfg.Auth.Audience || len(c.Auth.Issuers) != 1 ||
 			c.Auth.Issuers[0] != baseCfg.Auth.Issuers[0] || c.Signing.Key != baseCfg.Signing.Key ||
 			c.Storage.Database != baseCfg.Storage.Database || c.Storage.Blobs != baseCfg.Storage.Blobs {

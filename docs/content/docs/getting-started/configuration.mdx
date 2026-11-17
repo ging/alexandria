@@ -201,12 +201,13 @@ client_config:
 | `trust.hub_did` | Yes | — | DID whose `assertionMethod` keys are trusted to sign listings and manifests. |
 | `trust.context` | No | `https://w3id.org/alexandria-vhub/v1` | Expected JSON-LD context of the credentials. Set it to the hub's self-hosted URL when the hub uses `rdf.context: self-hosted`. |
 | `trust.did_ttl` | No | `PT6H` | How long the hub DID document is cached. |
-| `upstreams.dsp` | Yes | — | DSP endpoint of the connector. |
+| `mode` | No | `proxy` | `proxy`: the client forwards the traffic itself. `validator`: an external proxy (for example Envoy `ext_authz`) forwards and the traffic listeners only answer its checks. See `examples/`. |
+| `upstreams.dsp` | In `proxy` mode | — | DSP endpoint of the connector. Not used in `validator` mode. |
 | `upstreams.management` | No | — | Management API of the connector; required by rules on `mgmt-ingress`. |
 | `listeners.admin.bind` | Yes | — | Admin API listener. |
-| `listeners.dsp-ingress.bind` | No | — | Reverse proxy for inbound DSP traffic. |
-| `listeners.dsp-egress.bind` | No | — | Forward proxy for outbound DSP traffic. |
-| `listeners.mgmt-ingress.bind` | No | — | Reverse proxy for the connector management API. |
+| `listeners.dsp-ingress.bind` | No | — | Reverse proxy for inbound DSP traffic (check endpoint in `validator` mode). |
+| `listeners.dsp-egress.bind` | No | — | Forward proxy for outbound DSP traffic (check endpoint in `validator` mode). |
+| `listeners.mgmt-ingress.bind` | No | — | Reverse proxy for the connector management API (check endpoint in `validator` mode). |
 | `rules.seed` | No | — | Initial rule set, loaded only when the persistent rule store is empty. |
 | `default_action` | No | `forward` | What to do with a request no rule matches: `forward` or `reject`. |
 | `unknown_agreement` | No | `forward` | What to do with a transfer whose agreement was never captured. |

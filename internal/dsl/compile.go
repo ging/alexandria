@@ -23,6 +23,7 @@ import (
 type Options struct {
 	Previous []Source
 	Vendor   Vendor
+	Defaults lifecycle.Params
 }
 
 // Artifact is one generated or vendored file of the output.
@@ -99,13 +100,13 @@ func Compile(opt Options, srcs ...Source) *Result {
 		validateProfile(ix, all, &r.Findings)
 	}
 	if r.Space != nil {
-		r.Bindings = validateSpace(r.Space, all, opt.Vendor, &r.Findings)
+		r.Bindings = validateSpace(r.Space, all, opt, &r.Findings)
 	}
 	versioning(r, prevProfiles, prevSpace, opt)
 	if !r.OK() {
 		return r
 	}
-	r.emit()
+	r.emit(opt.Defaults)
 	r.checkOutputs()
 	if !r.OK() {
 		r.Artifacts, r.Lock = nil, nil
@@ -156,7 +157,7 @@ func versioning(r *Result, prevProfiles []*Index, prevSpace *Document, opt Optio
 		return
 	}
 	var discard Findings
-	prevRes := validateSpace(prevSpace, prevProfiles, opt.Vendor, &discard)
+	prevRes := validateSpace(prevSpace, prevProfiles, opt, &discard)
 	diffSpaces(prevSpace, r.Space, prevRes, r.Bindings, &r.Findings)
 }
 
@@ -231,7 +232,7 @@ func gatesFor(b *Resolved, role string) []string {
 }
 
 // emit renders the profile artefacts, the vendored copies and, for a bundle with a space, the space artefacts.
-func (r *Result) emit() {
+func (r *Result) emit(defaults lifecycle.Params) {
 	bound := map[*Index]*Resolved{}
 	for _, b := range r.Bindings {
 		if b.Profile != nil {
@@ -270,12 +271,12 @@ func (r *Result) emit() {
 		Artifact{Path: "space/prof.ttl", MediaType: "text/turtle", Role: "prof", AppliesTo: []string{}, Bytes: r.spaceProf()},
 		Artifact{Path: "space/shacl-union.ttl", MediaType: "text/turtle", Role: "shacl-union", AppliesTo: []string{}, Bytes: r.shaclUnion()},
 		Artifact{Path: "space/spec.html", MediaType: "text/html", Role: "specification", AppliesTo: []string{}, Bytes: r.spaceSpec()})
-	r.Lock = r.buildLock()
+	r.Lock = r.buildLock(defaults)
 }
 
 // buildLock assembles space-lock.json from the resolved bindings and their artefacts.
-func (r *Result) buildLock() *Lock {
-	params, _ := SpaceLifecycle(r.Space.Space)
+func (r *Result) buildLock(defaults lifecycle.Params) *Lock {
+	params, _ := spaceLifecycleWith(defaults, r.Space.Space)
 	l := &Lock{Space: r.Space.Space.Space.ID, Version: r.Space.Space.Space.Version, Lifecycle: params, Profiles: map[string][]string{}}
 	for _, b := range r.Bindings {
 		lb := LockBinding{Slot: b.Binding.Slot, Profile: b.Binding.Profile, Source: b.Binding.Source, Version: b.Version, Obligation: b.Binding.Obligation, Artifacts: []LockArtifact{}}

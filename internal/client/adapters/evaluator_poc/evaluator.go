@@ -132,7 +132,9 @@ func (e *Evaluator) warnOnce(p *pkgv.Package, f pkgv.File) {
 	if _, loaded := e.warned.LoadOrStore(string(p.Digest)+"|"+f.Path, true); loaded || e.Events == nil {
 		return
 	}
-	e.Events.Emit(app.NewNotice(app.EvSync, e.Namespace, e.Clock.Now(), PocEvalUnsupportedRole, f.Role+" artefact "+f.Path+" is not evaluated by the PoC"))
+	n := app.NewNotice(app.EvSync, e.Namespace, e.Clock.Now(), PocEvalUnsupportedRole, f.Role+" artefact "+f.Path+" is not evaluated by the PoC")
+	n.Severity = string(codes.SevInfo)
+	e.Events.Emit(n)
 }
 
 // contains reports whether xs holds x.

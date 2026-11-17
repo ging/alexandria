@@ -1,0 +1,459 @@
+\chapter{Una migración de principio a fin}
+\label{ch:migracion}
+
+Este capítulo recorre dos meses y medio de vida de Flexgrid. Se publican la 1.1.0 y la 2.0.0, se firma un
+acuerdo, se retira una versión y se revoca. En cada paso se envían los mismos tres mensajes y se mira qué
+cambia.
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{2.8cm}Y@{}}
+\toprule
+\textbf{Mensaje} & \textbf{Qué lleva y bajo qué versiones es válido} \\
+\midrule
+\cod{m1-forecast} & Previsión de demanda. Válido en las tres versiones. \\
+\cod{m2-profiling} & Perfilado de consumidores. Válido en 1.0.0 y 1.1.0; inválido en 2.0.0. \\
+\cod{m3-research} & Finalidad de investigación. Inválido en 1.0.0; válido desde 1.1.0. \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+\cod{rows} envía los tres por \cod{dsp-ingress} e imprime, por cada uno, la línea de estado HTTP y la cabecera
+\cod{VHub-Verdict}, seguidas del estado del cliente y sus versiones.
+
+\section{El punto de partida}
+
+3 de septiembre, con la 1.0.0 recién entrada en vigor:
+
+\begin{lstlisting}[style=sh]
+rows
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+m1-forecast    HTTP/1.1 200 OK | -
+m2-profiling   HTTP/1.1 200 OK | -
+m3-research    HTTP/1.1 400 Bad Request | VHub-Verdict: violation;gate=policy_intake;code="VERDICT_VIOLATION";rule="contract-request"
+   Active [('1.0.0', 'head')]
+\end{lstlisting}
+
+\section{Una versión compatible}
+
+El 20 de septiembre Lucía publica la 1.1.0, que añade la finalidad de investigación y marca obsoleto el
+perfilado.
+
+\begin{lstlisting}[style=sh]
+syncat 2026-09-20T10:00:00Z
+publish ../dsl/flexgrid-1.1.0.yaml
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+draft:     ffd85632051f7891
+{"@context":"…","class":"compatible","findings":[],"valid":true}
+candidate: 85089995ebc525b7
+\end{lstlisting}
+
+El hub la clasifica como \cod{compatible} por su número, y N4 ha comprobado contra la fuente de la 1.0.0 que lo
+es de verdad. El \cod{diff} del candidato muestra el cambio en términos de ficheros: aparecen los seis de
+\cod{profiles/odrl/metering/1.1.0/}, desaparecen los seis de \cod{1.0.0/} y cambian los cuatro del espacio y la
+fuente.
+
+Una versión compatible no admite ventana de gracia, porque no hay nada que hacer convivir:
+
+\begin{lstlisting}[style=sh]
+approve '{"grace_window":"P10D"}'
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+HTTP/2 422
+{"…","title":"DATES_GRACE_ON_COMPATIBLE","status":422,
+ "detail":"grace_window is only allowed on breaking versions","code":"DATES_GRACE_ON_COMPATIBLE","severity":"error"}
+\end{lstlisting}
+
+\begin{lstlisting}[style=sh]
+approve '{}'
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+HTTP/2 201
+{'version': '1.1.0', 'class': 'compatible', 'published_at': '2026-09-20T10:00:00Z',
+ 'new_content_from': '2026-09-22T10:00:00Z', 'enforced_from': '2026-09-22T10:00:00Z'}
+\end{lstlisting}
+
+Tres días después:
+
+\begin{lstlisting}[style=sh]
+syncat 2026-09-23T12:00:00Z
+rows
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+m1-forecast    HTTP/1.1 200 OK | -
+m2-profiling   HTTP/1.1 200 OK | -
+m3-research    HTTP/1.1 200 OK | -
+   Active [('1.1.0', 'head')]
+\end{lstlisting}
+
+La universidad ya puede negociar. El estado sigue siendo \cod{Active}, con una sola versión: la 1.1.0 ha
+sustituido limpiamente a la 1.0.0, que pasa a \cod{Superseded}.
+
+Y \cod{m2-profiling} pasa sin ninguna señal, aunque usa un término obsoleto. Es la trampa del
+capítulo~\ref{ch:evolucion} vista en producción: el aviso existe en \cod{shapes.ttl}, y nadie lo ejecuta.
+
+\section{Una versión de ruptura}
+
+El 1 de octubre se publica la 2.0.0, que retira el perfilado.
+
+\begin{lstlisting}[style=sh]
+syncat 2026-10-01T10:00:00Z
+publish ../dsl/flexgrid-2.0.0.yaml
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+draft:     a5fad501c89c41e8
+{"@context":"…","class":"breaking","findings":[],"valid":true}
+candidate: 5552a13ebfe21682
+\end{lstlisting}
+
+Lucía intenta acortar la convivencia a tres días:
+
+\begin{lstlisting}[style=sh]
+approve '{"grace_window":"P3D"}'
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+HTTP/2 422
+{"…","title":"DATES_GRACE_TOO_SHORT","status":422,
+ "detail":"grace_window P3D is below min_grace_window P7D","code":"DATES_GRACE_TOO_SHORT","severity":"error"}
+\end{lstlisting}
+
+El mínimo son siete días y es del hub: ninguna \emph{steward} puede dejar a los participantes sin tiempo para
+migrar. Con la gracia por defecto, de treinta:
+
+\begin{lstlisting}[style=sh]
+approve '{}'
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+HTTP/2 201
+{'version': '2.0.0', 'class': 'breaking', 'published_at': '2026-10-01T10:00:00Z',
+ 'new_content_from': '2026-10-03T10:00:00Z', 'enforced_from': '2026-11-02T10:00:00Z'}
+\end{lstlisting}
+
+Ahora las dos fechas son distintas, y entre ellas está la ventana de gracia.
+
+\begin{center}
+\begin{tikzpicture}[font=\scriptsize, x=0.156cm, y=1cm]
+  \draw[alxBorder] (0,-0.5) -- (80,-0.5);
+  \foreach \d/\l in {2/3 sep, 21/22 sep, 32/3 oct, 62/2 nov, 72/12 nov}
+    { \draw[alxBorder] (\d,-0.5) -- (\d,-0.65); \node[below] at (\d,-0.68) {\l}; }
+  \fill[alxAmber, opacity=0.13] (32,0.25) rectangle (62,1.75);
+  \node[alxAmber!80!black] at (47,1.0) {ventana de gracia: conviven};
+  \draw[alxBlue, dashed, line width=1.2pt] (0,2.2) -- (2,2.2);
+  \draw[alxBlue, line width=3.2pt] (2,2.2) -- (21,2.2);
+  \node[left] at (0,2.2) {1.0.0};
+  \draw[alxTeal, dashed, line width=1.2pt] (19,1.4) -- (21,1.4);
+  \draw[alxTeal, line width=3.2pt] (21,1.4) -- (62,1.4);
+  \draw[alxTeal!45, line width=3.2pt] (62,1.4) -- (72,1.4);
+  \node[left] at (19,1.4) {1.1.0};
+  \node[above, alxTeal!70!black] at (67,1.45) {retenida};
+  \node[alxRed, right] at (72,1.4) {revocada};
+  \draw[alxPurple, dashed, line width=1.2pt] (30,0.6) -- (32,0.6);
+  \draw[alxPurple, line width=3.2pt] (32,0.6) -- (80,0.6);
+  \node[left] at (30,0.6) {2.0.0};
+\end{tikzpicture}
+
+{\scriptsize El tramo discontinuo es la ventana de propagación: publicada, pero aún no vigente.}
+\end{center}
+
+\section{Lo que ve el borde, instante a instante}
+
+\begin{lstlisting}[style=sh]
+syncat 2026-10-02T12:00:00Z; rows
+syncat 2026-10-03T06:00:00Z; clock 2026-10-03T09:59:55Z; rows
+syncat 2026-10-10T12:00:00Z; rows
+syncat 2026-11-02T06:00:00Z; clock 2026-11-02T10:00:05Z; rows
+syncat 2026-11-05T12:00:00Z; rows
+\end{lstlisting}
+
+\begin{longtable}{@{}L{2.7cm}C{1.7cm}C{1.7cm}C{1.7cm}L{3.3cm}L{3.2cm}@{}}
+\toprule
+\textbf{Instante} & \textbf{m1} & \textbf{m2} & \textbf{m3} & \textbf{Estado y versiones} & \textbf{Por qué} \\
+\midrule
+\endhead
+3 sep, 12:00 & \ok & \ok & \viol & \cod{Active}: 1.0.0 & Solo la 1.0.0. \\
+23 sep, 12:00 & \ok & \ok & \ok & \cod{Active}: 1.1.0 & La 1.1.0 la ha sustituido. \\
+2 oct, 12:00 & \ok & \ok & \ok & \cod{Active}: 1.1.0; 2.0.0 programada & La 2.0.0 se conoce, pero no vale aún. \\
+3 oct, 09:59:55 & \ok & \warn & \ok & \cod{Transition}: 2.0.0 cabeza, 1.1.0 vigente & La 2.0.0 entra un margen de arrendamiento antes. \\
+10 oct, 12:00 & \ok & \warn & \ok & \cod{Transition} & Ventana de gracia. \\
+2 nov, 10:00:05 & \ok & \warn & \ok & \cod{Transition} & Aún dentro del margen tras \cod{enforced_from}. \\
+5 nov, 12:00 & \ok & \viol & \ok & \cod{Active}: 2.0.0; 1.1.0 retenida & Solo la 2.0.0. \\
+\bottomrule
+\end{longtable}
+
+Es el patrón \emph{expandir, migrar, contraer}. Primero se acepta lo nuevo. Lo viejo sigue funcionando con un
+aviso. El rechazo empieza solo después de \cod{enforced_from}.
+
+\subsection{El aviso}
+
+Durante la ventana, \cod{m2-profiling} se reenvía al conector y la respuesta vuelve con una cabecera:
+
+\begin{lstlisting}[style=out]
+m2-profiling   HTTP/1.1 200 OK | VHub-Verdict: warning;gate=policy_intake;code="VERDICT_NOT_IN_HEAD";rule="contract-request";version="1.1.0";sunset=@1793613600
+\end{lstlisting}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{5.7cm}Y@{}}
+\toprule
+\textbf{Parámetro} & \textbf{Significado} \\
+\midrule
+\cod{warning} & La clasificación. \\
+\cod{gate=policy_intake} & El gate que la produjo. \\
+\texttt{code="VERDICT\_NOT\_IN\_HEAD"} & El mensaje no conforma con la versión cabeza, pero sí con una anterior aún vigente. \\
+\texttt{version="1.1.0"} & La versión que lo aceptó. \\
+\cod{sunset=@1793613600} & Instante en que dejará de aceptarse: 2 de noviembre de 2026 a las 10:00 UTC. \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+La comercializadora no tiene que leer ningún boletín. Su propio tráfico le dice que lo que envía tiene fecha de
+caducidad, y cuál.
+
+\cod{:explain} muestra el razonamiento completo:
+
+\begin{lstlisting}[style=sh]
+ex m2-profiling | short
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+rule=contract-request state=Transition action=forward-notice code=None
+  gate=policy_intake  class=warning   codes=['VERDICT_NOT_IN_HEAD'] matched=1.1.0
+     - Violation json-schema /permission/0/action validation failed
+     - Info loader  POC_EVAL_UNSUPPORTED_ROLE: shacl artefact profiles/odrl/metering/2.0.0/shapes.ttl is not evaluated
+  verdict: warning;gate=policy_intake;code="VERDICT_NOT_IN_HEAD";rule="contract-request";version="1.1.0";sunset=@1793613600
+\end{lstlisting}
+
+Los hallazgos son los de la cabeza, la 2.0.0, que rechaza la acción. \cod{matched=1.1.0} dice quién lo aceptó.
+
+\begin{bajoElCapo}[El algoritmo de clasificación]
+Para un gate, después de las filas de estado:
+\begin{enumerate}[leftmargin=*, itemsep=1pt]
+  \item Cuerpo ilegible, o falta el nodo de \cod{select}: violación, \cod{MESSAGE_UNPARSEABLE}.
+  \item Ninguna versión vigente: violación, \cod{NO_VERSION_IN_FORCE}.
+  \item Se evalúa contra la \textbf{cabeza}. Si conforma: ok.
+  \item Si no, contra las anteriores aún vigentes, de la más nueva a la más vieja. Si una lo acepta: aviso,
+        \cod{VERDICT_NOT_IN_HEAD}.
+  \item Si ninguna: violación. \cod{CONTEXT_NOT_IN_PACKAGE} si el motivo es un contexto ajeno;
+        \cod{VERDICT_VIOLATION} en otro caso.
+\end{enumerate}
+\end{bajoElCapo}
+
+\subsection{El margen de arrendamiento}
+
+Dos filas de la tabla tienen horas extrañas. El 3 de octubre a las 09:59:55 la 2.0.0 ya acepta mensajes, cinco
+segundos antes de su \cod{new_content_from}. El 2 de noviembre a las 10:00:05, cinco segundos después de
+\cod{enforced_from}, la 1.1.0 todavía se acepta.
+
+Es el \cod{lease_margin}, de diez segundos: el cliente ensancha cada frontera por los dos lados. Los relojes de
+dos participantes nunca coinciden del todo, y sin margen un mensaje enviado en el segundo exacto del cambio
+podría ser válido para quien lo envía e inválido para quien lo recibe.
+
+\section{Los acuerdos sobreviven a su versión}
+
+El 10 de octubre, en plena ventana, la comercializadora y la distribuidora cierran un acuerdo que incluye el
+perfilado. Es \cod{examples/msgs/a1-agreement.json}:
+
+\begin{lstlisting}[style=json]
+{
+  "@context": [ … ],
+  "@type": "ContractAgreementMessage",
+  "providerPid": "urn:uuid:9c1f7a52-dso-neg-0042",
+  "consumerPid": "urn:uuid:7d2a9f10-ret-neg-0007",
+  "agreement": {
+    "@id": "urn:uuid:agreement-retail-0007", "@type": "Agreement",
+    "profile": "https://flexgrid.example/odrl/profile/metering",
+    "target": "urn:uuid:dataset-qh-load-madrid-2026",
+    "assigner": "did:web:dso.flexgrid.example",
+    "assignee": "did:web:retailer.flexgrid.example",
+    "permission": [ { "action": "profileConsumer", "constraint": [
+        {"leftOperand": "purpose", "operator": "eq", "rightOperand": {"@id": "enr:billing"}},
+        {"leftOperand": "retentionDays", "operator": "lteq", "rightOperand": 30} ] } ]
+  }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=sh]
+post /negotiations/urn:uuid:7d2a9f10-ret-neg-0007/agreement a1-agreement
+curl -s "$ADMINAPI/agreements/urn:uuid:agreement-retail-0007"
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+a1-agreement   HTTP/1.1 200 OK | VHub-Verdict: warning;gate=policy_intake;code="VERDICT_NOT_IN_HEAD";rule="contract-agreement-in";version="1.1.0";sunset=@1793613600
+
+{ "agreement_id": "urn:uuid:agreement-retail-0007",
+  "provider_pid": "urn:uuid:9c1f7a52-dso-neg-0042",
+  "consumer_pid": "urn:uuid:7d2a9f10-ret-neg-0007",
+  "role": "consumer",
+  "version": "1.1.0",
+  "manifest": "ni:///sha-256;8kvT3m-30MLD6JA7VFtn-iNDqtFe2fYvyx_uG5ImLgI",
+  "declared_profile": "https://flexgrid.example/odrl/profile/metering",
+  "recorded_at": "2026-10-10T12:00:00Z",
+  "source": "dsp-ingress",
+  "usable": true }
+\end{lstlisting}
+
+El acuerdo pasa con aviso, y el cliente lo \textbf{captura}: guarda su identificador, los de las dos partes, su
+papel y, sobre todo, la versión que lo validó, la 1.1.0. La captura ocurre cuando el conector responde \cod{2xx}
+y antes de devolver la respuesta.
+
+\begin{ideaClave}
+Un acuerdo queda ligado a la versión del vocabulario bajo la que se firmó, no a la vigente. Un contrato no se
+reinterpreta cada vez que cambian las reglas.
+\end{ideaClave}
+
+Con el acuerdo capturado, una transferencia bajo él se admite. \cod{examples/msgs/t1-transfer.json} es un
+\cod{TransferRequestMessage} con \cod{agreementId}:
+
+\begin{lstlisting}[style=sh]
+post /transfers/request t1-transfer
+post /transfers/request t2-transfer-no-format -b
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+t1-transfer             HTTP/1.1 200 OK | -
+t2-transfer-no-format   HTTP/1.1 400 Bad Request | VHub-Verdict: violation;gate=dsp_message;code="VERDICT_VIOLATION";rule="transfer-request"
+    {"@context":["https://w3id.org/dspace/2025/1/context.jsonld"],"@type":"TransferError",
+     "code":"VERDICT_VIOLATION","consumerPid":"urn:uuid:7d2a9f10-ret-trf-0001","providerPid":null,
+     "reason":["'allOf' failed","missing property 'format'"]}
+\end{lstlisting}
+
+La segunda transferencia es la primera vez que el slot \cod{dsp} vendorizado rechaza algo: al mensaje le falta
+\cod{format}, que el esquema de \cod{vendor/dsp/2025-1/} exige. El error es ahora un \cod{TransferError}, el que
+DSP define para ese intercambio.
+
+\subsection{Después de la retirada}
+
+El 5 de noviembre la 1.1.0 ya no está vigente. Una petición nueva con perfilado se rechaza. Pero:
+
+\begin{lstlisting}[style=sh]
+curl -s $ADMINAPI/versions | python3 -c "import json,sys;[print(v['version'], v['class'], v['state'], 'retained' if v['retained'] else '') for v in json.load(sys.stdin)]"
+post /transfers/request t1-transfer
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+1.0.0 initial Superseded
+1.1.0 compatible Retired retained
+2.0.0 breaking Published retained
+
+t1-transfer             HTTP/1.1 200 OK | -
+\end{lstlisting}
+
+La 1.1.0 está \cod{Retired}, pero su paquete se \textbf{retiene} porque el acuerdo la referencia, y la
+transferencia se sigue admitiendo. La 1.0.0, a la que no apunta ningún acuerdo, ya no se conserva.
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{2.6cm}Y@{}}
+\toprule
+\textbf{Estado} & \textbf{Significado, en un instante de referencia} \\
+\midrule
+\cod{Scheduled} & Antes de \cod{new_content_from}. \\
+\cod{Published} & Vigente y cabeza. \\
+\cod{Deprecated} & Vigente, pero no cabeza. \\
+\cod{Superseded}, \cod{Retired} & Ya no vigente. \\
+\cod{Revoked} & Revocada. \\
+\bottomrule
+\end{tabularx}
+
+\section{Revocar}
+
+El 10 de noviembre el regulador declara ilícito el perfilado individual. Retirar ya no basta: los acuerdos
+firmados bajo la 1.1.0 no deben amparar más transferencias.
+
+\begin{lstlisting}[style=sh]
+syncat 2026-11-10T00:00:00Z
+R=$HUB/v1/namespaces/flexgrid/versions
+curl -sk -X POST "$R/1.1.0:revoke" -H "Authorization: Bearer $(cat steward.token)" -d '{}'
+curl -sk -X POST "$R/2.0.0:revoke" -H "Authorization: Bearer $(cat steward.token)" -d '{"justification":"test"}'
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+{"…","title":"DATES_JUSTIFICATION_REQUIRED","status":422,"detail":"a revocation requires a justification", … }
+{"…","title":"DATES_REVOKE_LEAVES_NO_HEAD","status":422,"detail":"no version would be in force at 2026-11-12T00:00:00Z", … }
+\end{lstlisting}
+
+Los dos intentos fallan, y con razón: una revocación exige justificación, y no se puede revocar la única
+versión vigente, porque el espacio se quedaría sin reglas.
+
+\noindent\begin{tabularx}{\linewidth}{@{}C{1.3cm}Y L{6.1cm}@{}}
+\toprule
+\textbf{Regla} & \textbf{Comprobación} & \textbf{Código} \\
+\midrule
+REV-1 & La versión no está ya revocada. & \cod{DATES_ALREADY_REVOKED} \\
+REV-2 & Hay justificación. & \cod{DATES_JUSTIFICATION_REQUIRED} \\
+REV-3 & \cod{revoked_from} es al menos el instante de la petición más la ventana de propagación. & \cod{DATES_REVOCATION_TOO_EARLY} \\
+REV-4 & Queda alguna versión vigente. & \cod{DATES_REVOKE_LEAVES_NO_HEAD} \\
+\bottomrule
+\end{tabularx}
+
+\begin{lstlisting}[style=sh]
+curl -sk -X POST "$R/1.1.0:revoke" -H "Authorization: Bearer $(cat steward.token)" \
+  -d '{"justification":"Individual consumer profiling was ruled unlawful by the regulator"}'
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+{ … "credentialSubject": { "version": "1.1.0", "class": "compatible",
+    "enforced_from": "2026-09-22T10:00:00Z", "revoked_from": "2026-11-12T00:00:00Z", … } }
+\end{lstlisting}
+
+La revocación tampoco es instantánea: \cod{revoked_from} es el 12 de noviembre, dos días después. Las fechas ya
+emitidas no cambian; \cod{revoked_from} se añade una sola vez.
+
+El listado siguiente lleva la revocación, y el cliente, al verla, avisa de cada acuerdo afectado:
+
+\begin{lstlisting}[style=sh]
+grep AGREEMENT var/client/events.jsonl
+\end{lstlisting}
+\begin{lstlisting}[style=json]
+{"type":"vhub.agreement","ts":"…","code":"AGREEMENT_REVOCATION_SCHEDULED","severity":"info",
+ "detail":"revoked_from 2026-11-12T00:00:00Z","version":"1.1.0",
+ "agreement":"urn:uuid:agreement-retail-0007"}
+\end{lstlisting}
+
+Ese evento es lo que el operador de la comercializadora debe conectar a su sistema de alertas: tiene dos días
+para renegociar.
+
+\begin{lstlisting}[style=sh]
+clock 2026-11-12T00:00:05Z; sleep 2; post /transfers/request t1-transfer
+clock 2026-11-12T00:00:10Z; sleep 2; post /transfers/request t1-transfer -b
+\end{lstlisting}
+\begin{lstlisting}[style=out]
+t1-transfer   HTTP/1.1 200 OK | -
+
+t1-transfer   HTTP/1.1 400 Bad Request | VHub-Verdict: violation;gate=agreement_admission;code="AGREEMENT_VERSION_REVOKED";rule="transfer-request"
+    {"@context":["https://w3id.org/dspace/2025/1/context.jsonld"],"@type":"TransferError",
+     "code":"AGREEMENT_VERSION_REVOKED","consumerPid":"urn:uuid:7d2a9f10-ret-trf-0001","providerPid":null,
+     "reason":["AGREEMENT_VERSION_REVOKED"]}
+\end{lstlisting}
+
+A las 00:00:05 la transferencia aún pasa, dentro del margen de arrendamiento. A las 00:00:10 se rechaza, y el
+acuerdo figura como \texttt{"usable": false}.
+
+\begin{ideaClave}
+\textbf{Retirar} no rompe los acuerdos existentes. \textbf{Revocar} sí, y se anuncia con antelación. Son dos
+herramientas distintas: la primera es para evolucionar el vocabulario, la segunda para cuando algo que se
+permitió no debió permitirse.
+\end{ideaClave}
+
+\section{El rastro en el hub}
+
+Los eventos del \emph{namespace} cuentan la misma historia desde el otro lado. Resumidos:
+
+\begin{lstlisting}[style=out]
+10 2026-09-20T10:00:00Z draft.created        lucia
+11 2026-09-20T10:00:00Z candidate.proposed   lucia
+12 2026-09-20T10:00:00Z release.aborted      lucia     <- el intento con grace_window
+13 2026-09-20T10:00:00Z candidate.approved   lucia
+14 2026-09-20T10:00:00Z release.published    lucia     versions/1.1.0
+15 2026-09-20T10:00:00Z listing.issued       vhub
+…
+20 2026-10-01T10:00:00Z release.aborted      lucia     <- el intento con P3D
+21 2026-10-01T10:00:00Z candidate.approved   lucia
+22 2026-10-01T10:00:00Z release.published    lucia     versions/2.0.0
+…
+30 2026-11-10T00:00:00Z version.revoked      lucia     versions/1.1.0
+31 2026-11-10T00:00:00Z listing.issued       vhub
+\end{lstlisting}
+
+Los dos intentos de aprobación fallidos también quedaron registrados, como \cod{release.aborted}. Una aprobación
+que falla no deja nada visible para los clientes, pero sí deja constancia de que se intentó.
+
+\begin{retos}
+\begin{enumerate}[leftmargin=*, itemsep=2pt]
+  \item Repite la migración aprobando la 2.0.0 con \texttt{\{"grace\_window":"P10D"\}} y calcula antes a mano el
+        nuevo \cod{enforced_from} y el \cod{sunset} de la cabecera.
+  \item Pon \texttt{unknown\_agreement: reject} en el cliente y envía una transferencia con un \cod{agreementId} que
+        nunca se capturó.
+  \item ¿Qué pasaría con el acuerdo si en lugar de revocar la 1.1.0 se publicara una 3.0.0? Compruébalo.
+\end{enumerate}
+\end{retos}

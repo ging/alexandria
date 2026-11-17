@@ -1,13 +1,14 @@
 // Versions view: the signed VersionListing credential of a namespace, its lifecycle timeline and per-version records.
 // Stewards can revoke a published version; every document shown is the exact credential signed by the hub.
 import { useState } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Ban, FileBadge, GitBranch, RefreshCw } from 'lucide-react'
+import { Ban, ExternalLink, FileBadge, FileCode2, GitBranch, RefreshCw } from 'lucide-react'
 import { formatInstant, prettyJSON, relativeTo, shortDigest } from '@/lib/format'
 import { useAction, useNow, useNs } from '@/lib/hooks'
 import { asApiError } from '@/lib/http'
-import { hub, hubQueries, type Credential, type VersionRecord } from '@/lib/hub'
-import { CodeEditor } from '@/components/code-editor'
+import { hub, hubQueries, type Credential, type ManifestFile, type VersionRecord } from '@/lib/hub'
+import { CodeEditor, guessLanguage } from '@/components/code-editor'
 import { DataTable, type Column } from '@/components/data-table'
 import { DetailPanel, Split } from '@/components/detail-panel'
 import { ClassBadge, Timeline } from '@/components/lifecycle'
@@ -91,11 +92,14 @@ export function VersionsPage() {
   )
 }
 
-// RecordDetail shows one signed VersionRecord with its proof and the revoke action.
+// RecordDetail shows one signed VersionRecord with its package files, proof and the revoke action.
 function RecordDetail({ slug, version, onClose }: { slug: string; version: string; onClose: () => void }) {
   const q = useQuery(hubQueries.record(slug, version))
-  const [tab, setTab] = useState<'summary' | 'json'>('summary')
+  const manifestDigest = q.data?.credentialSubject.manifest ?? ''
+  const mq = useQuery({ ...hubQueries.manifest(manifestDigest), enabled: !!manifestDigest })
+  const [tab, setTab] = useState<'summary' | 'files' | 'json'>('summary')
   const [revoking, setRevoking] = useState(false)
+  const files = mq.data?.credentialSubject.files ?? []
   return (
     <DetailPanel
       title={<span className="font-mono text-sm">{version}</span>}
@@ -108,12 +112,116 @@ function RecordDetail({ slug, version, onClose }: { slug: string; version: strin
         <ErrorState error={q.error} />
       ) : (
         <>
-          <Tabs className="px-3" value={tab} onChange={setTab} tabs={[{ id: 'summary', label: 'Record' }, { id: 'json', label: 'Credential JSON' }]} />
-          {tab === 'summary' ? <RecordSummary vc={q.data} /> : <div className="p-3"><CodeEditor readOnly copy value={prettyJSON(q.data)} maxHeight="70vh" /></div>}
+          <Tabs
+            className="px-3"
+            value={tab}
+            onChange={setTab}
+            tabs={[
+              { id: 'summary', label: 'Record' },
+              { id: 'files', label: 'Files', count: mq.data ? files.length : undefined },
+              { id: 'json', label: 'Credential JSON' },
+            ]}
+          />
+          {tab === 'summary' ? (
+            <RecordSummary vc={q.data} />
+          ) : tab === 'files' ? (
+            <PackageFiles slug={slug} version={version} manifestDigest={manifestDigest} files={files} isPending={mq.isPending} error={mq.isError ? mq.error : null} />
+          ) : (
+            <div className="p-3"><CodeEditor readOnly copy value={prettyJSON(q.data)} maxHeight="70vh" /></div>
+          )}
         </>
       )}
       <Revoke slug={slug} version={version} open={revoking} onOpenChange={setRevoking} />
     </DetailPanel>
+  )
+}
+
+// PackageFiles lists the immutable artefacts compiled into a version package and previews them from /pub.
+function PackageFiles({
+  slug,
+  version,
+  manifestDigest,
+  files,
+  isPending,
+  error,
+}: {
+  slug: string
+  version: string
+  manifestDigest: string
+  files: ManifestFile[]
+  isPending: boolean
+  error: unknown
+}) {
+  const navigate = useNavigate()
+  const [preview, setPreview] = useState<ManifestFile | null>(null)
+  const previewPath = preview ? `/pub/${slug}/${version}/${preview.path}` : ''
+  const pq = useQuery({ ...hubQueries.pub(previewPath), enabled: !!preview })
+  const manifestPath = `/pub/packages/${manifestDigest.replace(/^ni:\/\/\/sha-256;/, '')}/manifest.json`
+  const openInPub = (p: string) => void navigate({ to: `/hub/pub?path=${encodeURIComponent(p)}` })
+  if (isPending) return <div className="p-4"><Spinner /></div>
+  if (error) return <ErrorState error={error} />
+  const body = pq.data ? (typeof pq.data.data === 'string' ? pq.data.text : prettyJSON(pq.data.data)) : ''
+  return (
+    <div className="space-y-3 p-3">
+      <div className="flex items-center justify-between gap-2 rounded-md border bg-side px-2.5 py-1.5 text-xs">
+        <span className="truncate text-muted">Package manifest</span>
+        <button onClick={() => openInPub(manifestPath)} className="inline-flex shrink-0 items-center gap-1 font-mono text-accent hover:underline">
+          manifest.json <ExternalLink className="size-3" />
+        </button>
+      </div>
+      <ul className="divide-y rounded-md border">
+        {files.map((f) => {
+          const pubUrl = `/pub/${slug}/${version}/${f.path}`
+          return (
+            <li key={f.path} className="flex items-center gap-2 px-2.5 py-2 hover:bg-hover">
+              <button onClick={() => setPreview(f)} className="min-w-0 flex-1 text-left">
+                <div className="flex items-center gap-1.5">
+                  <FileCode2 className="size-3.5 shrink-0 text-subtle" />
+                  <span className="truncate font-mono text-xs font-medium">{f.path}</span>
+                </div>
+                <div className="mt-0.5 flex flex-wrap items-center gap-1.5 pl-5 text-2xs text-subtle">
+                  <Badge>{f.role}</Badge>
+                  {f.slot ? <span>slot: {f.slot}</span> : null}
+                  <span className="font-mono">{f.media_type}</span>
+                </div>
+              </button>
+              <button
+                title="Open in Publication"
+                onClick={() => openInPub(pubUrl)}
+                className="rounded p-1 text-subtle hover:bg-active hover:text-fg"
+              >
+                <ExternalLink className="size-3.5" />
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+      {preview ? (
+        <Dialog
+          open={!!preview}
+          onOpenChange={(o) => { if (!o) setPreview(null) }}
+          width="max-w-3xl"
+          title={preview.path}
+          description={`${previewPath} · ${preview.media_type}`}
+          footer={
+            <>
+              <Button variant="ghost" icon={<ExternalLink className="size-3.5" />} onClick={() => { const u = previewPath; setPreview(null); openInPub(u) }}>
+                Open in Publication
+              </Button>
+              <Button variant="primary" onClick={() => setPreview(null)}>Close</Button>
+            </>
+          }
+        >
+          {pq.isPending ? (
+            <div className="flex h-40 items-center justify-center"><Spinner /></div>
+          ) : pq.isError ? (
+            <ErrorState error={pq.error} />
+          ) : (
+            <CodeEditor readOnly copy value={body} language={guessLanguage(body, preview.media_type)} maxHeight="60vh" />
+          )}
+        </Dialog>
+      ) : null}
+    </div>
   )
 }
 

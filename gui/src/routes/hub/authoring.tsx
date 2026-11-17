@@ -7,6 +7,7 @@ import { cn } from '@/lib/cn'
 import { formatInstant, iriTail, prettyJSON, relativeTo, shortDigest } from '@/lib/format'
 import { useAction, useNs } from '@/lib/hooks'
 import { hub, hubQueries, type HubEvent, type ValidationReport } from '@/lib/hub'
+import { runtime } from '@/lib/runtime'
 import { CodeEditor, guessLanguage } from '@/components/code-editor'
 import { ClassBadge, StateBadge } from '@/components/lifecycle'
 import { ErrorState } from '@/components/problem'
@@ -15,7 +16,47 @@ import { Field, Input, Textarea } from '@/components/ui/form'
 import { Badge, Empty, KV, Mono, Page, Spinner, Tabs } from '@/components/ui/misc'
 import { Dialog } from '@/components/ui/overlay'
 
-const template = (base: string, slug: string) =>
+// dslTemplate builds a minimal compilable alexandria.profiles/v1 YAML bundle for a namespace.
+const dslTemplate = (base: string, slug: string) =>
+  `dsl: alexandria.profiles/v1
+kind: OdrlProfile
+profile:
+  id: ${base}/odrl/profile/${slug}
+  version: 1.0.0
+  title: { en: ${slug} ODRL profile }
+  publisher: Data Space Authority
+  license: https://creativecommons.org/licenses/by/4.0/
+  base_url: ${base}/odrl/profile/${slug}
+namespaces:
+  ex: ${base}/ns/${slug}#
+terms:
+  - id: access
+    kind: action
+    included_in: odrl:use
+    label: { en: Access }
+    definition: { en: To access the asset under the governed policy. }
+---
+dsl: alexandria.profiles/v1
+kind: SpaceProfile
+space:
+  id: ${base}/spaces/${slug}
+  version: 1.0.0
+  title: { en: ${slug} data space }
+  operator: ${base}/party/authority
+  base_url: ${base}/pub/${slug}
+bindings:
+  - slot: odrl
+    profile: ${base}/odrl/profile/${slug}
+    source: internal
+    version: "=1.0.0"
+    obligation: mandatory
+    conformance:
+      - { role: json-schema, applies_to: policy_intake }
+      - { role: shacl, applies_to: policy_intake }
+`
+
+// pocTemplate builds a minimal Part 5.1 JSON draft when the server runs in poc compiler mode.
+const pocTemplate = (base: string, slug: string) =>
   prettyJSON({
     version: '1.0.0',
     profiles: [`${base}/pub/${slug}/profiles/odrl/1.0.0`],
@@ -127,7 +168,13 @@ export function AuthoringPage() {
           </div>
         </div>
       )}
-      <NewDraft slug={slug} initial={template(base || 'https://hub.example.com', slug)} open={creating} onOpenChange={setCreating} onCreated={(id) => open({ kind: 'draft', id })} />
+      <NewDraft
+        slug={slug}
+        initial={(runtime.compiler === 'poc' ? pocTemplate : dslTemplate)(base || 'https://hub.example.com', slug)}
+        open={creating}
+        onOpenChange={setCreating}
+        onCreated={(id) => open({ kind: 'draft', id })}
+      />
     </Page>
   )
 }
@@ -147,7 +194,11 @@ function NewDraft({ slug, initial, open, onOpenChange, onCreated }: { slug: stri
       onOpenChange={onOpenChange}
       width="max-w-3xl"
       title="New draft"
-      description="JSON for the PoC compiler or a YAML profile document (alexandria.profiles/v1) for the DSL compiler."
+      description={
+        runtime.compiler === 'poc'
+          ? 'Part 5.1 JSON draft for the legacy PoC compiler.'
+          : 'YAML bundle (alexandria.profiles/v1) with one SpaceProfile and the OdrlProfiles it binds, separated by ---.'
+      }
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
@@ -166,7 +217,8 @@ function DraftEditor({ slug, id, onProposed }: { slug: string; id: string; onPro
   const q = useQuery(hubQueries.draft(slug, id))
   const [text, setText] = useState<string | null>(null)
   const [report, setReport] = useState<ValidationReport | null>(null)
-  const loaded = q.data?.draft.document !== undefined ? prettyJSON(q.data.draft.document) : ''
+  const rawDoc = q.data?.draft.document
+  const loaded = typeof rawDoc === 'string' ? rawDoc : rawDoc !== undefined ? prettyJSON(rawDoc) : ''
   useEffect(() => { if (q.data) setText(loaded) }, [q.data, loaded])
   const dirty = text !== null && text !== loaded
   const key = ['hub', 'ns', slug, 'drafts', id]

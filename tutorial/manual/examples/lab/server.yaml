@@ -1,0 +1,44 @@
+# Flexgrid lab hub: alexandria-server with the profile DSL compiler and a vendored DSP copy.
+# Alternate ports (18443, 19400) so it never clashes with the default lab of config/server.yaml.
+common_config:
+  hosts:
+    http:
+      protocol: "https"
+      url: "127.0.0.1"
+      port: "18443"
+      internal_port: "18443"
+  db:
+    db_type: "SQLite"
+    database: "file:var/hub/hub.db"
+    blobs: "file:var/hub/blobs"
+  connection:
+    tls:
+      cert: "file:var/tls/hub.crt"
+      key: "file:var/tls/hub.key"
+
+auth_config:
+  enabled: true
+  issuer: "http://127.0.0.1:19400"
+  audience: "alexandria-vhub"
+  roles_claim: "roles"
+  admin_role: "vhub-admin"
+
+did_config:
+  type: "key"
+  signing_key: "file:var/hub/hub.key"
+
+observability:
+  log_level: "info"
+  log_format: "text"
+  metrics: true
+  port: "12112"
+
+vhub_config:
+  rdf_context: "self-hosted"
+  # Drafts are YAML bundles of alexandria.profiles/v1 instead of the PoC JSON format.
+  compiler: "dsl"
+  # Local copies for bindings with source: vendored (<slot>/<version>/vendor.json).
+  vendor_dir: "file:../vendor"
+  vocab:
+    max_size: 10485760
+    allow_insecure_localhost: true

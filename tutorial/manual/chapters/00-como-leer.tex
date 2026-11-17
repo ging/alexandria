@@ -1,0 +1,73 @@
+\chapter*{Cómo leer este tutorial}
+\addcontentsline{toc}{chapter}{Cómo leer este tutorial}
+\markboth{Cómo leer este tutorial}{}
+
+Este documento recorre Alexandria de punta a punta con un único ejemplo que se parece a un problema de
+verdad: una distribuidora eléctrica que comparte curvas de carga cuartohorarias con comercializadoras,
+agregadores de flexibilidad y un grupo de investigación. No hay colores ni acciones de juguete: hay finalidades
+de uso, agregación mínima, plazos de retención y jurisdicciones, que es de lo que tratan las políticas reales.
+
+El recorrido tiene cinco partes y cada una se apoya en la anterior:
+
+\begin{enumerate}[leftmargin=*, itemsep=2pt]
+  \item \textbf{El modelo mental.} Qué problema resuelve Alexandria, qué hace cada binario y cuál es el caso de estudio.
+  \item \textbf{El lenguaje de perfiles.} Cómo se escribe un \cod{OdrlProfile} y un \cod{SpaceProfile}, qué genera
+        \cod{alexandriac}, cómo valida y cómo se versiona.
+  \item \textbf{El hub.} Cómo \cod{alexandria-server} convierte ese YAML en una versión firmada, con fechas y auditoría.
+  \item \textbf{El borde.} Cómo \cod{alexandria-client} sincroniza esas versiones y decide sobre cada mensaje DSP.
+  \item \textbf{Revisión de SHACL.} Qué está hecho, qué no, qué falla cuando se ejecutan de verdad las \emph{shapes}
+        generadas y qué haría falta para cerrarlo.
+\end{enumerate}
+
+\section*{Convenciones}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{3.6cm}Y@{}}
+\toprule
+\textbf{Aspecto} & \textbf{Significado} \\
+\midrule
+Fondo azul claro & Comando que se escribe en la terminal. \\
+Fondo blanco, letra pequeña & Salida real del comando, copiada tal cual (recortada con \texttt{…} cuando es larga). \\
+Fondo gris & Contenido de un fichero: YAML, JSON o Turtle. \\
+Caja azul, «Idea clave» & El concepto que conviene retener de la sección. \\
+Caja ámbar, «Trampa habitual» & Un comportamiento que sorprende la primera vez. \\
+Caja gris, «Bajo el capó» & Dónde está en el código lo que se acaba de ver. \\
+Caja roja, «Hallazgo» & Un defecto o una carencia detectada durante la revisión. \\
+\bottomrule
+\end{tabularx}
+
+\section*{Qué necesitas}
+
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item Go 1.22 o posterior y \cod{make} para compilar (\texttt{make build}).
+  \item \cod{curl} y \cod{python3} (solo biblioteca estándar) para las llamadas y para leer JSON.
+  \item Para reproducir la revisión de SHACL del capítulo~\ref{ch:shacl}: un entorno virtual de Python con
+        \cod{pyshacl} y \cod{jsonschema}.
+\end{itemize}
+
+\section*{Los ficheros del tutorial}
+
+Todo lo que se cita vive en \cod{tutorial/manual/examples/}:
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{5.4cm}Y@{}}
+\toprule
+\textbf{Ruta} & \textbf{Contenido} \\
+\midrule
+\cod{dsl/metering-1.0.0.yaml} & El perfil ODRL de medida, solo. \\
+\cod{dsl/flexgrid-1.0.0.yaml} & Perfil 1.0.0 más el \cod{SpaceProfile} 1.0.0: el primer borrador que se publica. \\
+\cod{dsl/flexgrid-1.1.0.yaml} & Versión compatible: una finalidad nueva y una acción obsoleta. \\
+\cod{dsl/flexgrid-2.0.0.yaml} & Versión de ruptura: la acción obsoleta se retira. \\
+\cod{dsl/health-0.3.0.yaml} & Segundo perfil, de uso secundario de datos de salud. \\
+\cod{vendor/dsp/2025-1/} & Copia local reducida de DSP 2025-1 para el \emph{binding} vendorizado. \\
+\cod{msgs/} & Los mensajes DSP que se envían: \cod{m1}–\cod{m6}, el acuerdo \cod{a1} y las transferencias. \\
+\cod{rules/} & Las tres reglas del cliente que se adaptan. \\
+\cod{lab/} & \cod{server.yaml}, \cod{client.yaml} y \cod{env.sh}, el guion del laboratorio. \\
+\cod{shacl/harness.py} & El banco de pruebas de la revisión de SHACL. \\
+\bottomrule
+\end{tabularx}
+
+\begin{notaPractica}[Sobre los puertos]
+El laboratorio de este tutorial escucha en \cod{18443} (hub), \cod{19400} (IdP), \cod{18282} (conector),
+\cod{19080}/\cod{19081} (tráfico) y \cod{19090} (administración). Son distintos de los de \cod{config/server.yaml}
+y \cod{config/client.yaml} a propósito: así puede convivir con el laboratorio por defecto, que usa otra base de
+datos, otro compilador de borradores y otro \emph{namespace}.
+\end{notaPractica}

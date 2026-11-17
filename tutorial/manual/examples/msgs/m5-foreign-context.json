@@ -1,0 +1,22 @@
+{
+  "@context": [
+    "https://w3id.org/dspace/2025/1/context.jsonld",
+    "https://flexgrid.example/odrl/profile/metering/context.jsonld",
+    "https://schema.org/"
+  ],
+  "@type": "ContractRequestMessage",
+  "providerPid": "urn:uuid:9c1f7a52-dso-neg-0042",
+  "consumerPid": "urn:uuid:4be0d6c1-agg-neg-0017",
+  "callbackAddress": "https://aggregator.flexgrid.example/dsp/callback",
+  "offer": {
+    "@type": "Offer",
+    "@id": "urn:uuid:offer-forecast-02",
+    "profile": "https://flexgrid.example/odrl/profile/metering",
+    "target": "urn:uuid:dataset-qh-load-madrid-2026",
+    "permission": [
+      {
+        "action": "forecastDemand"
+      }
+    ]
+  }
+}

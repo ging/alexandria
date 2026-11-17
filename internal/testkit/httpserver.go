@@ -11,11 +11,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ging/alexandria/internal/core/lifecycle"
 	"github.com/ging/alexandria/internal/core/timex"
+	"github.com/ging/alexandria/internal/server/adapters/compiler_poc"
 	"github.com/ging/alexandria/internal/server/adapters/http_pub"
 	"github.com/ging/alexandria/internal/server/adapters/http_v1"
 	"github.com/ging/alexandria/internal/server/adapters/httpx"
 	"github.com/ging/alexandria/internal/server/adapters/jwt_jwks"
+	"github.com/ging/alexandria/internal/server/app"
 )
 
 // HTTPServer is an F6 hub reachable over HTTP with valid tokens for its principals.
@@ -27,14 +30,20 @@ type HTTPServer struct {
 	server                    *httptest.Server
 }
 
-// NewHTTPServer starts an F6 hub at t0 with namespace demo, behind httptest.
+// NewHTTPServer starts an F6 hub at t0 with compiler_poc, behind httptest.
 func NewHTTPServer(t *testing.T, t0 string) *HTTPServer {
+	t.Helper()
+	return NewHTTPServerWith(t, t0, compiler_poc.Compiler{Defaults: lifecycle.Defaults()})
+}
+
+// NewHTTPServerWith starts an HTTP hub at t0 with the given profile compiler.
+func NewHTTPServerWith(t *testing.T, t0 string, c app.ProfileCompiler) *HTTPServer {
 	t.Helper()
 	var idp *IDP
 	idpSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { idp.Handler().ServeHTTP(w, r) }))
 	t.Cleanup(idpSrv.Close)
 	idp = NewIDP(idpSrv.URL)
-	s := NewBareServer(t0)
+	s := NewBareServerWith(t0, c)
 	h := &HTTPServer{Server: s, IDP: idp}
 	verifier := &jwt_jwks.Verifier{
 		Issuers: []jwt_jwks.Issuer{{Iss: idp.Issuer, DiscoveryURL: idp.Issuer + "/.well-known/openid-configuration"}}, Audience: "alexandria-vhub",

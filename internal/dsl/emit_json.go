@@ -76,10 +76,14 @@ func emitSchema(ix *Index) []byte {
 	ref := func(name string) map[string]any { return map[string]any{"$ref": "#/$defs/" + name} }
 	arrayOf := func(name string) map[string]any { return map[string]any{"type": "array", "items": ref(name)} }
 	profileIDs := []string{id, id + "/" + ix.P.Profile.Version}
+	rule := map[string]any{"type": "object", "properties": map[string]any{
+		"action": ref("Action"), "constraint": arrayOf("Constraint"), "duty": arrayOf("Rule"),
+	}}
+	if ix.P.Rules.ActionsClosed() {
+		rule["required"] = []string{"action"}
+	}
 	defs := map[string]any{
-		"Rule": map[string]any{"type": "object", "properties": map[string]any{
-			"action": ref("Action"), "constraint": arrayOf("Constraint"), "duty": arrayOf("Rule"),
-		}},
+		"Rule":       rule,
 		"Constraint": map[string]any{"oneOf": []any{ref("LogicalConstraint"), ref("AtomicConstraint")}},
 		"LogicalConstraint": map[string]any{
 			"type": "object", "not": map[string]any{"required": []string{"leftOperand"}},
@@ -186,6 +190,17 @@ func signatureSchema(ix *Index, s *Signature) map[string]any {
 	return then
 }
 
+// lexicalForms are the XSD lexical spaces a typed @value must match, so the schema rejects what sh:datatype rejects.
+var lexicalForms = map[string]string{
+	"xsd:integer":  `^[+-]?[0-9]+$`,
+	"xsd:decimal":  `^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)$`,
+	"xsd:double":   `^([+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?|[+-]?INF|NaN)$`,
+	"xsd:float":    `^([+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?|[+-]?INF|NaN)$`,
+	"xsd:boolean":  `^(true|false|1|0)$`,
+	"xsd:date":     `^-?[0-9]{4,}-[0-9]{2}-[0-9]{2}(Z|[+-][0-9]{2}:[0-9]{2})?$`,
+	"xsd:dateTime": `^-?[0-9]{4,}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})?$`,
+}
+
 // valueSchema is the compact JSON-LD form of one right-operand value.
 func valueSchema(ix *Index, s *Signature) map[string]any {
 	if s.Kind() == "iri" {
@@ -200,7 +215,11 @@ func valueSchema(ix *Index, s *Signature) map[string]any {
 		}
 		return map[string]any{"type": "object", "required": []string{"@id"}, "properties": map[string]any{"@id": idSchema}}
 	}
-	typed := map[string]any{"type": "object", "required": []string{"@value"}, "properties": map[string]any{"@value": map[string]any{"type": "string"}}}
+	lexical := map[string]any{"type": "string"}
+	if re, ok := lexicalForms[s.Datatype]; ok {
+		lexical["pattern"] = re
+	}
+	typed := map[string]any{"type": "object", "required": []string{"@value"}, "properties": map[string]any{"@value": lexical}}
 	if s.Datatype != "" {
 		full, _ := ix.Expand(s.Datatype)
 		typed["required"] = []string{"@value", "@type"}

@@ -1,0 +1,282 @@
+\chapter{Anatomía de un \texttt{OdrlProfile}}
+\label{ch:odrlprofile}
+
+Un \cod{OdrlProfile} es un documento YAML que dice tres cosas: qué términos de ODRL \textbf{adopta} el espacio,
+qué términos nuevos \textbf{crea} y cómo de \textbf{cerrado} es el vocabulario resultante. Este capítulo recorre
+\cod{examples/dsl/metering-1.0.0.yaml} sección por sección.
+
+\section{Cabecera e identidad}
+
+\begin{lstlisting}[style=yaml]
+dsl: alexandria.profiles/v1
+kind: OdrlProfile
+
+profile:
+  id: https://flexgrid.example/odrl/profile/metering
+  version: 1.0.0
+  title:
+    en: Smart Metering Data Usage Profile
+    es: Perfil de uso de datos de medida inteligente
+  description:
+    en: ODRL profile for sharing quarter-hourly smart meter data between DSOs, retailers and aggregators.
+  publisher: Flexgrid Data Space Authority
+  license: https://creativecommons.org/licenses/by/4.0/
+  base_url: https://flexgrid.example/odrl/profile/metering
+\end{lstlisting}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{3.7cm}L{2.2cm}Y@{}}
+\toprule
+\textbf{Campo} & \textbf{Obligatorio} & \textbf{Qué es} \\
+\midrule
+\cod{dsl} & sí & Siempre \cod{alexandria.profiles/v1}. \\
+\cod{kind} & sí & \cod{OdrlProfile} o \cod{SpaceProfile}. \\
+\cod{profile.id} & sí & IRI del perfil. Es lo que una política declara en su campo \cod{profile}. \\
+\cod{profile.version} & sí & SemVer completo: \cod{MAYOR.MENOR.PARCHE}. \\
+\cod{profile.title} & sí & Mapa de idiomas. La clave \cod{en} es obligatoria en todos los mapas de idiomas. \\
+\cod{profile.description} & no & Mapa de idiomas. \\
+\cod{profile.publisher} & sí & Texto libre. \\
+\cod{profile.license} & sí & IRI de la licencia del vocabulario. \\
+\cod{profile.base_url} & sí & De aquí salen las URL de los artefactos: el contexto es \texttt{<base\_url>/\allowbreak{}context.jsonld}. \\
+\bottomrule
+\end{tabularx}
+
+\begin{trampaHabitual}[El identificador del perfil no es el espacio de nombres]
+El \cod{id} del perfil y el \emph{namespace} de sus términos son IRI distintas. Si coinciden, o si una es la otra
+más \texttt{\#} o \cod{/}, el compilador lo rechaza con \cod{PROFILE_ID_IS_NAMESPACE}. El perfil es un documento; los
+términos viven en otro sitio.
+\end{trampaHabitual}
+
+\section{Espacios de nombres}
+
+\begin{lstlisting}[style=yaml, firstnumber=16]
+namespaces:
+  enr: https://flexgrid.example/ns/metering#
+\end{lstlisting}
+
+Hay que declarar al menos uno, y su IRI tiene que acabar en \texttt{\#} o en \cod{/}. Cuando hay varios, el
+\textbf{primero que aparece en el fichero} es el espacio de nombres de los términos que crea el perfil. Los demás
+solo sirven para citar términos ajenos.
+
+Nueve prefijos están reservados y no se pueden redeclarar: \cod{odrl}, \cod{xsd}, \cod{rdf}, \cod{rdfs}, \cod{owl},
+\cod{skos}, \cod{dct}, \cod{sig} y \cod{alx}. Están siempre disponibles.
+
+\section{Términos adoptados}
+
+\begin{lstlisting}[style=yaml, firstnumber=19]
+adopted:
+  actions:
+    - odrl:aggregate
+    - odrl:anonymize
+  left_operands:
+    - term: odrl:purpose
+      signature:
+        value_kind: iri
+        values: [enr:gridBalancing, enr:billing, enr:demandForecast]
+        operators: [eq, isAnyOf]
+    - term: odrl:dateTime
+      signature:
+        datatype: xsd:dateTime
+        operators: [lt, lteq, gt, gteq]
+\end{lstlisting}
+
+Adoptar es decir «este término ya existe y aquí se usa». Las categorías son seis: \cod{actions},
+\cod{left_operands}, \cod{operators}, \cod{right_operands}, \cod{party_functions} y \cod{asset_relations}.
+
+Cada entrada admite dos formas. La \textbf{corta} es el CURIE a secas, como \cod{odrl:aggregate}. La
+\textbf{larga} es un objeto con \cod{term} y, solo para operandos izquierdos, \cod{signature} y \cod{enforcement}.
+
+Lo interesante está en la forma larga. ODRL define \cod{odrl:purpose}, pero no dice qué finalidades existen. Al
+adoptarlo con una firma, el perfil lo acota: en Flexgrid una finalidad es una de tres IRI, y se compara con
+\cod{eq} o con \cod{isAnyOf}. El término sigue siendo de ODRL; la restricción es del espacio.
+
+\begin{bajoElCapo}
+Los términos \cod{odrl:} adoptados se contrastan con una copia local del vocabulario ODRL~2.2
+(\cod{internal/dsl/odrlvocab.go}), nunca con la red. Se comprueba que el término exista y que su categoría sea la
+declarada. Un término adoptado que no sea de ODRL tiene que estar creado por otro perfil del mismo \emph{bundle}.
+\end{bajoElCapo}
+
+\section{Términos creados}
+
+\subsection{Acciones}
+
+\begin{lstlisting}[style=yaml, firstnumber=34]
+terms:
+  - id: forecastDemand
+    kind: action
+    included_in: odrl:use
+    label: { en: Forecast demand, es: Predecir la demanda }
+    definition:
+      en: To train or run load-forecasting models on the metering data.
+
+  - id: settleImbalance
+    kind: action
+    included_in: odrl:use
+    label: { en: Settle imbalance, es: Liquidar desvíos }
+    definition:
+      en: To use the metering data in the imbalance settlement between market parties.
+
+  - id: profileConsumer
+    kind: action
+    included_in: odrl:use
+    label: { en: Profile consumer, es: Perfilar al consumidor }
+    definition:
+      en: To derive a behavioural profile of an individual supply point.
+\end{lstlisting}
+
+Todo término tiene \cod{id}, \cod{kind}, \cod{label} y \cod{definition}. El \cod{id} es un nombre local, letras,
+dígitos y guion bajo, que se une al espacio de nombres: \cod{forecastDemand} pasa a ser
+\cod{enr:forecastDemand}.
+
+\cod{included_in} solo existe en las acciones y dice de qué acción más general es un caso. Si falta, el
+compilador avisa con \cod{ACTION_INCLUDED_IN_MISSING}, porque un motor de políticas no sabría que permitir
+\cod{odrl:use} cubre también la acción nueva.
+
+\subsection{Operandos izquierdos y sus firmas}
+
+\begin{lstlisting}[style=yaml, firstnumber=57]
+  - id: minAggregation
+    kind: left_operand
+    label: { en: Minimum aggregation, es: Agregación mínima }
+    definition:
+      en: Minimum number of supply points that every delivered record must aggregate.
+    signature:
+      datatype: xsd:integer
+      operators: [gteq, gt]
+
+  - id: retentionDays
+    kind: left_operand
+    label: { en: Retention in days, es: Retención en días }
+    definition:
+      en: Maximum number of days the consumer may keep the data.
+    signature:
+      datatype: xsd:integer
+      operators: [lteq, lt]
+
+  - id: processingRegion
+    kind: left_operand
+    label: { en: Processing region, es: Región de tratamiento }
+    definition:
+      en: Jurisdiction where the data may be stored and processed.
+    signature:
+      value_kind: iri
+      values: [enr:regionES, enr:regionEU, enr:regionEEA]
+      operators: [eq, isAnyOf]
+\end{lstlisting}
+
+La \textbf{firma} es la parte más valiosa del lenguaje. Un operando izquierdo sin firma es solo un nombre: se
+puede escribir \texttt{minAggregation eq "muchos"} y nadie protesta. Con firma, el operando tiene un álgebra.
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{3.1cm}Y@{}}
+\toprule
+\textbf{Campo de la firma} & \textbf{Significado} \\
+\midrule
+\cod{operators} & Obligatorio, al menos uno. Operadores admitidos: los doce de ODRL o el CURIE de un operador creado por el perfil. \\
+\cod{datatype} & Tipo XSD del operando derecho, como \cod{xsd:integer}. Implica un valor literal. \\
+\cod{value_kind} & \cod{literal} o \cod{iri}. Normalmente se deduce. \\
+\cod{values} & Enumeración cerrada de valores admitidos. \\
+\cod{scheme} & Alternativa a \cod{values}: los valores son conceptos de un esquema SKOS. Incompatible con \cod{values}, y hoy no es practicable (hallazgo H7 del capítulo~\ref{ch:shacl}). \\
+\cod{allow_reference} & Si es \cod{true}, admite \cod{rightOperandReference}. Por defecto es \cod{false}. \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+El tipo del valor, cuando no se escribe \cod{value_kind}, se deduce en este orden: si hay \cod{datatype}, es
+literal; si todos los \cod{values} parecen CURIE, es IRI; si hay \cod{scheme}, es IRI; en otro caso, literal.
+
+No todos los operadores casan con todos los tipos. El compilador aplica esta tabla:
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{4.3cm}Y@{}}
+\toprule
+\textbf{Operadores} & \textbf{Exigen} \\
+\midrule
+\cod{eq}, \cod{neq} & Nada: valen con cualquier tipo. \\
+\cod{lt}, \cod{lteq}, \cod{gt}, \cod{gteq} & Un tipo ordenado: \cod{xsd:integer}, \cod{decimal}, \cod{double}, \cod{float}, \cod{date}, \cod{dateTime} o \cod{time}. Con \cod{xsd:duration} hay aviso, porque el orden es parcial. \\
+\cod{isA}, \cod{hasPart}, \cod{isPartOf} & Valores IRI. \\
+\cod{isAnyOf}, \cod{isAllOf}, \cod{isNoneOf} & Nada, pero convierten el operando derecho en multivaluado: se admite una lista. \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Operandos derechos}
+
+\begin{lstlisting}[style=yaml, firstnumber=85]
+  - id: gridBalancing
+    kind: right_operand
+    label: { en: Grid balancing }
+    definition: { en: Operating the distribution grid and its flexibility markets. }
+  - id: billing
+    kind: right_operand
+    label: { en: Billing }
+    definition: { en: Invoicing the energy supplied to a supply point. }
+  # ... demandForecast, regionES, regionEU, regionEEA
+\end{lstlisting}
+
+Los valores IRI de una firma deberían ser operandos derechos del propio perfil. Si un valor no lo es, el
+compilador avisa con \cod{SIG_VALUE_KIND}: la política sería válida, pero nadie habría definido qué significa.
+
+\subsection{Los once tipos de término}
+
+\noindent\begin{tabularx}{\linewidth}{@{}L{4.4cm}Y@{}}
+\toprule
+\textbf{\texttt{kind}} & \textbf{Forma RDF que genera} \\
+\midrule
+\cod{action} & \cod{odrl:Action}, con \cod{odrl:includedIn}. \\
+\cod{left_operand}, \cod{operator}, \cod{right_operand}, \cod{conflict_term} & Individuo de la clase ODRL correspondiente. \\
+\cod{party_function}, \cod{asset_relation}, \cod{logical_operand} & Subpropiedad de \cod{odrl:function}, \cod{odrl:relation} u \cod{odrl:operand}. \\
+\cod{rule_subclass}, \cod{policy_subclass}, \cod{constraint_subclass} & Clase OWL. Exigen \cod{subclass_of}. \\
+\bottomrule
+\end{tabularx}
+
+\section{Ciclo de vida de un término}
+
+Un término tiene \cod{status}: \cod{active} por defecto, \cod{deprecated} o \cod{retired}. Junto a él,
+\cod{replaced_by} dice qué usar en su lugar. En la versión 1.0.0 todo está activo; el capítulo~\ref{ch:evolucion}
+usa estos campos para retirar \cod{profileConsumer} sin romper a nadie de golpe.
+
+\begin{ideaClave}
+Un término \textbf{nunca se borra}. Se marca obsoleto en una versión y retirado en otra posterior. El compilador
+lo exige comparando cada versión con la anterior.
+\end{ideaClave}
+
+\section{Cierre del vocabulario}
+
+\begin{lstlisting}[style=yaml, firstnumber=112]
+rules:
+  actions: closed
+  left_operands: closed
+\end{lstlisting}
+
+Con la lista de acciones \textbf{cerrada}, una política solo puede usar las acciones del perfil, creadas o
+adoptadas, más \cod{odrl:use} y \cod{odrl:transfer}, que son el núcleo de ODRL y un perfil no puede prohibir. Con
+la lista de operandos izquierdos cerrada, una restricción solo puede usar los del perfil.
+
+Ambas listas son cerradas por defecto. Abrir una (\cod{open}) es un cambio menor; cerrarla después es una
+ruptura.
+
+\section{El bloque \texttt{enforcement}}
+
+Un operando izquierdo admite además un bloque \cod{enforcement} con \cod{cedar_path}, \cod{pdp_level} y
+\cod{eval_timing}, que describe cómo lo evaluaría un motor de decisión. El lenguaje lo valida: exige que el
+operando tenga firma, y falla con \cod{ENFORCEMENT_WITHOUT_SIGNATURE} si no la tiene.
+
+\begin{notaPractica}[Hoy no genera nada]
+La proyección a Cedar está desconectada (\texttt{cedarEnabled = false} en \cod{internal/dsl/cedar.go}). El bloque se
+analiza y se versiona, pero no produce \cod{cedar-mapping.json} ni \cod{cedar.schema}, y un \emph{binding} que
+pida esos roles falla con \cod{ARTIFACT_MISSING}. Por eso el perfil de Flexgrid no lo usa.
+\end{notaPractica}
+
+\section{Un YAML más estricto de lo habitual}
+
+El lenguaje usa YAML restringido al modelo de datos de JSON. No se admiten \textbf{anclas}, \textbf{alias} ni
+\textbf{etiquetas} explícitas, las claves duplicadas se rechazan y las claves de un mapa tienen que ser cadenas.
+
+La razón es práctica: dos personas que leen el mismo fichero tienen que ver el mismo documento. Un ancla definida
+cien líneas más arriba cambia el significado de una línea sin que se note en un \emph{diff}.
+
+\begin{retos}
+\begin{enumerate}[leftmargin=*, itemsep=2pt]
+  \item Añade un operando \cod{meteringResolution} que exprese la resolución temporal mínima. Pruébalo con
+        \cod{xsd:duration} y \cod{gteq}, y luego con \cod{xsd:integer} en minutos. ¿Qué dice el compilador en cada caso?
+  \item Cambia \texttt{operators: [lteq, lt]} de \cod{retentionDays} por \texttt{[lteq, isA]} y lee el error.
+  \item Quita \cod{included_in} de una acción y comprueba que el aviso no impide compilar.
+\end{enumerate}
+\end{retos}

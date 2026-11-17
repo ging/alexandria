@@ -111,3 +111,49 @@ func TestInvalidObservabilitySettingsRejected(t *testing.T) {
 		t.Fatalf("expected CONFIG_SCHEMA on invalid log_format, got %v", cerr)
 	}
 }
+
+func TestModeDefaultsToProxy(t *testing.T) {
+	c, err := Parse(example(t))
+	if err != nil || c.Mode != ModeProxy || c.Validator() {
+		t.Fatalf("got %v %+v", err, c)
+	}
+}
+
+func TestValidatorModeNeedsNoUpstreams(t *testing.T) {
+	c, err := Parse([]byte(`{"mode":"validator","trust":{"hub":"https://h","namespace":"demo","hub_did":"did:web:h"},"listeners":{"admin":{"bind":"a:1"}},"events":{"sink":"file:///e"}}`))
+	if err != nil || !c.Validator() {
+		t.Fatalf("got %v %+v", err, c)
+	}
+}
+
+func TestProxyModeStillRequiresUpstreams(t *testing.T) {
+	for _, mode := range []string{``, `"mode":"proxy",`} {
+		_, err := Parse([]byte(`{` + mode + `"trust":{"hub":"https://h","namespace":"demo","hub_did":"did:web:h"},"listeners":{"admin":{"bind":"a:1"}},"events":{"sink":"file:///e"}}`))
+		if err == nil || err.Code != codes.ConfigSchema {
+			t.Fatalf("mode %q: got %v", mode, err)
+		}
+	}
+}
+
+func TestUnknownModeIsConfigSchema(t *testing.T) {
+	_, err := Parse([]byte(`{"mode":"sidecar","trust":{"hub":"https://h","namespace":"demo","hub_did":"did:web:h"},"upstreams":{"dsp":"http://c"},"listeners":{"admin":{"bind":"a:1"}},"events":{"sink":"file:///e"}}`))
+	if err == nil || err.Code != codes.ConfigSchema {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestValidatorModeInNodeLayout(t *testing.T) {
+	c, err := Parse([]byte("did_config: {hub_did: 'did:web:h'}\nobservability: {port: '9090', events_sink: 'file:///e'}\nclient_config: {mode: validator, trust: {hub: 'https://h', namespace: demo}, listeners: {dsp-ingress: {bind: '127.0.0.1:9080'}}}\n"))
+	if err != nil || !c.Validator() || c.Upstreams.DSP != "" {
+		t.Fatalf("got %v %+v", err, c)
+	}
+}
+
+func TestExampleConfigsLoadInTheirMode(t *testing.T) {
+	for path, validator := range map[string]bool{"../../../examples/proxy/client.yaml": false, "../../../examples/envoy/client.yaml": true} {
+		c, err := Load(path)
+		if err != nil || c.Validator() != validator {
+			t.Fatalf("%s: %v %+v", path, err, c)
+		}
+	}
+}

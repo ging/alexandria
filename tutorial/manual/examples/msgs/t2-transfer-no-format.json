@@ -1,0 +1,9 @@
+{
+  "@context": [
+    "https://w3id.org/dspace/2025/1/context.jsonld"
+  ],
+  "@type": "TransferRequestMessage",
+  "consumerPid": "urn:uuid:7d2a9f10-ret-trf-0001",
+  "agreementId": "urn:uuid:agreement-retail-0007",
+  "callbackAddress": "https://retailer.flexgrid.example/dsp/callback"
+}
