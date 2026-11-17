@@ -57,7 +57,8 @@ observability:
 # Vocabulary Hub settings (Appendix B, DP-6, DP-9, DP-11).
 vhub_config:
   rdf_context: "self-hosted"
-  compiler: "poc"
+  compiler: "dsl"
+  vendor_dir: "file:../deploy/vendor"
   clock_skew: "PT5S"
   vocab:
     max_size: 10485760

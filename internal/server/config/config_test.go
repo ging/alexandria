@@ -48,6 +48,7 @@ func TestYAMLAndNodeLayoutMatchJSON(t *testing.T) {
 			t.Fatalf("%s: %v", path, err)
 		}
 		if c.Listen != baseCfg.Listen || c.Base != baseCfg.Base || c.Context() != baseCfg.Context() ||
+			c.Compiler != baseCfg.Compiler || c.VendorDir != baseCfg.VendorDir ||
 			c.Auth.Audience != baseCfg.Auth.Audience || len(c.Auth.Issuers) != 1 ||
 			c.Auth.Issuers[0] != baseCfg.Auth.Issuers[0] || c.Signing.Key != baseCfg.Signing.Key ||
 			c.Storage.Database != baseCfg.Storage.Database || c.Storage.Blobs != baseCfg.Storage.Blobs {

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DSP 2025-1 negotiation and transfer messages (reduced local copy for the Flexgrid lab)",
+  "type": "object",
+  "required": ["@type"],
+  "allOf": [
+    {
+      "if": {"properties": {"@type": {"enum": ["ContractRequestMessage", "dspace:ContractRequestMessage"]}}},
+      "then": {
+        "required": ["consumerPid", "offer", "callbackAddress"],
+        "properties": {
+          "consumerPid": {"type": "string", "minLength": 1},
+          "providerPid": {"type": "string", "minLength": 1},
+          "callbackAddress": {"type": "string", "pattern": "^https?://"},
+          "offer": {"type": "object", "required": ["@id"]}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"@type": {"enum": ["ContractAgreementMessage", "dspace:ContractAgreementMessage"]}}},
+      "then": {
+        "required": ["consumerPid", "providerPid", "agreement"],
+        "properties": {"agreement": {"type": "object", "required": ["@id", "target", "assigner", "assignee"]}}
+      }
+    },
+    {
+      "if": {"properties": {"@type": {"enum": ["TransferRequestMessage", "dspace:TransferRequestMessage"]}}},
+      "then": {"required": ["consumerPid", "agreementId", "format", "callbackAddress"]}
+    }
+  ]
+}
