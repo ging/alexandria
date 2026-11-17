@@ -26,14 +26,17 @@ const SourceName = "sources/draft.yaml"
 // manifestRoles are the roles of §3.7; any other language role is published as "other".
 var manifestRoles = map[string]bool{pkgv.RoleJSONSchema: true, pkgv.RoleSHACL: true, pkgv.RoleContext: true}
 
-// Compiler compiles YAML drafts; Vendor resolves vendored bindings from local copies.
-type Compiler struct{ Vendor dsl.Vendor }
+// Compiler compiles YAML drafts; Vendor resolves vendored bindings and Defaults supply base lifecycle parameters.
+type Compiler struct {
+	Vendor   dsl.Vendor
+	Defaults lifecycle.Params
+}
 
 var _ app.ProfileCompiler = Compiler{}
 
 // options builds the language options for a hub context.
 func (c Compiler) options(ctx app.CompileContext) dsl.Options {
-	opt := dsl.Options{Vendor: c.Vendor}
+	opt := dsl.Options{Vendor: c.Vendor, Defaults: c.Defaults}
 	if len(ctx.Previous) > 0 {
 		opt.Previous = []dsl.Source{{Name: "previous.yaml", Data: ctx.Previous}}
 	}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/ging/alexandria/internal/core/jsonld"
 	"github.com/ging/alexandria/internal/core/schemas"
+	"github.com/ging/alexandria/internal/server/adapters/compiler_dsl"
 	"github.com/ging/alexandria/internal/testkit"
 )
 
@@ -181,5 +182,33 @@ func TestT_HUB_029_CredentialsConflictOnlyOnIssAndSub(t *testing.T) {
 		if _, err := jsonld.Expand(b, loader(t, withoutIssSub(t))); err != nil {
 			t.Errorf("%s does not expand without iss/sub: %v", p, err)
 		}
+	}
+}
+
+// TestYAMLDraftDocumentRoundTripsAndExpands verifies that YAML DSL drafts return their source string on GET and expand as JSON-LD.
+func TestYAMLDraftDocumentRoundTripsAndExpands(t *testing.T) {
+	h := testkit.NewHTTPServerWith(t, "2026-09-01T10:00:00Z", compiler_dsl.Compiler{})
+	h.SetupHTTP(t)
+	yamlDoc, err := os.ReadFile("../../../../conformance/f6/drafts/v1.0.0.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, hdr, b := h.Do(t, "POST", "/v1/namespaces/demo/drafts", h.SergioTok, yamlDoc, map[string]string{"Content-Type": "application/yaml"})
+	if st != 201 {
+		t.Fatalf("create yaml draft: %d %s", st, b)
+	}
+	loc := strings.TrimPrefix(hdr.Get("Location"), testkit.Base)
+	st, _, b = h.Do(t, "GET", loc, h.SergioTok, nil, nil)
+	if st != 200 {
+		t.Fatalf("get yaml draft: %d %s", st, b)
+	}
+	var out struct {
+		Document string `json:"document"`
+	}
+	if err := json.Unmarshal(b, &out); err != nil || out.Document != string(yamlDoc) {
+		t.Fatalf("document mismatch: err=%v got=%q", err, out.Document)
+	}
+	if _, err := jsonld.Expand(b, loader(t, schemas.Context())); err != nil {
+		t.Fatalf("yaml draft response does not expand: %v", err)
 	}
 }

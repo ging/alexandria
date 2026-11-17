@@ -139,7 +139,7 @@ func Launch(binDir, work string, log io.Writer) (Env, func(), error) {
 		"rdf":   map[string]string{"context": "self-hosted"},
 		"auth":  map[string]any{"issuers": []map[string]string{{"iss": e.IDPURL, "discovery_url": e.IDPURL + "/.well-known/openid-configuration"}}, "audience": "alexandria-vhub"},
 		"vocab": map[string]any{"allow_insecure_localhost": true}, "storage": map[string]string{"database": "file:hub/hub.db", "blobs": "file:hub/blobs"},
-		"tls": map[string]string{"cert": "file:hub.crt", "key": "file:hub-tls.key"},
+		"tls": map[string]string{"cert": "file:hub.crt", "key": "file:hub-tls.key"}, "compiler": "poc",
 	}
 	if err := writeJSON(filepath.Join(work, "server.json"), server); err != nil {
 		return e, nil, err

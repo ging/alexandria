@@ -102,3 +102,16 @@ func TestSlotsListEachGateOnce(t *testing.T) {
 		t.Fatalf("applies_to %v", got)
 	}
 }
+
+// TestCompilerAppliesServerLifecycleDefaults verifies that server lifecycle defaults fill an absent space lifecycle.
+func TestCompilerAppliesServerLifecycleDefaults(t *testing.T) {
+	defs := lifecycle.Defaults()
+	defs.GraceWindow *= 2
+	c, err := compiler_dsl.Compiler{Defaults: defs}.Compile(draft(t, "v1.0.0.yaml"), app.CompileContext{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Params.GraceWindow != defs.GraceWindow {
+		t.Fatalf("got grace_window %v, want %v", c.Params.GraceWindow, defs.GraceWindow)
+	}
+}

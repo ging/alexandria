@@ -117,7 +117,7 @@ func New(deps Deps) (*Module, error) {
 	mux := http.NewServeMux()
 	http_v1.Handler{Hub: hub, Tokens: tokens, Context: cfg.Context(), Base: cfg.Base, Logger: logx.Component(logger, "http.v1")}.Register(mux)
 	http_pub.Handler{Pub: hub.Publication, Problems: httpx.Problems{Context: cfg.Context(), Logger: logx.Component(logger, "http.pub")}}.Register(mux)
-	ui := http_ui.Handler{Audience: cfg.Auth.Audience}
+	ui := http_ui.Handler{Audience: cfg.Auth.Audience, Compiler: cfg.Compiler}
 	if len(cfg.Auth.Issuers) > 0 {
 		ui.Issuer = cfg.Auth.Issuers[0].Iss
 	}
@@ -150,12 +150,12 @@ func verifier(cfg config.Server, c timex.Clock, logger *slog.Logger) *jwt_jwks.V
 	return v
 }
 
-// profileCompiler selects the draft compiler: the PoC JSON drafts (poc, the default) or the YAML language (dsl).
+// profileCompiler selects the draft compiler: the YAML profile language (dsl, the default) or the PoC JSON drafts (poc).
 func profileCompiler(cfg config.Server) app.ProfileCompiler {
-	if cfg.Compiler != "dsl" {
+	if cfg.Compiler == "poc" {
 		return compiler_poc.Compiler{Defaults: cfg.Defaults}
 	}
-	c := compiler_dsl.Compiler{}
+	c := compiler_dsl.Compiler{Defaults: cfg.Defaults}
 	if cfg.VendorDir != "" {
 		c.Vendor = dsl.FSVendor{FS: os.DirFS(cfg.VendorDir)}
 	}

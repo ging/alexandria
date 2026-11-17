@@ -12,9 +12,10 @@ import (
 type Handler struct {
 	Issuer   string
 	Audience string
+	Compiler string
 }
 
 // Register mounts /ui/ on mux and reports whether the console is compiled into this binary.
 func (h Handler) Register(mux *http.ServeMux) bool {
-	return webui.Mount(mux, webui.Config{Workspace: "hub", Issuer: h.Issuer, Audience: h.Audience})
+	return webui.Mount(mux, webui.Config{Workspace: "hub", Issuer: h.Issuer, Audience: h.Audience, Compiler: h.Compiler})
 }
