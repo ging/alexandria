@@ -94,6 +94,28 @@ export interface ListingSubject {
   versions: VersionRecord[]
 }
 
+// ManifestFile is one artefact entry in a signed PackageManifest.
+export interface ManifestFile {
+  path: string
+  media_type: string
+  digest: string
+  role: string
+  slot?: string
+  applies_to?: string[]
+  url?: string
+  source?: string
+}
+
+// ManifestSubject is the subject of a signed PackageManifest credential.
+export interface ManifestSubject {
+  id: string
+  namespace: string
+  version: string
+  lifecycle: Record<string, unknown>
+  profiles?: string[]
+  files: ManifestFile[]
+}
+
 // Draft is an editable release proposal with its optimistic-concurrency ETag.
 export interface Draft {
   id: string
@@ -157,6 +179,9 @@ export interface VocabularyInput {
 // ns builds the path of a namespace-scoped resource.
 const ns = (slug: string, rest = '') => `${BASE}/v1/namespaces/${encodeURIComponent(slug)}${rest}`
 
+// draftContentType selects JSON or YAML media type from the draft source text.
+const draftContentType = (doc: string) => (doc.trimStart().startsWith('{') ? 'application/json' : 'application/yaml')
+
 // graph unwraps a @graph list response.
 async function graph<T>(url: string, auth = false): Promise<T[]> {
   return (await request<Graph<T>>(url, { auth })).data['@graph'] ?? []
@@ -197,10 +222,10 @@ export const hub = {
   refreshVocabulary: (slug: string, name: string) => request<Revision>(ns(slug, `/vocabularies/${name}:refresh`), { method: 'POST', auth: true }),
   putContent: (slug: string, name: string, content: string, mediaType: string, ifMatch?: string) =>
     request<Revision>(ns(slug, `/vocabularies/${name}/content`), { method: 'PUT', raw: content, contentType: mediaType, ifMatch, auth: true }),
-  createDraft: (slug: string, doc: string) => request<Draft>(ns(slug, '/drafts'), { method: 'POST', raw: doc, auth: true }),
+  createDraft: (slug: string, doc: string) => request<Draft>(ns(slug, '/drafts'), { method: 'POST', raw: doc, contentType: draftContentType(doc), auth: true }),
   getDraft: (slug: string, id: string) => request<Draft>(ns(slug, `/drafts/${id}`), { auth: true }),
   replaceDraft: (slug: string, id: string, doc: string, ifMatch: string) =>
-    request<Draft>(ns(slug, `/drafts/${id}`), { method: 'PUT', raw: doc, ifMatch, auth: true }),
+    request<Draft>(ns(slug, `/drafts/${id}`), { method: 'PUT', raw: doc, contentType: draftContentType(doc), ifMatch, auth: true }),
   validateDraft: (slug: string, id: string) => request<ValidationReport>(ns(slug, `/drafts/${id}:validate`), { method: 'POST', auth: true }),
   proposeDraft: (slug: string, id: string) => request<Candidate>(ns(slug, `/drafts/${id}:propose`), { method: 'POST', auth: true }),
   approveCandidate: (slug: string, id: string, graceWindow?: string) =>
@@ -234,6 +259,14 @@ export const hubQueries = {
       queryKey: ['hub', 'ns', slug, 'versions', version],
       queryFn: async () => (await request<Credential<VersionRecord>>(ns(slug, `/versions/${version}`))).data,
     }),
+  manifest: (digest: string) => {
+    const seg = digest.replace(/^ni:\/\/\/sha-256;/, '')
+    return queryOptions({
+      queryKey: ['hub', 'manifest', seg],
+      queryFn: async () => (await request<Credential<ManifestSubject>>(`${BASE}/pub/packages/${encodeURIComponent(seg)}/manifest.json`)).data,
+      staleTime: Infinity,
+    })
+  },
   events: (slug?: string) =>
     queryOptions({ queryKey: slug ? ['hub', 'ns', slug, 'events'] : ['hub', 'events'], queryFn: () => allEvents(slug), retry: false }),
   draft: (slug: string, id: string) =>

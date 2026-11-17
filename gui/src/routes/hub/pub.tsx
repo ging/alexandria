@@ -1,6 +1,7 @@
 // Publication explorer: a Postman-style GET console for the public, immutable /pub tree of the hub.
 // It follows head and vocabulary redirects and shows status, caching headers, ETag and the artefact body.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useLocation } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { CornerDownRight, Globe, SendHorizontal } from 'lucide-react'
 import { cn } from '@/lib/cn'
@@ -17,9 +18,18 @@ import { Badge, Empty, Method, Mono, Page, Spinner, Tabs } from '@/components/ui
 // PubPage renders the request bar, shortcuts and the response viewer.
 export function PubPage() {
   const { namespace } = useSettings()
-  const [draft, setDraft] = useState('/pub/_vhub/v1/context.jsonld')
-  const [path, setPath] = useState<string | null>(null)
+  const loc = useLocation()
+  const requested = new URLSearchParams(loc.searchStr).get('path')
+  const [draft, setDraft] = useState(requested || '/pub/_vhub/v1/context.jsonld')
+  const [path, setPath] = useState<string | null>(requested || null)
   const [tab, setTab] = useState<'body' | 'headers'>('body')
+  useEffect(() => {
+    if (requested) {
+      const clean = requested.startsWith('/') ? requested : `/${requested}`
+      setDraft(clean)
+      setPath(clean)
+    }
+  }, [requested])
   const q = useQuery({ ...hubQueries.pub(path ?? ''), enabled: !!path })
   const send = (p = draft) => {
     const clean = p.startsWith('/') ? p : `/${p}`
