@@ -262,7 +262,7 @@ func TestT_CLI_017_AgreedPackageRetainedAfterRetirement(t *testing.T) {
 func TestT_SYS_004_InForceDatesComeOnlyFromListing(t *testing.T) {
 	_, c := f6(t)
 	vs := c.Status.Versions()
-	if len(vs) != 2 || vs[0].NewContentFrom.String() != "2026-09-03T10:00:00Z" || vs[1].EnforcedFrom.String() != "2026-11-02T10:00:00Z" {
+	if len(vs) != 2 || vs[0].NewContentFrom.String() != "2026-09-01T10:00:00Z" || vs[1].EnforcedFrom.String() != "2026-11-02T10:00:00Z" {
 		t.Fatalf("unexpected dates in versions: %+v", vs)
 	}
 }

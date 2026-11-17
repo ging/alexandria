@@ -20,6 +20,7 @@ type Config struct {
 	Issuer    string `json:"issuer,omitempty"`
 	Audience  string `json:"audience,omitempty"`
 	Compiler  string `json:"compiler,omitempty"`
+	HubDID    string `json:"hub_did,omitempty"`
 }
 
 // Enabled reports whether the console assets were compiled into this binary.

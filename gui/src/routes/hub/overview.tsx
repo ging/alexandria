@@ -8,6 +8,7 @@ import type { ReactNode } from 'react'
 import { formatInstant, iriTail, relativeTo } from '@/lib/format'
 import { useAction, useNs } from '@/lib/hooks'
 import { hub, hubQueries, type Steward } from '@/lib/hub'
+import { runtime } from '@/lib/runtime'
 import { useActiveIdentity } from '@/lib/settings'
 import { asApiError } from '@/lib/http'
 import { ClassBadge, Timeline } from '@/components/lifecycle'
@@ -28,6 +29,7 @@ export function OverviewPage() {
   const n = nsq.data
   const versions = listing.data?.credentialSubject.versions ?? []
   const head = versions.filter((v) => !v.revoked_from).at(-1)
+  const hubDid = runtime.hubDid || listing.data?.issuer || ''
   return (
     <Page title={<span className="flex items-center gap-2">{n.title || n.slug} <Mono className="font-normal text-muted">{n.slug}</Mono></span>} subtitle={n.description}>
       <div className="mx-auto max-w-5xl space-y-4">
@@ -41,7 +43,8 @@ export function OverviewPage() {
           <KV
             items={[
               ['IRI', <Mono copy={n.id}>{n.id}</Mono>],
-              ['Slug', <Mono>{n.slug}</Mono>],
+              ['Slug', <Mono copy={n.slug}>{n.slug}</Mono>],
+              ...(hubDid ? ([['Hub DID', <Mono copy={hubDid}>{hubDid}</Mono>]] as [string, ReactNode][]) : []),
               ['Created', <span className="tnum">{formatInstant(n.created_at)}</span>],
               ['Head redirect', <Mono copy={`/pub/${n.slug}`}>GET /pub/{n.slug}</Mono>],
             ]}
