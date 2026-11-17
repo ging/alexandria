@@ -411,6 +411,7 @@ var cases = map[codes.Code]func(t *testing.T) []string{
 		s.Publish(t, "2026-09-01T10:00:00Z", testkit.DraftV1, app.ApproveOptions{})
 		c := testkit.NewClient(t, s)
 		c.SyncNow(t)
+		s.Clock.Set("2026-09-01T09:59:00Z")
 		return []string{msgBody(c, "odrl:use")}
 	},
 	codes.MessageUnparseable: func(t *testing.T) []string {

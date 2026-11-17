@@ -20,7 +20,7 @@ func ptr[T any](v T) *T { return &v }
 // f6 returns the two records of the F6 example.
 func f6() []Record {
 	return []Record{
-		{Version: semver.MustParse("1.0.0"), Class: Initial, PublishedAt: at("2026-09-01T10:00:00Z"), NewContentFrom: at("2026-09-03T10:00:00Z"), EnforcedFrom: at("2026-09-03T10:00:00Z")},
+		{Version: semver.MustParse("1.0.0"), Class: Initial, PublishedAt: at("2026-09-01T10:00:00Z"), NewContentFrom: at("2026-09-01T10:00:00Z"), EnforcedFrom: at("2026-09-01T10:00:00Z")},
 		{Version: semver.MustParse("2.0.0"), Class: Breaking, PublishedAt: at("2026-10-01T10:00:00Z"), NewContentFrom: at("2026-10-03T10:00:00Z"), EnforcedFrom: at("2026-11-02T10:00:00Z")},
 	}
 }
@@ -49,7 +49,7 @@ func versions(rs []Record) []string {
 
 func TestT_HUB_005_Row1_InitialEnforcedAtNewContent(t *testing.T) {
 	r, err := Plan(approval("1.0.0", Initial, "2026-09-01T10:00:00Z"), nil)
-	if err != nil || r.NewContentFrom != at("2026-09-03T10:00:00Z") || r.EnforcedFrom != r.NewContentFrom {
+	if err != nil || r.NewContentFrom != at("2026-09-01T10:00:00Z") || r.EnforcedFrom != r.PublishedAt {
 		t.Fatalf("got %+v %v", r, err)
 	}
 }
@@ -196,7 +196,7 @@ func TestT_HUB_014_Rev4LeavesNoHead(t *testing.T) {
 func TestT_HUB_009_F6StatesOfFirstVersion(t *testing.T) {
 	rs := f6()
 	cases := map[string]State{
-		"2026-09-02T00:00:00Z": Scheduled, "2026-10-03T09:59:59Z": Published, "2026-10-03T10:00:00Z": Deprecated,
+		"2026-09-01T09:59:59Z": Scheduled, "2026-09-01T10:00:00Z": Published, "2026-10-03T09:59:59Z": Published, "2026-10-03T10:00:00Z": Deprecated,
 		"2026-11-02T09:59:59Z": Deprecated, "2026-11-02T10:00:00Z": Retired,
 	}
 	for ts, want := range cases {
@@ -222,8 +222,8 @@ func TestT_HUB_009_MembershipFollowsStates(t *testing.T) {
 
 func TestT_HUB_009_SupersededAfterCompatible(t *testing.T) {
 	rs := []Record{
-		{Version: semver.MustParse("1.0.0"), Class: Initial, NewContentFrom: at("2026-09-03T10:00:00Z"), EnforcedFrom: at("2026-09-03T10:00:00Z")},
-		{Version: semver.MustParse("1.1.0"), Class: Compatible, NewContentFrom: at("2026-09-10T10:00:00Z"), EnforcedFrom: at("2026-09-10T10:00:00Z")},
+		{Version: semver.MustParse("1.0.0"), Class: Initial, PublishedAt: at("2026-09-01T10:00:00Z"), NewContentFrom: at("2026-09-01T10:00:00Z"), EnforcedFrom: at("2026-09-01T10:00:00Z")},
+		{Version: semver.MustParse("1.1.0"), Class: Compatible, PublishedAt: at("2026-09-08T10:00:00Z"), NewContentFrom: at("2026-09-10T10:00:00Z"), EnforcedFrom: at("2026-09-10T10:00:00Z")},
 	}
 	if got := StateAt(rs, rs[0], at("2026-09-10T10:00:00Z")); got != Superseded {
 		t.Fatalf("got %s", got)
@@ -299,7 +299,8 @@ func randomRecords(r *rand.Rand, n int) []Record {
 		lastEF = ef
 		c := []Class{Compatible, Breaking}[r.Intn(2)]
 		if i == 0 {
-			c, ef = Initial, nc
+			c, nc, ef = Initial, t, t
+			lastEF = ef
 		}
 		rec := Record{Version: semver.Version{Major: uint64(i + 1)}, Class: c, PublishedAt: t, NewContentFrom: nc, EnforcedFrom: ef}
 		if r.Intn(5) == 0 {
@@ -386,6 +387,11 @@ func TestCheckRecordsS7(t *testing.T) {
 	bad := f6()
 	bad[1].NewContentFrom = bad[1].PublishedAt.Add(timex.Day)
 	if err := CheckRecords(bad, p); codeOf(err) != codes.SyncDatesInvalid {
+		t.Fatalf("got %v", err)
+	}
+	badInit := f6()
+	badInit[0].NewContentFrom = badInit[0].PublishedAt.Add(2 * timex.Day)
+	if err := CheckRecords(badInit, p); codeOf(err) != codes.SyncDatesInvalid {
 		t.Fatalf("got %v", err)
 	}
 }

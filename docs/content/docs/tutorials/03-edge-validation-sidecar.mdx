@@ -52,19 +52,17 @@ curl -X POST "$ADMINAPI/rules:explain" -d '{
 }'
 ```
 
-While `1.0.0` is still scheduled, the answer is:
+Because `1.0.0` is an `initial` release, it is already in force (`new_content_from = enforced_from = published_at`), so the answer is:
 
 ```json
 {
   "rule": "contract-request",
   "state": "Active",
-  "action": "reject",
-  "code": "NO_VERSION_IN_FORCE",
-  "vhub_verdict": "violation;gate=dsp_message;code=\"NO_VERSION_IN_FORCE\";…"
+  "action": "forward"
 }
 ```
 
-No version is in force yet, so a rule in `enforce` rejects. After `new_content_from` the same request gives `forward`; with `"action": "odrl:read"` it gives `reject` with `VERDICT_VIOLATION`, because the schema of `1.0.0` does not admit that action.
+With `"action": "odrl:read"` it gives `reject` with `VERDICT_VIOLATION`, because the schema of `1.0.0` does not admit that action. (If no version were in force at the local instant, an `enforce` rule would reject with `NO_VERSION_IN_FORCE`.)
 
 ### 4. Send a message through the proxy
 

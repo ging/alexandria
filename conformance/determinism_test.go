@@ -65,7 +65,7 @@ func TestT_CLI_030_TwoParsesSelectTheSameRule(t *testing.T) {
 }
 
 func TestT_HUB_005_DatesAreDeterministic(t *testing.T) {
-	recs := []lifecycle.Record{{Version: semver.MustParse("1.0.0"), Class: lifecycle.Initial, NewContentFrom: timex.MustInstant("2026-09-03T10:00:00Z"), EnforcedFrom: timex.MustInstant("2026-09-03T10:00:00Z")}}
+	recs := []lifecycle.Record{{Version: semver.MustParse("1.0.0"), Class: lifecycle.Initial, PublishedAt: timex.MustInstant("2026-09-01T10:00:00Z"), NewContentFrom: timex.MustInstant("2026-09-01T10:00:00Z"), EnforcedFrom: timex.MustInstant("2026-09-01T10:00:00Z")}}
 	g := 10 * timex.Day
 	rows := []lifecycle.Approval{
 		{Version: semver.MustParse("1.1.0"), Class: lifecycle.Compatible},

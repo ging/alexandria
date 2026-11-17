@@ -109,8 +109,8 @@ curl -sk -X POST "$DRAFT:propose" -H "Authorization: Bearer $(cat steward.token)
  "planned": {
   "version": "1.0.0", "class": "initial",
   "published_at": "2026-09-01T10:00:00Z",
-  "new_content_from": "2026-09-03T10:00:00Z",
-  "enforced_from": "2026-09-03T10:00:00Z",
+  "new_content_from": "2026-09-01T10:00:00Z",
+  "enforced_from": "2026-09-01T10:00:00Z",
   "revoked_from": null
  },
  "proposed_at": "2026-09-01T10:00:00Z",
@@ -150,8 +150,8 @@ curl -sk -X POST "$HUB/v1/namespaces/flexgrid/candidates/5e6789e09b415f9d:approv
     "version": "1.0.0", "class": "initial",
     "manifest": "ni:///sha-256;cCYTVfOvidDw_pxQY5o1DHnHmfRjcSzDDAp3xLmxw2k",
     "published_at": "2026-09-01T10:00:00Z",
-    "new_content_from": "2026-09-03T10:00:00Z",
-    "enforced_from": "2026-09-03T10:00:00Z",
+    "new_content_from": "2026-09-01T10:00:00Z",
+    "enforced_from": "2026-09-01T10:00:00Z",
     "revoked_from": null
   },
   "proof": {
@@ -204,7 +204,7 @@ curl -sk $HUB/v1/namespaces/flexgrid/versions
     "id": "https://127.0.0.1:18443/v1/namespaces/flexgrid/versions",
     "sequence": 1,
     "versions": [ { "version": "1.0.0", "class": "initial", "manifest": "ni:///sha-256;cCYT…",
-                    "new_content_from": "2026-09-03T10:00:00Z", "enforced_from": "2026-09-03T10:00:00Z",
+                    "new_content_from": "2026-09-01T10:00:00Z", "enforced_from": "2026-09-01T10:00:00Z",
                     "revoked_from": null, … } ] },
   "proof": { … } }
 \end{lstlisting}
@@ -302,7 +302,7 @@ Con $P$ el instante de publicación, $pw$ la ventana de propagación y $gw$ la d
 \toprule
 \textbf{Clase} & \textbf{\texttt{grace\_window} al aprobar} & \textbf{\texttt{new\_content\_from}} & \textbf{\texttt{enforced\_from}} \\
 \midrule
-\cod{initial} & No se admite & $P + pw$ & $P + pw$ \\
+\cod{initial} & No se admite & $P$ & $P$ \\
 \cod{compatible} & No se admite & $P + pw$ & $P + pw$ \\
 \cod{breaking} & Omitida & $P + pw$ & $P + pw + gw$ \\
 \cod{breaking} & Igual o mayor que la mínima & $P + pw$ & $P + pw + $ la pedida \\
@@ -314,10 +314,11 @@ Con $P$ el instante de publicación, $pw$ la ventana de propagación y $gw$ la d
 Una versión compatible hereda la fecha de entrada en vigor de su predecesora cuando esa fecha es posterior: no
 puede adelantar a una versión que todavía está en su ventana.
 
-Para la 1.0.0, aprobada el 1 de septiembre a las 10:00 con dos días de propagación, ambas fechas son el 3 de
-septiembre a las 10:00. Entre el 1 y el 3 la versión existe y los clientes la descargan, pero todavía no vale.
-Ese es el sentido de la ventana de propagación: nadie se entera de una regla nueva en el mismo instante en que
-empieza a aplicarse.
+Para la 1.0.0 (\cod{initial}), aprobada el 1 de septiembre a las 10:00, tanto \cod{new_content_from} como
+\cod{enforced_from} valen ese mismo instante: al no existir ninguna versión previa en el \emph{namespace}, entra
+en vigor desde el principio. En cambio, para las transiciones posteriores (\cod{compatible} y \cod{breaking}) se
+suma la ventana de propagación ($pw$): nadie se entera de una regla nueva sobre un espacio en marcha en el mismo
+instante en que empieza a aplicarse.
 
 El capítulo~\ref{ch:migracion} publica una versión compatible y una de ruptura y enseña cómo se ven esas fechas
 desde el cliente.
