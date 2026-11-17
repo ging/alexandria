@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { ArrowRight, FlaskConical, SendHorizontal } from 'lucide-react'
 import { client, clientQueries, type Explanation, type GateExplanation, type Rule } from '@/lib/client'
+import { concretizeDspPath, DEFAULT_EXPLAIN_MESSAGE, dspExampleForRule, PROVIDER_PID } from '@/lib/dsp-examples'
 import { prettyJSON } from '@/lib/format'
 import { CodeEditor } from '@/components/code-editor'
 import { ModeBadge, StateBadge } from '@/components/lifecycle'
@@ -14,18 +15,14 @@ import { Badge, Empty, KV, Method, Mono, Page, Tabs } from '@/components/ui/misc
 
 const listeners = ['dsp-ingress', 'dsp-egress', 'mgmt-ingress']
 const methods = ['POST', 'GET', 'PUT', 'DELETE']
-const sample = { '@type': 'ContractRequestMessage', providerPid: 'urn:uuid:p-1', consumerPid: 'urn:uuid:c-1', action: 'odrl:use' }
-
-// concretize replaces URI template variables with sample identifiers.
-const concretize = (path: string) => path.replace(/\{[^}]+\}/g, 'urn:uuid:p-1')
 
 // ExplainPage renders the request builder and the decision report.
 export function ExplainPage() {
   const rules = useQuery(clientQueries.rules())
   const [listener, setListener] = useState('dsp-ingress')
   const [method, setMethod] = useState('POST')
-  const [path, setPath] = useState('/negotiations/urn:uuid:p-1/request')
-  const [body, setBody] = useState(prettyJSON(sample))
+  const [path, setPath] = useState(`/negotiations/${PROVIDER_PID}/request`)
+  const [body, setBody] = useState(prettyJSON(DEFAULT_EXPLAIN_MESSAGE))
   const [tab, setTab] = useState<'report' | 'json'>('report')
   const [parseError, setParseError] = useState<string | null>(null)
   const run = useMutation({ mutationFn: client.explain })
@@ -44,8 +41,9 @@ export function ExplainPage() {
   const preset = (r: Rule) => {
     setListener(r.listener)
     setMethod(r.match.method)
-    setPath(concretize(r.match.path))
-    if (r.match.method !== 'GET') setBody(prettyJSON({ ...sample, '@type': r.message }))
+    setPath(concretizeDspPath(r.match.path))
+    const example = dspExampleForRule(r)
+    setBody(example ? prettyJSON(example) : '')
   }
   return (
     <Page flush title="Explain" subtitle="What would the hot path decide for this message right now? Nothing is forwarded, recorded or emitted.">

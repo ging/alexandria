@@ -16,7 +16,7 @@ import { Field, Input, Textarea } from '@/components/ui/form'
 import { Badge, Empty, KV, Mono, Page, Spinner, Tabs } from '@/components/ui/misc'
 import { Dialog } from '@/components/ui/overlay'
 
-// dslTemplate builds a minimal compilable alexandria.profiles/v1 YAML bundle for a namespace.
+// dslTemplate builds a minimal compilable alexandria.profiles/v1 YAML bundle with ODRL and DSP 2025-1 bindings.
 const dslTemplate = (base: string, slug: string) =>
   `dsl: alexandria.profiles/v1
 kind: OdrlProfile
@@ -29,6 +29,12 @@ profile:
   base_url: ${base}/odrl/profile/${slug}
 namespaces:
   ex: ${base}/ns/${slug}#
+adopted:
+  left_operands:
+    - term: odrl:dateTime
+      signature:
+        datatype: xsd:dateTime
+        operators: [lt, lteq, gt, gteq]
 terms:
   - id: access
     kind: action
@@ -53,6 +59,13 @@ bindings:
     conformance:
       - { role: json-schema, applies_to: policy_intake }
       - { role: shacl, applies_to: policy_intake }
+  - slot: dsp
+    profile: https://w3id.org/dspace/2025/1
+    source: vendored
+    version: "=2025-1"
+    obligation: mandatory
+    conformance:
+      - { role: json-schema, applies_to: dsp_message }
 `
 
 // pocTemplate builds a minimal Part 5.1 JSON draft when the server runs in poc compiler mode.

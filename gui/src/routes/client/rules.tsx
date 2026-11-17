@@ -38,13 +38,18 @@ const columns: Column<Rule>[] = [
   { id: 'mode', header: 'Mode', accessorFn: (r) => r.mode ?? 'observe', cell: (c) => <ModeBadge mode={c.row.original.mode ?? 'observe'} />, meta: { className: 'w-20' } },
 ]
 
+// newRule builds a DSP 2025-1-err2 compliant rule template selecting the /offer policy node.
 const newRule = (rs: Ruleset): Rule => ({
-  id: 'custom-rule',
+  id: 'contract-request-offer-policy',
   priority: Math.max(0, ...rs.rules.map((r) => r.priority)) + 10,
   listener: 'dsp-ingress',
-  match: { method: 'POST', path: '/diagnostics/{id}' },
+  match: {
+    method: 'POST',
+    path: '/v2025-1/negotiations/{providerPid}/request',
+    body: [{ pointer: '/@type', one_of: ['ContractRequestMessage', 'dspace:ContractRequestMessage'] }],
+  },
   message: 'ContractRequestMessage',
-  verify: { gates: ['dsp_message'] },
+  verify: { select: '/offer', gates: ['policy_intake'] },
   mode: 'observe',
 })
 

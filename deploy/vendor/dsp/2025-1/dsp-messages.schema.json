@@ -1,31 +1,106 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "DSP 2025-1 negotiation and transfer messages (reduced local copy for the Flexgrid lab)",
+  "title": "Eclipse Dataspace Protocol 2025-1-err2 message schemas (self-contained offline copy)",
   "type": "object",
-  "required": ["@type"],
+  "required": ["@context", "@type"],
   "allOf": [
     {
-      "if": {"properties": {"@type": {"enum": ["ContractRequestMessage", "dspace:ContractRequestMessage"]}}},
+      "if": { "properties": { "@type": { "enum": ["CatalogRequestMessage", "dspace:CatalogRequestMessage"] } } },
+      "then": { "properties": { "filter": { "type": "array" } } }
+    },
+    {
+      "if": { "properties": { "@type": { "enum": ["DatasetRequestMessage", "dspace:DatasetRequestMessage"] } } },
       "then": {
-        "required": ["consumerPid", "offer", "callbackAddress"],
+        "required": ["dataset"],
+        "properties": { "dataset": { "type": "string", "minLength": 1 } }
+      }
+    },
+    {
+      "if": { "properties": { "@type": { "enum": ["ContractRequestMessage", "dspace:ContractRequestMessage"] } } },
+      "then": {
+        "required": ["consumerPid", "offer"],
+        "anyOf": [{ "required": ["callbackAddress"] }, { "required": ["providerPid"] }],
         "properties": {
-          "consumerPid": {"type": "string", "minLength": 1},
-          "providerPid": {"type": "string", "minLength": 1},
-          "callbackAddress": {"type": "string", "pattern": "^https?://"},
-          "offer": {"type": "object", "required": ["@id"]}
+          "consumerPid": { "type": "string", "minLength": 1 },
+          "providerPid": { "type": "string", "minLength": 1 },
+          "callbackAddress": { "type": "string", "pattern": "^https?://" },
+          "offer": { "type": "object", "required": ["@id", "target"] }
         }
       }
     },
     {
-      "if": {"properties": {"@type": {"enum": ["ContractAgreementMessage", "dspace:ContractAgreementMessage"]}}},
+      "if": { "properties": { "@type": { "enum": ["ContractOfferMessage", "dspace:ContractOfferMessage"] } } },
       "then": {
-        "required": ["consumerPid", "providerPid", "agreement"],
-        "properties": {"agreement": {"type": "object", "required": ["@id", "target", "assigner", "assignee"]}}
+        "required": ["providerPid", "offer"],
+        "anyOf": [{ "required": ["callbackAddress"] }, { "required": ["consumerPid"] }],
+        "properties": {
+          "providerPid": { "type": "string", "minLength": 1 },
+          "consumerPid": { "type": "string", "minLength": 1 },
+          "callbackAddress": { "type": "string", "pattern": "^https?://" },
+          "offer": { "type": "object", "required": ["@id", "target"] }
+        }
       }
     },
     {
-      "if": {"properties": {"@type": {"enum": ["TransferRequestMessage", "dspace:TransferRequestMessage"]}}},
-      "then": {"required": ["consumerPid", "agreementId", "format", "callbackAddress"]}
+      "if": { "properties": { "@type": { "enum": ["ContractAgreementMessage", "dspace:ContractAgreementMessage"] } } },
+      "then": {
+        "required": ["consumerPid", "providerPid", "agreement"],
+        "properties": {
+          "agreement": { "type": "object", "required": ["@id", "target", "assigner", "assignee"] }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "@type": {
+            "enum": [
+              "ContractAgreementVerificationMessage",
+              "dspace:ContractAgreementVerificationMessage",
+              "ContractNegotiationTerminationMessage",
+              "dspace:ContractNegotiationTerminationMessage",
+              "TransferStartMessage",
+              "dspace:TransferStartMessage",
+              "TransferSuspensionMessage",
+              "dspace:TransferSuspensionMessage",
+              "TransferCompletionMessage",
+              "dspace:TransferCompletionMessage",
+              "TransferTerminationMessage",
+              "dspace:TransferTerminationMessage"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": ["consumerPid", "providerPid"],
+        "properties": {
+          "consumerPid": { "type": "string", "minLength": 1 },
+          "providerPid": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "@type": { "enum": ["ContractNegotiationEventMessage", "dspace:ContractNegotiationEventMessage"] } } },
+      "then": {
+        "required": ["consumerPid", "providerPid", "eventType"],
+        "properties": {
+          "consumerPid": { "type": "string", "minLength": 1 },
+          "providerPid": { "type": "string", "minLength": 1 },
+          "eventType": { "enum": ["ACCEPTED", "FINALIZED"] }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "@type": { "enum": ["TransferRequestMessage", "dspace:TransferRequestMessage"] } } },
+      "then": {
+        "required": ["consumerPid", "agreementId", "format", "callbackAddress"],
+        "properties": {
+          "consumerPid": { "type": "string", "minLength": 1 },
+          "agreementId": { "type": "string", "minLength": 1 },
+          "format": { "type": "string", "minLength": 1 },
+          "callbackAddress": { "type": "string", "pattern": "^https?://" }
+        }
+      }
     }
   ]
 }
