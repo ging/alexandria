@@ -24,7 +24,7 @@ func admin(t *testing.T, ts string) (*httptest.Server, *testkit.Client) {
 		s.Clock.Set(ts)
 		c.SyncNow(t)
 	}
-	srv := httptest.NewServer(status_http.Admin{Status: c.Status, Rules: c.Rules, Explainer: &c.Edge.Explainer, Agreements: c.Agreements, Audit: c.Audit, Cell: c.Cell, Metrics: metrics.New()}.Handler())
+	srv := httptest.NewServer(status_http.Admin{Status: c.Status, Sync: c.Sync, Rules: c.Rules, Explainer: &c.Edge.Explainer, Agreements: c.Agreements, Audit: c.Audit, Cell: c.Cell, Metrics: metrics.New()}.Handler())
 	t.Cleanup(srv.Close)
 	return srv, c
 }
@@ -112,5 +112,19 @@ func TestT_CLI_032_ExplainOverHTTP(t *testing.T) {
 	st, _, b := do(t, srv, "POST", "/rules:explain", "", body)
 	if st != 200 || !strings.Contains(b, `"action":"forward-notice"`) || !strings.Contains(b, "VERDICT_NOT_IN_HEAD") || c.Upstream.Count() != 0 {
 		t.Fatalf("%d %s", st, b)
+	}
+}
+
+// TestPostSyncTriggersSynchronization verifies POST /sync pulls the latest listing immediately.
+func TestPostSyncTriggersSynchronization(t *testing.T) {
+	srv, _ := admin(t, "")
+	if st, _, _ := do(t, srv, "GET", "/readyz", "", ""); st != 503 {
+		t.Fatalf("expected 503 while Onboarding, got %d", st)
+	}
+	if st, _, b := do(t, srv, "POST", "/sync", "", ""); st != 200 || !strings.Contains(b, `"sequence":2`) {
+		t.Fatalf("POST /sync: %d %s", st, b)
+	}
+	if st, _, _ := do(t, srv, "GET", "/readyz", "", ""); st != 200 {
+		t.Fatalf("expected 200 after sync, got %d", st)
 	}
 }

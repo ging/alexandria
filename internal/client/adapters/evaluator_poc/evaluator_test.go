@@ -85,3 +85,33 @@ func TestUnsupportedRoleNoticeIsInformational(t *testing.T) {
 		t.Fatalf("event %+v", out.events[0])
 	}
 }
+
+// TestJSONSchemaTargetsRootForDSPAndSelectedForPolicy verifies gate-scoped schema evaluation on nested DSP messages.
+func TestJSONSchemaTargetsRootForDSPAndSelectedForPolicy(t *testing.T) {
+	pkg := &pkgv.Package{
+		Digest: "ni:///sha-256;dual",
+		Slots: []pkgv.Slot{
+			{Slot: "dsp", Obligation: "mandatory", AppliesTo: []string{"dsp_message"}},
+			{Slot: "odrl", Obligation: "mandatory", AppliesTo: []string{"policy_intake"}},
+		},
+		Manifest: pkgv.Manifest{Files: []pkgv.File{
+			{Path: "dsp.json", Role: "json-schema", Slot: "dsp", AppliesTo: []string{"dsp_message"}},
+			{Path: "odrl.json", Role: "json-schema", Slot: "odrl", AppliesTo: []string{"policy_intake"}},
+		}},
+		Raw: pkgv.Files{Content: map[string][]byte{
+			"dsp.json":  []byte(`{"type":"object","required":["@type","offer"]}`),
+			"odrl.json": []byte(`{"type":"object","required":["profile"]}`),
+		}},
+	}
+	msg := domain.Message{
+		Root:     []byte(`{"@type":"ContractRequestMessage","offer":{"profile":"https://example.org/odrl"}}`),
+		Selected: []byte(`{"profile":"https://example.org/odrl"}`),
+	}
+	ev := &Evaluator{}
+	if r := ev.Evaluate(msg, domain.GateDSP, pkg); !r.Pass {
+		t.Fatalf("dsp_message failed: %+v", r.Findings)
+	}
+	if r := ev.Evaluate(msg, domain.GatePolicy, pkg); !r.Pass {
+		t.Fatalf("policy_intake failed: %+v", r.Findings)
+	}
+}

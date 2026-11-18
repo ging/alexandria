@@ -19,6 +19,7 @@ import (
 // Admin groups the use cases behind the admin API.
 type Admin struct {
 	Status     *app.Status
+	Sync       *app.Sync
 	Rules      *app.Rules
 	Explainer  *app.Explainer
 	Agreements *app.Agreements
@@ -32,6 +33,7 @@ type Admin struct {
 func (a Admin) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /status", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, http.StatusOK, a.Status.Get()) })
+	mux.HandleFunc("POST /sync", a.syncNow)
 	mux.HandleFunc("GET /versions", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, http.StatusOK, a.Status.Versions()) })
 	mux.HandleFunc("GET /rules", func(w http.ResponseWriter, _ *http.Request) { a.ruleset(w, http.StatusOK, a.Rules.Get(), nil) })
 	mux.HandleFunc("PUT /rules", func(w http.ResponseWriter, r *http.Request) {
@@ -107,6 +109,23 @@ type explainRequest struct {
 	Method   string          `json:"method"`
 	Path     string          `json:"path"`
 	Body     json.RawMessage `json:"body"`
+}
+
+// syncNow triggers an immediate S1–S13 hub synchronization pass and returns the refreshed status.
+func (a Admin) syncNow(w http.ResponseWriter, _ *http.Request) {
+	if a.Sync == nil {
+		a.writeError(w, codes.New(codes.APINotFound, "sync endpoint not configured"))
+		return
+	}
+	if cerr := a.Sync.Run(); cerr != nil {
+		st := http.StatusUnprocessableEntity
+		if cerr.Code == codes.SyncUnreachable {
+			st = http.StatusBadGateway
+		}
+		writeProblem(w, problem.From(cerr, st))
+		return
+	}
+	writeJSON(w, http.StatusOK, a.Status.Get())
 }
 
 // explain answers what the hot path would decide, without effects.

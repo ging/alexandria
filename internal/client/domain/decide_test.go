@@ -250,3 +250,31 @@ func TestReasonsFallBackToCodesWhenOnlyInformational(t *testing.T) {
 		t.Fatalf("reasons %v", got)
 	}
 }
+
+// TestSelectTargetsPolicyWhileDSPValidatesRoot verifies that verify.select scopes policy_intake without breaking dsp_message.
+func TestSelectTargetsPolicyWhileDSPValidatesRoot(t *testing.T) {
+	e := env(t, "2026-10-02T12:00:00Z", Active)
+	r, _ := e.Rules.Find("contract-request")
+	r.Verify.Select = "/offer"
+	e.Rules, _ = e.Rules.Replacing("contract-request", r)
+	e.Eval = func(g Gate, v lifecycle.Record, m Message) EvalResult {
+		if g == GateDSP {
+			doc, _ := Decode(m.Selected)
+			if typ, _ := Pointer(doc, "/@type"); typ == "ContractRequestMessage" {
+				return EvalResult{Pass: true}
+			}
+			return EvalResult{Findings: []Finding{{Slot: "dsp", Source: "json-schema", Severity: "Violation", Message: "missing @type"}}}
+		}
+		return evalByAction(g, v, m)
+	}
+	nested := []byte(`{"@type":"ContractRequestMessage","providerPid":"urn:p","consumerPid":"urn:c","offer":{"action":"odrl:use"}}`)
+	d := Decide(e, Request{Listener: DSPIngress, Method: "POST", Path: "/negotiations/urn:p/request", Body: nested})
+	if d.Action != Forward {
+		t.Fatalf("expected Forward, got %s (%+v)", d.Action, d.Gates)
+	}
+	missingOffer := []byte(`{"@type":"ContractRequestMessage","providerPid":"urn:p","consumerPid":"urn:c"}`)
+	d2 := Decide(e, Request{Listener: DSPIngress, Method: "POST", Path: "/negotiations/urn:p/request", Body: missingOffer})
+	if d2.Gates[0].Class.Result != OK || policy(d2).Class.Code() != codes.MessageUnparseable {
+		t.Fatalf("expected dsp_message OK and policy_intake MESSAGE_UNPARSEABLE, got %+v", d2.Gates)
+	}
+}

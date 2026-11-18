@@ -49,6 +49,7 @@
       },
       "message": "ContractRequestMessage",
       "verify": {
+        "select": "/offer",
         "gates": [
           "dsp_message",
           "policy_intake"
@@ -79,7 +80,7 @@
           "dsp_message",
           "policy_intake"
         ],
-        "select": ""
+        "select": "/offer"
       },
       "mode": "enforce"
     },
@@ -141,6 +142,7 @@
       },
       "message": "ContractOfferMessage",
       "verify": {
+        "select": "/offer",
         "gates": [
           "dsp_message",
           "policy_intake"
@@ -158,6 +160,7 @@
       },
       "message": "ContractOfferMessage",
       "verify": {
+        "select": "/offer",
         "gates": [
           "dsp_message",
           "policy_intake"
@@ -175,6 +178,7 @@
       },
       "message": "ContractAgreementMessage",
       "verify": {
+        "select": "/agreement",
         "gates": [
           "dsp_message",
           "policy_intake"
@@ -192,6 +196,7 @@
       },
       "message": "ContractAgreementMessage",
       "verify": {
+        "select": "/agreement",
         "gates": [
           "dsp_message",
           "policy_intake"
