@@ -76,14 +76,14 @@ func Draft(hub, v string) []byte {
 "content":{"type":"object","properties":{"action":{"enum":` + enum + `}},"required":["action"]}}]}`)
 }
 
-// Messages of F6: a contract request with an action, A1 and its transfer.
+// Messages of F6: a contract request with an offer action, A1 and its transfer.
 func contractRequest(action string) []byte {
-	return []byte(`{"@type":"ContractRequestMessage","providerPid":"urn:uuid:p-1","consumerPid":"urn:uuid:c-1","action":"` + action + `"}`)
+	return []byte(`{"@type":"ContractRequestMessage","providerPid":"urn:uuid:p-1","consumerPid":"urn:uuid:c-1","offer":{"action":"` + action + `"}}`)
 }
 
 // agreement is the ContractAgreementMessage of A1.
 func agreement() []byte {
-	return []byte(`{"@type":"ContractAgreementMessage","providerPid":"urn:uuid:p-1","consumerPid":"urn:uuid:c-1","action":"ex:access","agreement":{"@id":"urn:uuid:A1"}}`)
+	return []byte(`{"@type":"ContractAgreementMessage","providerPid":"urn:uuid:p-1","consumerPid":"urn:uuid:c-1","agreement":{"@id":"urn:uuid:A1","action":"ex:access"}}`)
 }
 
 // transfer is the TransferRequestMessage of A1.

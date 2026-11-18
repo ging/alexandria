@@ -125,7 +125,7 @@ func New(deps Deps) (*Module, error) {
 	edge := &app.Edge{Explainer: explainer, Upstream: up, Capture: agreements, Audit: audit, Events: sink, Metrics: reg, Logger: logx.Component(logger, "edge")}
 	gc := &app.GC{Packages: pkgs, Agreements: agreements, Cell: cell, Events: sink, Clock: deps.Clock, Logger: logx.Component(logger, "gc"), Namespace: ns, Interval: cfg.GCInterval}
 	adminMux := status_http.Admin{
-		Status: status, Rules: rules, Explainer: &explainer, Agreements: agreements, Audit: audit, Cell: cell, Metrics: reg,
+		Status: status, Sync: syncer, Rules: rules, Explainer: &explainer, Agreements: agreements, Audit: audit, Cell: cell, Metrics: reg,
 		Logger: logx.Component(logger, "http.admin"),
 	}.Handler()
 	adminRoot := http.NewServeMux()

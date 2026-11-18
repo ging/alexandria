@@ -55,7 +55,7 @@ func (e *Evaluator) Evaluate(m domain.Message, g domain.Gate, p *pkgv.Package) d
 			if f.Slot != s.Slot || !contains(f.AppliesTo, string(g)) {
 				continue
 			}
-			found = append(found, e.apply(m, p, f, s.Slot)...)
+			found = append(found, e.apply(m, g, p, f, s.Slot)...)
 		}
 		violated := false
 		for _, f := range found {
@@ -72,16 +72,20 @@ func (e *Evaluator) Evaluate(m domain.Message, g domain.Gate, p *pkgv.Package) d
 	return res
 }
 
-// apply runs one artefact against the message.
-func (e *Evaluator) apply(m domain.Message, p *pkgv.Package, f pkgv.File, slot string) []domain.Finding {
+// apply runs one artefact against the message envelope (dsp_message) or the selected node (other gates).
+func (e *Evaluator) apply(m domain.Message, g domain.Gate, p *pkgv.Package, f pkgv.File, slot string) []domain.Finding {
 	switch f.Role {
 	case "json-schema":
 		s, err := e.compiled(p, f)
 		if err != nil {
 			return []domain.Finding{{Slot: slot, Source: "json-schema", Severity: "Violation", Message: "schema " + f.Path + ": " + err.Error()}}
 		}
+		target := m.Selected
+		if g == domain.GateDSP {
+			target = m.Root
+		}
 		var out []domain.Finding
-		for _, l := range s.Errors(m.Selected) {
+		for _, l := range s.Errors(target) {
 			out = append(out, domain.Finding{Slot: slot, Source: "json-schema", Severity: "Violation", Path: l.Path, Message: l.Message})
 		}
 		return out

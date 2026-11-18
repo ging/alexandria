@@ -1,9 +1,11 @@
 // Generic dense data table built on TanStack Table v9 with client-side sorting, quick filter and row selection callback.
 // Markup and styling are owned here so every list in the console shares one compact grid look.
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { createSortedRowModel, rowSortingFeature, sortFns, tableFeatures, useTable, type ColumnDef, type RowData, type SortingState } from '@tanstack/react-table'
 import { ArrowDown, ArrowUp, Search } from 'lucide-react'
 import { cn } from '@/lib/cn'
+import { hasOpenDialog, isEditableTarget, useWindowKeydown } from '@/lib/hotkeys'
+import { Kbd } from '@/components/ui/misc'
 
 const features = tableFeatures({ rowSortingFeature, sortedRowModel: createSortedRowModel(), sortFns })
 
@@ -78,8 +80,25 @@ export function DataTable<T extends object>({
                 key={row.id}
                 onClick={onRowClick ? () => onRowClick(row.original) : undefined}
                 tabIndex={onRowClick ? 0 : undefined}
-                onKeyDown={onRowClick ? (e) => e.key === 'Enter' && onRowClick(row.original) : undefined}
-                className={cn('group/row', onRowClick && 'cursor-pointer', active ? 'bg-accent-soft' : 'hover:bg-hover')}
+                onKeyDown={
+                  onRowClick
+                    ? (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          onRowClick(row.original)
+                        } else if (e.key === 'ArrowDown' || e.key === 'j') {
+                          e.preventDefault()
+                          const next = e.currentTarget.nextElementSibling as HTMLElement | null
+                          next?.focus()
+                        } else if (e.key === 'ArrowUp' || e.key === 'k') {
+                          e.preventDefault()
+                          const prev = e.currentTarget.previousElementSibling as HTMLElement | null
+                          prev?.focus()
+                        }
+                      }
+                    : undefined
+                }
+                className={cn('group/row focus:bg-hover focus:outline-none', onRowClick && 'cursor-pointer', active ? 'bg-accent-soft' : 'hover:bg-hover')}
               >
                 {row.getAllCells().map((cell) => (
                   <td key={cell.id} className={cn('h-9 border-b px-3 align-middle first:pl-6 last:pr-6', (cell.column.columnDef as Column<T>).meta?.className)}>
@@ -97,18 +116,39 @@ export function DataTable<T extends object>({
   )
 }
 
-// FilterInput renders the quick-filter box placed in page headers.
+// FilterInput renders the quick-filter box placed in page headers and focuses when pressing /.
 export function FilterInput({ value, onChange, placeholder = 'Filter', className }: { value: string; onChange: (v: string) => void; placeholder?: string; className?: string }) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  useWindowKeydown((e) => {
+    if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey && !isEditableTarget(e.target) && !hasOpenDialog()) {
+      e.preventDefault()
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    }
+  })
   return (
     <div className={cn('relative w-56', className)}>
       <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-subtle" />
       <input
+        ref={inputRef}
+        data-filter-input
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            if (value) onChange('')
+            else e.currentTarget.blur()
+          }
+        }}
         placeholder={placeholder}
         spellCheck={false}
-        className="h-8 w-full rounded-md border border-line-strong bg-input pr-2.5 pl-8 text-sm placeholder:text-subtle focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+        className="h-8 w-full rounded-md border border-line-strong bg-input pr-7 pl-8 text-sm placeholder:text-subtle focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
       />
+      {!value ? (
+        <span className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2">
+          <Kbd>/</Kbd>
+        </span>
+      ) : null}
     </div>
   )
 }

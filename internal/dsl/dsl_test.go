@@ -144,7 +144,7 @@ func TestShapesFollowReferenceOutput(t *testing.T) {
 		"sh:in ( col:putColor odrl:use odrl:transfer )",
 		"sh:in ( odrl:dateTime col:color )",
 		"sh:in ( odrl:eq odrl:lt odrl:lteq odrl:gt odrl:gteq )",
-		"sh:nodeKind sh:Literal ; sh:datatype xsd:dateTime",
+		"sh:nodeKind sh:Literal ; sh:or ( [ sh:datatype xsd:dateTime ] [ sh:datatype xsd:string ; sh:pattern",
 		"sh:nodeKind sh:IRI ; sh:in ( col:red col:green col:blue col:yellow )",
 		"sh:path odrl:rightOperandReference ; sh:maxCount 0",
 	} {

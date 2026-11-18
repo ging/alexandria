@@ -95,7 +95,7 @@ A rule maps a request to the gates that validate it.
     "body": [{"pointer": "/@type", "one_of": ["ContractRequestMessage", "dspace:ContractRequestMessage"]}]
   },
   "message": "ContractRequestMessage",
-  "verify": {"gates": ["dsp_message", "policy_intake"], "select": ""},
+  "verify": {"gates": ["dsp_message", "policy_intake"], "select": "/offer"},
   "mode": "enforce"
 }
 ```
@@ -106,7 +106,7 @@ A rule maps a request to the gates that validate it.
 | `match.path` | URI template of whole segments; a variable matches one non-empty segment. |
 | `match.body` | Optional conditions on the JSON body, addressed by JSON Pointer. |
 | `message` | The DSP message type the rule expects. |
-| `verify.gates` | One to four gates. `verify.select` is a JSON Pointer to the node to validate (the whole body when empty). |
+| `verify.gates` | One to four gates. `verify.select` is a JSON Pointer scoping `policy_intake` / `catalog_entry` (the whole body when empty; `dsp_message` always validates the root envelope). |
 | `mode` | `observe` (default), `shadow` or `enforce`. |
 | `validate_response` | Passive validation of catalog responses with the `catalog_entry` gate. |
 

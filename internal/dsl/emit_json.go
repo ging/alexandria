@@ -190,7 +190,7 @@ func signatureSchema(ix *Index, s *Signature) map[string]any {
 	return then
 }
 
-// lexicalForms are the XSD lexical spaces a typed @value must match, so the schema rejects what sh:datatype rejects.
+// lexicalForms are the XSD/ISO-8601 lexical spaces checked on both @value objects and DSP compact string literals.
 var lexicalForms = map[string]string{
 	"xsd:integer":  `^[+-]?[0-9]+$`,
 	"xsd:decimal":  `^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)$`,
@@ -198,10 +198,12 @@ var lexicalForms = map[string]string{
 	"xsd:float":    `^([+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?|[+-]?INF|NaN)$`,
 	"xsd:boolean":  `^(true|false|1|0)$`,
 	"xsd:date":     `^-?[0-9]{4,}-[0-9]{2}-[0-9]{2}(Z|[+-][0-9]{2}:[0-9]{2})?$`,
-	"xsd:dateTime": `^-?[0-9]{4,}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})?$`,
+	"xsd:dateTime": `^-?[0-9]{4,}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}(\.[0-9]+)?)?(Z|[+-][0-9]{2}:[0-9]{2})?$`,
+	"xsd:time":     `^[0-9]{2}:[0-9]{2}(:[0-9]{2}(\.[0-9]+)?)?(Z|[+-][0-9]{2}:[0-9]{2})?$`,
+	"xsd:anyURI":   `^[^ \t\r\n]+$`,
 }
 
-// valueSchema is the compact JSON-LD form of one right-operand value.
+// valueSchema is the compact JSON-LD form of one right-operand value, admitting both @value objects and DSP lexical strings.
 func valueSchema(ix *Index, s *Signature) map[string]any {
 	if s.Kind() == "iri" {
 		idSchema := map[string]any{"type": "string"}
@@ -242,9 +244,15 @@ func valueSchema(ix *Index, s *Signature) map[string]any {
 		alts = append(alts, map[string]any{"type": "number"})
 	case "xsd:boolean":
 		alts = append(alts, map[string]any{"type": "boolean"})
-	}
-	if len(alts) == 1 {
-		return typed
+	default:
+		plain := map[string]any{"type": "string"}
+		if re, ok := lexicalForms[s.Datatype]; ok {
+			plain["pattern"] = re
+		}
+		if len(s.Values) > 0 {
+			plain["enum"] = s.Values
+		}
+		alts = append(alts, plain)
 	}
 	return map[string]any{"anyOf": alts}
 }

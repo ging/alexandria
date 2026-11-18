@@ -34,7 +34,18 @@ const columns: Column<Rule>[] = [
       </span>
     ),
   },
-  { id: 'gates', header: 'Gates', enableSorting: false, cell: (c) => <span className="flex gap-1">{c.row.original.verify.gates.map((g) => <Badge key={g} tone="accent" className="font-mono">{g}</Badge>)}</span>, meta: { className: 'w-60' } },
+  {
+    id: 'gates',
+    header: 'Gates',
+    enableSorting: false,
+    cell: (c) => (
+      <span className="flex flex-wrap items-center gap-1">
+        {c.row.original.verify.gates.map((g) => <Badge key={g} tone="accent" className="font-mono">{g}</Badge>)}
+        {c.row.original.verify.select ? <Badge className="font-mono">{c.row.original.verify.select}</Badge> : null}
+      </span>
+    ),
+    meta: { className: 'w-64' },
+  },
   { id: 'mode', header: 'Mode', accessorFn: (r) => r.mode ?? 'observe', cell: (c) => <ModeBadge mode={c.row.original.mode ?? 'observe'} />, meta: { className: 'w-20' } },
 ]
 
@@ -141,6 +152,33 @@ function RuleDetail({ rule, revision, onClose }: { rule: Rule; revision: number;
             ['Match', <span className="flex items-center gap-2"><Method value={rule.match.method} /><Mono>{rule.match.path}</Mono></span>],
             ['Message', <Mono>{rule.message}</Mono>],
             ['Gates', <span className="flex flex-wrap gap-1">{rule.verify.gates.map((g) => <Badge key={g} tone="accent" className="font-mono">{g}</Badge>)}</span>],
+            ...(rule.verify.gates.includes('policy_intake')
+              ? [
+                  [
+                    'Policy path',
+                    <span className="flex flex-wrap items-center gap-1">
+                      {(['/offer', '/agreement', '/policy', ''] as const).map((ptr) => {
+                        const cur = rule.verify.select ?? ''
+                        const active = cur === ptr
+                        return (
+                          <button
+                            key={ptr || 'root'}
+                            type="button"
+                            disabled={update.isPending}
+                            onClick={() => !active && update.mutate(JSON.stringify({ ...rule, verify: { ...rule.verify, select: ptr } }))}
+                            className={cn(
+                              'h-5 rounded-sm border px-1.5 font-mono text-2xs transition-colors',
+                              active ? 'border-accent/50 bg-accent-soft font-medium text-accent' : 'border-line-strong bg-bg text-muted hover:text-fg',
+                            )}
+                          >
+                            {ptr || '/ (root)'}
+                          </button>
+                        )
+                      })}
+                    </span>,
+                  ] as [string, React.ReactNode],
+                ]
+              : []),
             ...(rule.validate_response ? [['Response', <span className="flex items-center gap-1"><Badge tone="accent" className="font-mono">{rule.validate_response.gate}</Badge><ModeBadge mode={rule.validate_response.mode ?? 'shadow'} /></span>] as [string, React.ReactNode]] : []),
           ]}
         />

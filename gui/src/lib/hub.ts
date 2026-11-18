@@ -154,6 +154,7 @@ export interface Candidate {
   planned: VersionRecord
   proposed_at: string
   lifecycle: Record<string, unknown>
+  files?: ManifestFile[]
 }
 
 // HubEvent is one entry of the append-only governance log.
@@ -281,6 +282,13 @@ export const hubQueries = {
     queryOptions({
       queryKey: ['hub', 'ns', slug, 'candidates', id],
       queryFn: async () => (await request<Candidate>(ns(slug, `/candidates/${id}`), { auth: true })).data,
+    }),
+  candidateFile: (slug: string, id: string, filePath: string) =>
+    queryOptions({
+      queryKey: ['hub', 'ns', slug, 'candidates', id, 'file', filePath],
+      queryFn: () => request(ns(slug, `/candidates/${encodeURIComponent(id)}/files/${filePath}`), { auth: true }),
+      staleTime: Infinity,
+      retry: false,
     }),
   pub: (path: string) =>
     queryOptions({ queryKey: ['hub', 'pubpath', path], queryFn: () => hub.fetchPub(path), retry: false, staleTime: 30_000 }),

@@ -184,6 +184,10 @@
   button:disabled {
     cursor: not-allowed;
   }
+  select {
+    -webkit-appearance: none;
+    appearance: none;
+  }
   * {
     scrollbar-width: thin;
     scrollbar-color: color-mix(in srgb, var(--fg-subtle) 40%, transparent) transparent;

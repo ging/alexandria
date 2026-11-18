@@ -62,12 +62,16 @@ func (h Handler) vocabulary(ns string, v domain.Vocabulary) map[string]any {
 	return m
 }
 
-// candidate projects a candidate with its planned record.
+// candidate projects a candidate with its planned record and compiled artefact entries.
 func (h Handler) candidate(c domain.Candidate) map[string]any {
-	return map[string]any{
+	m := map[string]any{
 		"id": h.nsIRI(c.Namespace) + "/candidates/" + c.ID, "namespace": h.nsIRI(c.Namespace), "state": c.State,
 		"version": c.Version.String(), "class": c.Class, "diff": c.Diff, "planned": c.Planned, "proposed_at": c.ProposedAt, "lifecycle": c.Params,
 	}
+	if len(c.Package.Entries) > 0 {
+		m["files"] = c.Package.Entries
+	}
+	return m
 }
 
 // event projects an event; its id is an IRI ending in the numeric event id.

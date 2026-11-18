@@ -212,3 +212,33 @@ func TestYAMLDraftDocumentRoundTripsAndExpands(t *testing.T) {
 		t.Fatalf("yaml draft response does not expand: %v", err)
 	}
 }
+
+// TestCandidateFilesBeforeApproval verifies that an unapproved candidate lists its compiled files and serves their bytes.
+func TestCandidateFilesBeforeApproval(t *testing.T) {
+	h := hub(t)
+	_, hdr, _ := h.Do(t, "POST", "/v1/namespaces/demo/drafts", h.SergioTok, testkit.DraftV1, nil)
+	did := hdr.Get("Location")[strings.LastIndex(hdr.Get("Location"), "/")+1:]
+	st, _, b := h.Do(t, "POST", "/v1/namespaces/demo/drafts/"+did+":propose", h.SergioTok, nil, nil)
+	if st != 201 {
+		t.Fatalf("propose: %d %s", st, b)
+	}
+	if _, err := jsonld.Expand(b, loader(t, schemas.Context())); err != nil {
+		t.Fatalf("candidate response does not expand: %v", err)
+	}
+	var cand struct {
+		ID    string `json:"id"`
+		Files []struct {
+			Path      string `json:"path"`
+			MediaType string `json:"media_type"`
+		} `json:"files"`
+	}
+	if err := json.Unmarshal(b, &cand); err != nil || len(cand.Files) == 0 {
+		t.Fatalf("expected candidate files: err=%v len=%d", err, len(cand.Files))
+	}
+	cid := cand.ID[strings.LastIndex(cand.ID, "/")+1:]
+	first := cand.Files[0]
+	st, fhdr, fb := h.Do(t, "GET", "/v1/namespaces/demo/candidates/"+cid+"/files/"+first.Path, h.SergioTok, nil, nil)
+	if st != 200 || len(fb) == 0 || !strings.HasPrefix(fhdr.Get("Content-Type"), first.MediaType) {
+		t.Fatalf("candidate file: st=%d ct=%q len=%d", st, fhdr.Get("Content-Type"), len(fb))
+	}
+}

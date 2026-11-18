@@ -63,14 +63,19 @@ func Decide(env Env, req Request) Decision {
 		return d
 	}
 	r := sel.Rule
-	msg, unparseable := message(req.Body, sel, r.Verify.Select)
+	rootMsg := Message{Root: req.Body, Selected: req.Body}
+	selMsg, selUnparseable := message(req.Body, sel, r.Verify.Select)
 	var enforced []Action
 	var items []Item
 	for _, g := range r.Verify.Gates {
 		gr := GateResult{Gate: g, Mode: r.EffectiveMode(), Action: Forward}
 		if gr.Mode != Observe {
 			gr.Evaluated = true
-			gr.Class = classifyGate(env, g, msg, sel.Doc, unparseable)
+			gateMsg, gateUnparseable := selMsg, selUnparseable
+			if g == GateDSP || g == GateAdmission {
+				gateMsg, gateUnparseable = rootMsg, sel.Unparseable
+			}
+			gr.Class = classifyGate(env, g, gateMsg, sel.Doc, gateUnparseable)
 			gr.Action = Act(gr.Mode, gr.Class.Result)
 		}
 		if gr.Mode == Enforce {
