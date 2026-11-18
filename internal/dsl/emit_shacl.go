@@ -13,6 +13,12 @@ const policyTargets = "sh:targetClass odrl:Policy, odrl:Set, odrl:Offer, odrl:Ag
 // coreActions are the two ODRL Core actions, always allowed and reported as ignored.
 var coreActions = []string{"odrl:use", "odrl:transfer"}
 
+// jsonNativeTypes are XSD datatypes that JSON-LD 1.1 expands from native JSON scalars without @type coercion.
+var jsonNativeTypes = map[string]bool{
+	"xsd:string": true, "xsd:integer": true, "xsd:decimal": true,
+	"xsd:double": true, "xsd:float": true, "xsd:boolean": true,
+}
+
 // shapesNS is the namespace of the generated shapes.
 func shapesNS(ix *Index) string { return strings.TrimRight(ix.P.Profile.BaseURL, "/") + "/shapes#" }
 
@@ -130,7 +136,11 @@ func emitSigShape(t *turtle, ix *Index, e *Entry) {
 		ro += " ; sh:nodeKind sh:Literal"
 		if s.Datatype != "" {
 			dt, _ := ix.Expand(s.Datatype)
-			ro += " ; sh:datatype " + t.ref(dt)
+			if re, ok := lexicalForms[s.Datatype]; ok && !jsonNativeTypes[s.Datatype] {
+				ro += " ; sh:or ( [ sh:datatype " + t.ref(dt) + " ] [ sh:datatype xsd:string ; sh:pattern " + lit(re) + " ] )"
+			} else {
+				ro += " ; sh:datatype " + t.ref(dt)
+			}
 		}
 		if len(s.Values) > 0 {
 			var vs []string

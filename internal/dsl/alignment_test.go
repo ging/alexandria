@@ -98,6 +98,27 @@ func TestSchemaAcceptsWellFormedTypedValue(t *testing.T) {
 	}
 }
 
+// TestSchemaAcceptsCanonicalDSPDateStringsWithOrderedOperators verifies DSP compact dateTime strings and ordered operator checks.
+func TestSchemaAcceptsCanonicalDSPDateStringsWithOrderedOperators(t *testing.T) {
+	s := colorsSchema(t)
+	for _, op := range []string{"lt", "lteq", "gt", "gteq", "eq"} {
+		for _, val := range []string{"2023-12-31T06:00Z", "2023-12-31T06:00:00Z"} {
+			perm := `{"action":"use","constraint":[{"leftOperand":"dateTime","operator":"` + op + `","rightOperand":"` + val + `"}]}`
+			if err := s.Validate(offer(colorsID, perm)); err != nil {
+				t.Errorf("%s %s failed: %v", op, val, err)
+			}
+		}
+	}
+	badVal := `{"action":"use","constraint":[{"leftOperand":"dateTime","operator":"lteq","rightOperand":"tomorrow"}]}`
+	if s.Validate(offer(colorsID, badVal)) == nil {
+		t.Fatal("ill-formed plain string passed dateTime signature")
+	}
+	badOp := `{"action":"use","constraint":[{"leftOperand":"dateTime","operator":"isA","rightOperand":"2023-12-31T06:00:00Z"}]}`
+	if s.Validate(offer(colorsID, badOp)) == nil {
+		t.Fatal("disallowed operator passed dateTime signature")
+	}
+}
+
 func TestN2MandatoryGateCoveredOnlyByShaclIsWarned(t *testing.T) {
 	r := Compile(Options{}, colors(t), space("1.0.0", "^0.1", ""))
 	expectErrors(t, r)
