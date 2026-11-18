@@ -83,8 +83,8 @@ Two compilers implement the draft format, selected by `compiler`:
 
 | Compiler | Draft format |
 |:---|:---|
-| `poc` (default, `DP-6`) | A JSON document with `version`, `profiles`, `slots` and `files`; each file has a path, media type, role and either inline `content` or a `source` vocabulary revision of the same namespace. |
-| `dsl` | A YAML bundle in the [`alexandria.profiles/v1`](./profiles-dsl) language. |
+| `dsl` (default) | A YAML bundle in the [`alexandria.profiles/v1`](./profiles-dsl) language (`OdrlProfile` + `SpaceProfile`). |
+| `poc` (`DP-6`) | Legacy JSON document with `version`, `profiles`, `slots` and `files`; each file has a path, media type, role and either inline `content` or a `source` vocabulary revision of the same namespace. |
 
 ---
 

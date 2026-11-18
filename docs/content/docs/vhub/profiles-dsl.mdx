@@ -148,6 +148,10 @@ Compiling an `OdrlProfile` and `SpaceProfile` produces deterministic, byte-repro
 | `profiles/odrl/<token>/<ver>/context.jsonld` | `mapping` | JSON-LD `@context` mapping every term alias to its full IRI (with mandatory `url` per `D-PVP-1`). |
 | `profiles/odrl/<token>/<ver>/shapes.ttl` | `shacl` | W3C SHACL shapes (§13.3): closed action lists, `sh:Warning` shapes for `deprecated` terms, and one constraint shape per `left_operand` signature. |
 | `profiles/odrl/<token>/<ver>/schema.json` | `json-schema` | Self-contained JSON Schema Draft 2020-12 over compact ODRL `Offer`/`Agreement` payloads (validates declared `profile`, allowed actions, atomic and logical `and`/`or`/`xone` constraints, and per-signature operators/values). |
+
+<Callout type="info">
+For temporal signatures (`xsd:dateTime`, `xsd:date`, `xsd:time`), both generated `schema.json` and `shapes.ttl` accept **RDF typed literals** (`{"@value": "2023-12-31T06:00Z", "@type": "...#dateTime"}`) **and** compact **DSP 2025-1** ISO-8601 strings (`"2023-12-31T06:00Z"`).
+</Callout>
 | `profiles/odrl/<token>/<ver>/prof.ttl` & `spec.html` | `prof`, `specification` | W3C PROF manifest and human-readable HTML specification. |
 | `space/prof.ttl` & `space/spec.html` | `prof`, `specification` | Space-level W3C PROF manifest and HTML specification. |
 | `space/shacl-union.ttl` | `shacl-union` | Combined SHACL shapes across all `mandatory` bindings per gate. |

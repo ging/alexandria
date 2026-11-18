@@ -1,154 +1,208 @@
 ---
-title: "2. Governing a Release"
-description: "Create a namespace, assign a steward, register vocabularies, and take a draft through validation, proposal and approval on alexandria-server; then inspect the signed credentials and published files."
+title: "2. Hub Governance & Authoring Lifecycle"
+description: "Set up the GreenCity Mobility namespace, appoint steward sergio, publish a hosted vocabulary, and release 1.0.0 via the Authoring Studio or HTTP API."
 ---
 
 import { Steps } from 'fumadocs-ui/components/steps';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 import { Callout } from 'fumadocs-ui/components/callout';
 
-# 2. Governing a Release
+# 2. Hub Governance & Authoring Lifecycle
 
-You will publish version `1.0.0` of a namespace. The laboratory of the [quickstart](../getting-started/quickstart) must be running.
+In **[Tutorial 1](./01-first-profile-dsl)** we validated and compiled `mobility-v1.0.0.yaml` locally. Now let's put it on **`alexandria-server`**, the central Vocabulary Hub (`C-HUB`), so every GreenCity participant can discover and verify it safely.
 
-```bash
-HUB=https://127.0.0.1:8443
-ADMIN=$(./bin/fake-idp token --sub ana --admin --ttl 24h)
-STEWARD=$(./bin/fake-idp token --sub sergio --ttl 24h)
-```
+We'll walk through **two super-clear flows**:
+- **Flow 1** — Bootstrap the `mobility` namespace (`ana · admin`), copy the Hub DID, appoint steward `sergio`, and upload `mobility-vocab`.
+- **Flow 2** — Author, validate (`N1–N5`), propose, review, approve `1.0.0`, and explore immutable `/pub` outputs.
 
-`curl -k` accepts the laboratory certificate.
+*(Both the **Console UI** with video walkthroughs and equivalent **`curl` commands** are shown side by side below!)*
+
+---
+
+## Flow 1 — Bootstrap `mobility`, Appoint Steward & Upload Vocabulary
+
+<FlowVideo
+  src="/videos/flow-01-bootstrap.mp4"
+  title="Flow 1 · Bootstrap mobility namespace, appoint steward sergio & upload vocabulary"
+  caption="ana creates mobility and appoints sergio; sergio switches identity and publishes revision 1 of mobility-vocab."
+/>
 
 <Steps>
 
-### 1. Create the namespace and its steward
+### Sign in as `ana` and create the `mobility` namespace
 
-Only the admin may do this:
+Only a hub administrator (`vhub-admin`) can create namespaces and manage stewards. Note that admins **cannot** mutate namespace contents unless explicitly assigned as a steward too—clean separation of duties!
+
+<Tabs items={['Console UI', 'CLI / curl']}>
+<Tab value="Console UI">
+
+1. Open **Identity** (`Anonymous` top right) → **Sign in with OIDC** → click **`ana · admin`**.
+2. In **Namespaces**, click **New namespace**, set slug **`mobility`** and title **`GreenCity Mobility`**, then click **Create namespace**.
+3. The hub jumps straight to **Overview**. Copy the **Hub DID** badge (you'll paste it into `alexandria-client` next!) and click **Assign steward** → subject **`sergio`**.
+
+</Tab>
+<Tab value="CLI / curl">
 
 ```bash
-curl -k -X POST $HUB/v1/namespaces -H "Authorization: Bearer $ADMIN" \
-  -d '{"slug":"demo","title":"Demo data space"}'
+export HUB=https://127.0.0.1:8443
+ADMIN=$(./bin/fake-idp token --sub ana --roles vhub-admin)
 
-curl -k -X POST $HUB/v1/namespaces/demo/stewards -H "Authorization: Bearer $ADMIN" \
-  -d '{"iss":"http://127.0.0.1:9400","sub":"sergio","label":"Sergio"}'
+# Create namespace
+curl -k -s -X POST "$HUB/v1/namespaces" \
+  -H "Authorization: Bearer $ADMIN" \
+  -H "Content-Type: application/json" \
+  -d '{"slug":"mobility","title":"GreenCity Mobility"}'
+
+# Appoint steward sergio (using your fake-idp issuer)
+curl -k -s -X PUT "$HUB/v1/namespaces/mobility/stewards/sergio" \
+  -H "Authorization: Bearer $ADMIN" \
+  -H "Content-Type: application/json" \
+  -d '{"iss":"http://127.0.0.1:9400","sub":"sergio","label":"Sergio — Mobility Steward"}'
 ```
 
-From here on every operation uses the steward token. The admin token would be answered `403`: being admin does not grant namespace operations.
+</Tab>
+</Tabs>
 
-### 2. Register vocabularies
+### Switch to `sergio` and upload `mobility-vocab`
 
-A hosted vocabulary, with content you upload:
+Create `/tmp/mobility-vocab.ttl`:
 
-```bash
-curl -k -X POST $HUB/v1/namespaces/demo/vocabularies -H "Authorization: Bearer $STEWARD" \
-  -d '{"name":"odrl-ext","kind":"hosted","media_type":"text/turtle"}'
-
-cat > odrl-ext.ttl <<'TTL'
-@prefix ex: <https://example.com/ns#> .
+```turtle
+@prefix mob:  <https://mobility.example/ns/> .
 @prefix odrl: <http://www.w3.org/ns/odrl/2/> .
-ex:access a odrl:Action .
-TTL
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
 
-curl -k -X PUT $HUB/v1/namespaces/demo/vocabularies/odrl-ext/content \
-  -H "Authorization: Bearer $STEWARD" -H "Content-Type: text/turtle" \
-  --data-binary @odrl-ext.ttl
+mob:shareTelemetry a odrl:Action ;
+  odrl:includedIn odrl:use ;
+  rdfs:label "Share Telemetry"@en ;
+  skos:definition "Access and stream real-time fleet telemetry datasets."@en .
+
+mob:region a odrl:LeftOperand ;
+  rdfs:label "Authorized Region"@en ;
+  skos:definition "Geographic zone where telemetry may be processed (e.g. EU, ES)."@en .
 ```
 
-The answer is revision `r1` with its digest. Uploading the same bytes again returns `200` and creates nothing; different bytes create `r2`.
+<Tabs items={['Console UI', 'CLI / curl']}>
+<Tab value="Console UI">
 
-A proxy vocabulary pins a copy of an upstream document:
+1. Switch **Identity** → **Sign in with OIDC** → **`sergio · steward`**.
+2. Open **Vocabularies** (`g v`) → **Register vocabulary** → name **`mobility-vocab`** (`hosted`, `text/turtle`).
+3. Click **`mobility-vocab`**, click **Upload content**, paste `/tmp/mobility-vocab.ttl`, and click **Publish revision**.
+
+</Tab>
+<Tab value="CLI / curl">
 
 ```bash
-curl -k -X POST $HUB/v1/namespaces/demo/vocabularies -H "Authorization: Bearer $STEWARD" \
-  -d '{"name":"dcat-ap-context","kind":"proxy","media_type":"application/ld+json",
-       "upstream":"http://127.0.0.1:8282/dcat-ap.jsonld"}'
+STEWARD=$(./bin/fake-idp token --sub sergio)
+
+# Register vocabulary
+curl -k -s -X POST "$HUB/v1/namespaces/mobility/vocabularies" \
+  -H "Authorization: Bearer $STEWARD" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"mobility-vocab","kind":"hosted","media_type":"text/turtle"}'
+
+# Upload revision 1
+curl -k -i -X PUT "$HUB/v1/namespaces/mobility/vocabularies/mobility-vocab/content" \
+  -H "Authorization: Bearer $STEWARD" \
+  -H "Content-Type: text/turtle" \
+  --data-binary @/tmp/mobility-vocab.ttl
 ```
 
-Both are public at once:
+</Tab>
+</Tabs>
 
-```bash
-curl -k -L $HUB/pub/demo/vocab/odrl-ext      # 303 to …/r/1, then the bytes
-```
-
-### 3. Create a draft
-
-With the default `poc` compiler a draft is a JSON document. This one defines a `policy` slot whose schema admits two actions:
-
-```bash
-cat > draft-1.0.0.json <<'JSON'
-{
-  "version": "1.0.0",
-  "profiles": ["https://127.0.0.1:8443/pub/demo/profiles/odrl/1.0.0"],
-  "slots": [{"slot": "policy", "obligation": "mandatory", "applies_to": ["policy_intake"]}],
-  "files": [{
-    "path": "schemas/policy.schema.json",
-    "media_type": "application/schema+json",
-    "role": "json-schema",
-    "slot": "policy",
-    "applies_to": ["policy_intake"],
-    "content": {
-      "type": "object",
-      "properties": {"action": {"enum": ["odrl:use", "ex:access"]}},
-      "required": ["action"]
-    }
-  }]
-}
-JSON
-
-curl -k -i -X POST $HUB/v1/namespaces/demo/drafts \
-  -H "Authorization: Bearer $STEWARD" --data-binary @draft-1.0.0.json
-```
-
-Keep the last segment of the `Location` header as `DRAFT`. The `ETag` is needed to replace the draft later (`PUT` with `If-Match`).
-
-### 4. Validate and propose
-
-```bash
-curl -k -X POST "$HUB/v1/namespaces/demo/drafts/$DRAFT:validate" -H "Authorization: Bearer $STEWARD"
-# {"valid": true, "class": "initial", "findings": []}
-
-curl -k -X POST "$HUB/v1/namespaces/demo/drafts/$DRAFT:propose" -H "Authorization: Bearer $STEWARD"
-```
-
-The candidate carries its `class`, the `diff` against the current head, the `lifecycle` parameters and the `planned` record with the dates it would get. Keep the last segment of its `id` as `CANDIDATE`. The candidate is frozen: editing the draft afterwards does not change it.
-
-### 5. Approve
-
-```bash
-curl -k -X POST "$HUB/v1/namespaces/demo/candidates/$CANDIDATE:approve" \
-  -H "Authorization: Bearer $STEWARD" -d '{}'
-```
-
-The answer is the signed `VersionRecord`. As an `initial` version, `new_content_from` and `enforced_from` both equal the publication instant `published_at`, so `1.0.0` enters into force immediately (subsequent `compatible` and `breaking` transitions add the propagation window, two days by default).
-
-### 6. Read the credentials
-
-```bash
-curl -k $HUB/v1/namespaces/demo/versions          # VersionListing
-curl -k $HUB/v1/namespaces/demo/versions/1.0.0    # VersionRecord
-```
-
-Each is a VC 2.0 document whose `proof` has `cryptosuite: eddsa-jcs-2022` and a `verificationMethod` under the hub DID. The listing has `sequence: 1` and a `validUntil` one `ttl` ahead; the hub re-issues it before it expires.
-
-### 7. Read the published package
-
-```bash
-MANIFEST=$(curl -sk $HUB/v1/namespaces/demo/versions/1.0.0 | jq -r .credentialSubject.manifest)
-curl -k "$HUB/pub/packages/${MANIFEST#ni:///sha-256;}/manifest.json"
-curl -k -i $HUB/pub/demo/1.0.0/schemas/policy.schema.json
-```
-
-The file is served with `Cache-Control: public, max-age=31536000, immutable` and an `ETag` equal to its SHA-256.
-
-### 8. Read the audit trail
-
-```bash
-curl -k $HUB/v1/namespaces/demo/events -H "Authorization: Bearer $STEWARD"
-```
+Your Turtle vocabulary is now immutable at `/pub/mobility/vocab/mobility-vocab/r/1`, with `/pub/mobility/vocab/mobility-vocab` issuing a `303` redirect to the latest revision.
 
 </Steps>
 
+---
+
+## Flow 2 — Authoring Studio, Candidate Review & Initial Release `1.0.0`
+
+Now let's bring `/tmp/mobility-v1.0.0.yaml` through the full **draft → validate → propose → approve** workflow and inspect the published artifacts!
+
+<FlowVideo
+  src="/videos/flow-02-authoring-release.mp4"
+  title="Flow 2 · Authoring Studio (Code ↔ Split ↔ Form), N1–N5 validation, Propose, Approve 1.0.0 & /pub"
+  caption="Creating the v1.0.0 draft inline, switching between Code and Split Studio views, validating, proposing, approving 1.0.0, and inspecting /hub/pub."
+/>
+
+<Steps>
+
+### Create and validate the `1.0.0` draft
+
+<Tabs items={['Console UI', 'CLI / curl']}>
+<Tab value="Console UI">
+
+1. Go to **Authoring** (`g a`) and press **`n`** (or click **New draft**) to open the full-height studio.
+2. Notice **Form**, **Split**, and **Code** (`f` / `s` / `y`) stay live-synchronized! Switch to **Code**, paste `/tmp/mobility-v1.0.0.yaml`, then switch back to **Split** and toggle **ODRL Profile ↔ Space Profile** (`1` / `2`) to review your structured forms.
+3. Click **Create draft** (or `⌘↵`), then click **Validate** to verify all `N1`–`N5` rules pass cleanly.
+
+</Tab>
+<Tab value="CLI / curl">
+
+```bash
+# Wrap /tmp/mobility-v1.0.0.yaml in JSON {"content": ...}
+jq -Rs '{content: .}' /tmp/mobility-v1.0.0.yaml > /tmp/draft-payload.json
+
+DRAFT=$(curl -k -s -X POST "$HUB/v1/namespaces/mobility/drafts" \
+  -H "Authorization: Bearer $STEWARD" \
+  -H "Content-Type: application/json" \
+  --data-binary @/tmp/draft-payload.json | jq -r '.id | split("/")[-1]')
+
+# Run dry-run validation (no state change)
+curl -k -s -X POST "$HUB/v1/namespaces/mobility/drafts/$DRAFT:validate" \
+  -H "Authorization: Bearer $STEWARD"
+```
+
+</Tab>
+</Tabs>
+
+### Propose candidate, inspect compiled artifacts & approve `1.0.0`
+
+When you click **Propose** (`POST …:propose`), the server compiles the entire bundle into an **immutable candidate** so reviewers can inspect every generated file (`context.jsonld`, `schema.json`, `shapes.ttl`, rendered `spec.html`) and the diff against head **before** approving.
+
+<Tabs items={['Console UI', 'CLI / curl']}>
+<Tab value="Console UI">
+
+1. Click **Propose** to freeze the candidate.
+2. Browse the **Summary** tab (planned dates + diff) and open the **Files** tab to inspect any compiled artifact inline—including rendered **`spec.html`**.
+3. Click **Approve & publish** (`1.0.0` is class **`initial`**, so `new_content_from` and `enforced_from` both start **immediately at publication time**!).
+4. Open **Versions** (`g l`) and **Publication** (`g p`) to browse the immutable `/pub/mobility/1.0.0/…` tree.
+
+</Tab>
+<Tab value="CLI / curl">
+
+```bash
+CANDIDATE=$(curl -k -s -X POST "$HUB/v1/namespaces/mobility/drafts/$DRAFT:propose" \
+  -H "Authorization: Bearer $STEWARD" | jq -r '.id | split("/")[-1]')
+
+# Optional: inspect candidate files list & diff before approving
+curl -k -s "$HUB/v1/namespaces/mobility/candidates/$CANDIDATE/files" \
+  -H "Authorization: Bearer $STEWARD" | jq '.[].path'
+
+# Approve 1.0.0 (initial release enters force immediately)
+curl -k -s -X POST "$HUB/v1/namespaces/mobility/candidates/$CANDIDATE:approve" \
+  -H "Authorization: Bearer $STEWARD" \
+  -H "Content-Type: application/json" -d '{}'
+
+# Verify /v1/namespaces/mobility/versions and public /pub/mobility redirect
+curl -k -s "$HUB/v1/namespaces/mobility/versions" | jq '.credentialSubject.versions'
+curl -k -i "$HUB/pub/mobility"
+```
+
+</Tab>
+</Tabs>
+
 <Callout type="info">
-`GET /pub/demo` redirects to the head version. It answers `404` until some version is in force, which for a first release means after the propagation window.
+Notice what makes **`1.0.0` (`initial`)** special: unlike `compatible` and `breaking` updates—which honor a propagation window—the very first version enters force **immediately (`new_content_from = enforced_from = P`)**. So as soon as your sidecar syncs, it becomes **Ready (`Active`)** right away!
 </Callout>
 
-Next: [validate DSP traffic at the edge](./03-edge-validation-sidecar).
+</Steps>
+
+---
+
+## Next Tutorial
+
+With `mobility` `1.0.0` published and cryptographically signed on the hub, head to **[Tutorial 3: Edge Validation Sidecar (`alexandria-client`)](./03-edge-validation-sidecar)** to synchronize GreenCity's proxy, inspect `/offer` rule scoping, and dry-run live DSP 2025-1 contract messages.
