@@ -2,15 +2,17 @@
 // Data comes from GET /status, /healthz and /readyz on the admin listener and refreshes every few seconds.
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, RefreshCw } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/cn'
-import { clientQueries, type ClientState } from '@/lib/client'
+import { client, clientQueries, type ClientState } from '@/lib/client'
 import { formatInstant, formatSpan, iriTail, relativeTo, shortDigest } from '@/lib/format'
-import { useNow } from '@/lib/hooks'
+import { useAction, useNow } from '@/lib/hooks'
+import { hasOpenDialog, isEditableTarget, useWindowKeydown } from '@/lib/hotkeys'
 import { runtime } from '@/lib/runtime'
 import { StateBadge, stateTone } from '@/components/lifecycle'
 import { ErrorState } from '@/components/problem'
+import { Button } from '@/components/ui/button'
 import { Badge, Dot, KV, Mono, Page, Section, Spinner } from '@/components/ui/misc'
 
 const states: { id: ClientState; hint: string }[] = [
@@ -28,6 +30,16 @@ export function StatusPage() {
   const q = useQuery(clientQueries.status())
   const health = useQuery(clientQueries.health())
   const now = useNow(1000)
+  const sync = useAction(() => client.sync(), {
+    success: (r) => `Synced · listing sequence ${r.data.last_accepted_listing?.sequence ?? '—'}`,
+    invalidate: [['client', 'status'], ['client', 'health'], ['client', 'versions'], ['client', 'audit']],
+  })
+  useWindowKeydown((e) => {
+    if (e.key === 'r' && !e.metaKey && !e.ctrlKey && !e.altKey && !isEditableTarget(e.target) && !hasOpenDialog() && !sync.isPending) {
+      e.preventDefault()
+      sync.mutate(undefined)
+    }
+  })
   if (q.isPending) return <div className="flex h-40 items-center justify-center"><Spinner /></div>
   if (q.isError) return <Page title="Status"><ErrorState error={q.error} /></Page>
   const s = q.data
@@ -38,7 +50,18 @@ export function StatusPage() {
   const expired = l ? now >= until : false
   const skew = Math.abs(s.clock_skew_estimate_ms)
   return (
-    <Page title="Status" subtitle={<>Edge proxy for namespace <span className="font-mono">{iriTail(s.namespace)}</span> · refreshed every 5 s</>} actions={<StateBadge state={s.state} />}>
+    <Page
+      title="Status"
+      subtitle={<>Edge proxy for namespace <span className="font-mono">{iriTail(s.namespace)}</span> · refreshed every 5 s</>}
+      actions={
+        <div className="flex items-center gap-2">
+          <Button size="sm" icon={<RefreshCw className={sync.isPending ? 'size-3.5 animate-spin' : 'size-3.5'} />} loading={sync.isPending} onClick={() => sync.mutate(undefined)}>
+            Sync now
+          </Button>
+          <StateBadge state={s.state} />
+        </div>
+      }
+    >
       <div className="mx-auto max-w-5xl space-y-4">
         <Section title="Operational state">
           <ol className="flex items-stretch gap-1">

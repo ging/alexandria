@@ -14,6 +14,9 @@ export const CONSUMER_PID = 'urn:uuid:32541fe6-c580-409e-85a8-8a9a32fbe833'
 // DATASET_ID is the dataset identifier from the DSP 2025-1-err2 catalog examples.
 export const DATASET_ID = 'urn:uuid:3afeadd8-ed2d-569e-d634-8394a8836d57'
 
+// DSP_DATETIME_EXAMPLE is the canonical ISO-8601 dateTime string used in DSP 2025-1-err2 examples.
+const DSP_DATETIME_EXAMPLE = '2023-12-31T06:00Z'
+
 // ruleExamples maps seed rule identifiers to their exact DSP 2025-1-err2 specification payloads.
 const ruleExamples: Record<string, Record<string, unknown>> = {
   'catalog-request': {
@@ -49,7 +52,7 @@ const ruleExamples: Record<string, Record<string, unknown>> = {
             {
               leftOperand: 'dateTime',
               operator: 'lteq',
-              rightOperand: '2023-12-31T06:00Z',
+              rightOperand: DSP_DATETIME_EXAMPLE,
             },
           ],
         },
@@ -84,7 +87,7 @@ const ruleExamples: Record<string, Record<string, unknown>> = {
             {
               leftOperand: 'dateTime',
               operator: 'lteq',
-              rightOperand: '2023-12-31T06:00Z',
+              rightOperand: DSP_DATETIME_EXAMPLE,
             },
           ],
         },
@@ -122,7 +125,7 @@ const messageExamples: Record<string, Record<string, unknown>> = {
             {
               leftOperand: 'dateTime',
               operator: 'lteq',
-              rightOperand: '2023-12-31T06:00Z',
+              rightOperand: DSP_DATETIME_EXAMPLE,
             },
           ],
         },

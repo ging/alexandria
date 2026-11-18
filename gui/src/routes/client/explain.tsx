@@ -6,6 +6,7 @@ import { ArrowRight, FlaskConical, SendHorizontal } from 'lucide-react'
 import { client, clientQueries, type Explanation, type GateExplanation, type Rule } from '@/lib/client'
 import { concretizeDspPath, DEFAULT_EXPLAIN_MESSAGE, dspExampleForRule, PROVIDER_PID } from '@/lib/dsp-examples'
 import { prettyJSON } from '@/lib/format'
+import { hasOpenDialog, isEditableTarget, useWindowKeydown } from '@/lib/hotkeys'
 import { CodeEditor } from '@/components/code-editor'
 import { ModeBadge, StateBadge } from '@/components/lifecycle'
 import { ProblemBanner } from '@/components/problem'
@@ -38,6 +39,16 @@ export function ExplainPage() {
     } else parsed = null
     run.mutate({ listener, method, path, body: parsed })
   }
+  useWindowKeydown((e) => {
+    if (hasOpenDialog()) return
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !run.isPending) {
+      e.preventDefault()
+      send()
+    } else if (run.data && !isEditableTarget(e.target) && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      if (e.key === '1') setTab('report')
+      else if (e.key === '2') setTab('json')
+    }
+  })
   const preset = (r: Rule) => {
     setListener(r.listener)
     setMethod(r.match.method)

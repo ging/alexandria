@@ -18,10 +18,10 @@ export function Textarea({ className, mono, ...rest }: TextareaHTMLAttributes<HT
 }
 
 // Select renders a native select with the console chrome.
-export function Select({ className, children, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
+export function Select({ className, style, children, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <div className={cn('relative', className)}>
-      <select className={cn(control, 'h-8 appearance-none pr-7')} {...rest}>
+      <select style={{ WebkitAppearance: 'none', appearance: 'none', ...style }} className={cn(control, 'h-8 appearance-none pr-7')} {...rest}>
         {children}
       </select>
       <ChevronDown className="pointer-events-none absolute top-1/2 right-2 size-3.5 -translate-y-1/2 text-subtle" />

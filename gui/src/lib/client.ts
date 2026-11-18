@@ -124,6 +124,7 @@ export const etagOf = (revision: number) => `"${revision}"`
 
 // client groups the mutating admin operations.
 export const client = {
+  sync: () => request<Status>(`${BASE}/sync`, { method: 'POST' }),
   addRule: (rule: string, revision: number) => request<Ruleset>(`${BASE}/rules`, { method: 'POST', raw: rule, ifMatch: etagOf(revision) }),
   updateRule: (id: string, rule: string, revision: number) =>
     request<Ruleset>(`${BASE}/rules/${encodeURIComponent(id)}`, { method: 'PUT', raw: rule, ifMatch: etagOf(revision) }),
