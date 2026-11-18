@@ -42,28 +42,29 @@ type handlerFunc func(w http.ResponseWriter, r *http.Request, p *domain.Principa
 // Register mounts the /v1 routes on mux.
 func (h Handler) Register(mux *http.ServeMux) {
 	routes := map[string]handlerFunc{
-		"POST /v1/namespaces":                                 h.createNamespace,
-		"GET /v1/namespaces":                                  h.listNamespaces,
-		"GET /v1/namespaces/{ns}":                             h.getNamespace,
-		"GET /v1/namespaces/{ns}/stewards":                    h.listStewards,
-		"POST /v1/namespaces/{ns}/stewards":                   h.assignSteward,
-		"DELETE /v1/namespaces/{ns}/stewards/{id}":            h.removeSteward,
-		"GET /v1/events":                                      h.events,
-		"GET /v1/namespaces/{ns}/events":                      h.events,
-		"POST /v1/namespaces/{ns}/vocabularies":               h.createVocabulary,
-		"GET /v1/namespaces/{ns}/vocabularies":                h.listVocabularies,
-		"GET /v1/namespaces/{ns}/vocabularies/{name}":         h.getVocabulary,
-		"POST /v1/namespaces/{ns}/vocabularies/{name}":        h.vocabularyAction,
-		"PUT /v1/namespaces/{ns}/vocabularies/{name}/content": h.putContent,
-		"POST /v1/namespaces/{ns}/drafts":                     h.createDraft,
-		"GET /v1/namespaces/{ns}/drafts/{id}":                 h.getDraft,
-		"PUT /v1/namespaces/{ns}/drafts/{id}":                 h.replaceDraft,
-		"POST /v1/namespaces/{ns}/drafts/{id}":                h.draftAction,
-		"GET /v1/namespaces/{ns}/candidates/{id}":             h.getCandidate,
-		"POST /v1/namespaces/{ns}/candidates/{id}":            h.candidateAction,
-		"GET /v1/namespaces/{ns}/versions":                    h.listing,
-		"GET /v1/namespaces/{ns}/versions/{version}":          h.record,
-		"POST /v1/namespaces/{ns}/versions/{version}":         h.versionAction,
+		"POST /v1/namespaces":                                     h.createNamespace,
+		"GET /v1/namespaces":                                      h.listNamespaces,
+		"GET /v1/namespaces/{ns}":                                 h.getNamespace,
+		"GET /v1/namespaces/{ns}/stewards":                        h.listStewards,
+		"POST /v1/namespaces/{ns}/stewards":                       h.assignSteward,
+		"DELETE /v1/namespaces/{ns}/stewards/{id}":                h.removeSteward,
+		"GET /v1/events":                                          h.events,
+		"GET /v1/namespaces/{ns}/events":                          h.events,
+		"POST /v1/namespaces/{ns}/vocabularies":                   h.createVocabulary,
+		"GET /v1/namespaces/{ns}/vocabularies":                    h.listVocabularies,
+		"GET /v1/namespaces/{ns}/vocabularies/{name}":             h.getVocabulary,
+		"POST /v1/namespaces/{ns}/vocabularies/{name}":            h.vocabularyAction,
+		"PUT /v1/namespaces/{ns}/vocabularies/{name}/content":     h.putContent,
+		"POST /v1/namespaces/{ns}/drafts":                         h.createDraft,
+		"GET /v1/namespaces/{ns}/drafts/{id}":                     h.getDraft,
+		"PUT /v1/namespaces/{ns}/drafts/{id}":                     h.replaceDraft,
+		"POST /v1/namespaces/{ns}/drafts/{id}":                    h.draftAction,
+		"GET /v1/namespaces/{ns}/candidates/{id}":                 h.getCandidate,
+		"GET /v1/namespaces/{ns}/candidates/{id}/files/{path...}": h.getCandidateFile,
+		"POST /v1/namespaces/{ns}/candidates/{id}":                h.candidateAction,
+		"GET /v1/namespaces/{ns}/versions":                        h.listing,
+		"GET /v1/namespaces/{ns}/versions/{version}":              h.record,
+		"POST /v1/namespaces/{ns}/versions/{version}":             h.versionAction,
 	}
 	for pattern, f := range routes {
 		mux.Handle(pattern, h.authenticated(f))
@@ -347,6 +348,16 @@ func (h Handler) draftAction(w http.ResponseWriter, r *http.Request, p *domain.P
 func (h Handler) getCandidate(w http.ResponseWriter, r *http.Request, p *domain.Principal) {
 	c, err := h.Hub.Query.Candidate(p, r.PathValue("ns"), r.PathValue("id"))
 	h.out(w, http.StatusOK, h.doc(h.candidate(c)), err)
+}
+
+// getCandidateFile handles GET .../candidates/{id}/files/{path...} to preview frozen candidate artefacts before publication.
+func (h Handler) getCandidateFile(w http.ResponseWriter, r *http.Request, p *domain.Principal) {
+	b, mediaType, err := h.Hub.Query.CandidateFile(p, r.PathValue("ns"), r.PathValue("id"), r.PathValue("path"))
+	if err != nil {
+		h.problems().Error(w, err)
+		return
+	}
+	httpx.Body(w, http.StatusOK, mediaType, b)
 }
 
 // candidateAction handles POST .../candidates/{id}:approve and :reject.

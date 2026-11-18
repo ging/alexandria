@@ -3,6 +3,7 @@
 package app
 
 import (
+	"github.com/ging/alexandria/internal/core/codes"
 	"github.com/ging/alexandria/internal/server/domain"
 )
 
@@ -31,4 +32,24 @@ func (q *Query) Candidate(p *domain.Principal, ns, id string) (domain.Candidate,
 	}
 	c, err := q.d.Store.GetCandidate(ns, id)
 	return c, notFound(err, "candidate "+id)
+}
+
+// CandidateFile returns the compiled bytes and media type of one artefact inside a frozen candidate.
+func (q *Query) CandidateFile(p *domain.Principal, ns, id, path string) ([]byte, string, error) {
+	c, err := q.Candidate(p, ns, id)
+	if err != nil {
+		return nil, "", err
+	}
+	b, ok := c.Package.Files[path]
+	if !ok {
+		return nil, "", codes.New(codes.APINotFound, "candidate file %s not found", path)
+	}
+	mediaType := "application/octet-stream"
+	for _, e := range c.Package.Entries {
+		if e.Path == path && e.MediaType != "" {
+			mediaType = e.MediaType
+			break
+		}
+	}
+	return b, mediaType, nil
 }
