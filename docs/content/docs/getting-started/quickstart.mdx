@@ -1,118 +1,86 @@
 ---
 title: Quickstart
-description: Build Alexandria, replay the F6 scenario in one command, then start the laboratory services by hand.
+description: Run the automated scenario in one command, or start the Alexandria lab yourself and walk through the GreenCity Mobility story.
 ---
 
-import { Steps } from 'fumadocs-ui/components/steps';
 import { Callout } from 'fumadocs-ui/components/callout';
+import { Steps } from 'fumadocs-ui/components/steps';
 
 # Quickstart
 
+Welcome! Whether you prefer exploring visually in the **Alexandria Console** or scripting everything from the terminal, you can have a complete Vocabulary Hub and edge validation sidecar running locally in about two minutes.
+
+Let's build the binaries first, then either launch the one-command demo or start the 4-process lab yourself.
+
 ---
 
-## Path A: Build, Test and Run the F6 Demo
+## Option A — One-Command Automated Replay
 
-<Steps>
-
-### 1. Build the binaries
-
-```bash
-make build
-```
-
-Produces `bin/alexandria-server`, `bin/alexandria-client`, `bin/alexandriac`, `bin/fake-idp` and `bin/fake-connector`.
-
-### 2. Run the suites
-
-```bash
-make test conformance e2e trace
-```
-
-Unit and architecture tests, the conformance battery, the end-to-end F6 scenario across the real binaries, and the traceability check (81 of 81 requirements, 76 of 77 catalog codes).
-
-### 3. Replay F6
+From the repository root:
 
 ```bash
 make demo
 ```
 
-Starts `fake-idp`, `fake-connector`, the server and the client with a shared file clock, replays two and a half months of lifecycle in seconds and prints the verdict table: the same messages moving through `ok`, `warning` with a `VHub-Verdict` notice, and `violation` as versions are published, enforced and revoked.
-
-</Steps>
+This builds all five Go binaries into `bin/`, launches `fake-idp`, `alexandria-server`, `fake-connector`, and `alexandria-client` on free local ports with a simulated clock, and replays the full normative **Scenario F6** lifecycle (`1.0.0 initial` -> `2.0.0 breaking` -> grace window -> cutoff & agreement revocation) printing every verdict along the way.
 
 ---
 
-## Path B: Start the Laboratory by Hand
+## Option B — Interactive Lab (Console + Terminal)
+
+To click through the visual **Alexandria Console** (recommended while following the [Tutorials](../tutorials)) or drive the HTTP APIs yourself:
 
 <Steps>
 
-### 1. Start the services
+### Build binaries with the embedded Console
 
-Each command in its own terminal, from the repository root:
+If you want `alexandria-server` and `alexandria-client` to serve the browser Console directly under `/ui/`, use `build-gui` (requires Node.js + pnpm):
 
 ```bash
+make build-gui
+```
+
+Or build only the Go binaries (`make build`) and run the standalone Console dev server in `gui/` (`make gui-dev` on `http://localhost:5273`) so both **Server** and **Client** workspaces live side by side in one tab.
+
+### Start the laboratory processes
+
+Open four terminals (or background them cleanly):
+
+```bash
+# 1. Laboratory OIDC identity provider (http://127.0.0.1:9400)
 ./bin/fake-idp serve
-./bin/fake-connector
+
+# 2. Vocabulary Hub server (https://127.0.0.1:8443)
 ./bin/alexandria-server -config config/server.yaml
+
+# 3. Upstream DSP connector (http://127.0.0.1:8282)
+./bin/fake-connector -listen 127.0.0.1:8282
+```
+
+Notice on first boot `alexandria-server` generates a laboratory signing key, derives its **Hub DID** (`did:key:...`), and prints a self-signed certificate under `var/tls/hub.crt`. Copy that **Hub DID** (you can grab it with one click from the Console sidebar or `/v1/namespaces/{ns}/versions`), put it in `config/client.yaml` under `did_config.hub_did`, and start the edge sidecar:
+
+```bash
+# 4. Edge validation proxy (ingress :9080, egress :9081, admin :9090)
 ./bin/alexandria-client -config config/client.yaml
 ```
 
-On first start the server creates its signing key and a laboratory TLS certificate under `var/`, and logs its `hub_did`. Copy that DID into `did_config.hub_did` of `config/client.yaml` before starting the client: the client only accepts credentials issued by the DID it is configured to trust.
+### Open the Console and follow the GreenCity Mobility story
 
-### 2. Get tokens
+- If using the embedded Console:
+  - Hub workspace: `https://127.0.0.1:8443/ui/` (accept the local lab TLS warning)
+  - Client workspace: `http://127.0.0.1:9090/ui/`
+- If using `make gui-dev`: open `http://localhost:5273/` to switch seamlessly between **Server** and **Client** with `g w`.
 
-```bash
-ADMIN=$(./bin/fake-idp token --sub ana --admin --ttl 24h)
-STEWARD=$(./bin/fake-idp token --sub sergio --ttl 24h)
-```
-
-### 3. Create a namespace and a steward
-
-```bash
-curl -k -X POST https://127.0.0.1:8443/v1/namespaces \
-  -H "Authorization: Bearer $ADMIN" \
-  -d '{"slug":"demo","title":"Demo data space"}'
-
-curl -k -X POST https://127.0.0.1:8443/v1/namespaces/demo/stewards \
-  -H "Authorization: Bearer $ADMIN" \
-  -d '{"iss":"http://127.0.0.1:9400","sub":"sergio","label":"Sergio"}'
-```
-
-### 4. Check both sides
-
-```bash
-curl -k https://127.0.0.1:8443/v1/namespaces
-curl http://127.0.0.1:9090/status
-```
-
-The client reports `Onboarding` until the namespace publishes its first version.
+<Callout type="info">
+To sign in quickly during local labs, open the **Identity** menu at the top right, choose **Sign in with OIDC**, and use the one-click `fake-idp` presets (`ana · admin` or `sergio · steward`).
+</Callout>
 
 </Steps>
 
-<Callout type="info">
-Prefer a browser? `make build-gui` embeds the **[Alexandria Console](../vhub/console)** in both binaries (`/ui/`), and `fake-idp serve` provides a password-less sign-in page for the lab admin and stewards.
-</Callout>
-
-<Callout type="info">
-Continue with the **[tutorials](../tutorials)** to publish a release and send DSP traffic through the proxy.
-</Callout>
-
 ---
 
-## Command Cheat Sheet
+## Where to Next?
 
-| Action | Command |
-|:---|:---|
-| Build the binaries | `make build` |
-| Build with the embedded console | `make build-gui` |
-| Unit, contract and architecture tests | `make test` |
-| Conformance battery | `make conformance` |
-| End-to-end F6 scenario | `make e2e` |
-| F6 demo table | `make demo` |
-| Traceability matrix | `make trace` |
-| Format, lint, test, conformance and trace | `make check` |
-| Console development server | `make gui-dev` |
-| Jupyter tutorials | `make tutorial` |
-| Documentation site | `make docs-dev` |
+Ready to follow one cohesive end-to-end story—**GreenCity Mobility (`mobility`)**—from YAML authoring to live DSP contract validation and zero-downtime breaking upgrades?
 
-Every target has a `task` equivalent (`task build`, `task build:gui`, `task gui:dev`, …).
+Start with **[Tutorial 1: Authoring Your First Profile (`alexandriac`)](../tutorials/01-first-profile-dsl)**.

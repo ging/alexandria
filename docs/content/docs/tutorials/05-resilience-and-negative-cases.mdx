@@ -19,10 +19,10 @@ curl -k -i -X POST $HUB/v1/namespaces -d '{"slug":"x"}'
 
 # A valid token that is neither admin nor steward → 403 API_FORBIDDEN_ROLE
 EVE=$(./bin/fake-idp token --sub eve)
-curl -k -i -X POST $HUB/v1/namespaces/demo/drafts -H "Authorization: Bearer $EVE" -d '{}'
+curl -k -i -X POST $HUB/v1/namespaces/mobility/drafts -H "Authorization: Bearer $EVE" -d '{}'
 
 # The admin is not a steward → 403 on namespace operations
-curl -k -i $HUB/v1/namespaces/demo/events -H "Authorization: Bearer $ADMIN"
+curl -k -i $HUB/v1/namespaces/mobility/events -H "Authorization: Bearer $ADMIN"
 ```
 
 An expired or tampered token is `401` on any endpoint, including public ones.
@@ -33,12 +33,12 @@ An expired or tampered token is `401` on any endpoint, including public ones.
 
 ```bash
 # Replace a draft without If-Match → 428 API_PRECONDITION_REQUIRED
-curl -k -i -X PUT $HUB/v1/namespaces/demo/drafts/$DRAFT \
-  -H "Authorization: Bearer $STEWARD" --data-binary @draft-1.0.0.json
+curl -k -i -X PUT $HUB/v1/namespaces/mobility/drafts/$DRAFT \
+  -H "Authorization: Bearer $STEWARD" --data-binary @draft-payload.json
 
 # With a stale ETag → 412 API_PRECONDITION_FAILED
-curl -k -i -X PUT $HUB/v1/namespaces/demo/drafts/$DRAFT \
-  -H "Authorization: Bearer $STEWARD" -H 'If-Match: "stale"' --data-binary @draft-1.0.0.json
+curl -k -i -X PUT $HUB/v1/namespaces/mobility/drafts/$DRAFT \
+  -H "Authorization: Bearer $STEWARD" -H 'If-Match: "stale"' --data-binary @draft-payload.json
 ```
 
 The rule API of the client behaves the same way, with the revision as `ETag`.
@@ -49,8 +49,8 @@ The rule API of the client behaves the same way, with the revision as `ETag`.
 
 | Try this | Result |
 |:---|:---|
-| Create a namespace with slug `Demo!` | `422 NS_SLUG_INVALID` |
-| Create `demo` twice, or `_vhub` | `409 NS_EXISTS` |
+| Create a namespace with slug `Mobility!` | `422 NS_SLUG_INVALID` |
+| Create `mobility` twice, or `_vhub` | `409 NS_EXISTS` |
 | Approve a candidate that is already approved | `409 API_INVALID_STATE` |
 | Propose a draft whose version is not greater than the latest | `422` with a compiler finding |
 | Approve a `compatible` release with a `grace_window` | `422 DATES_GRACE_ON_COMPATIBLE` |

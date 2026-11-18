@@ -210,6 +210,7 @@ Served only on the `admin` listener, without authentication. Errors are `applica
 | Endpoint | Purpose |
 |:---|:---|
 | `GET /status` | Namespace, state, local versions with their role (`head`, `in_force`, `scheduled`, `retained`), last accepted listing, hub DID, rule-set revision and clock-skew estimate (`REQ-CLI-020`). |
+| `POST /sync` | Trigger an immediate synchronization cycle against the hub (bypassing the periodic poll interval) and return the updated status. |
 | `GET /versions` | Known lifecycle records with their reference state and whether the package is held. |
 | `GET /rules` | The rule set; its revision is the `ETag`. |
 | `PUT /rules` | Replace the whole set. |

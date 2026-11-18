@@ -1,105 +1,110 @@
 ---
 title: "4. Breaking Changes and Scenario F6"
-description: "How a breaking release coexists with its predecessor: dates, the grace window, VHub-Verdict notices, agreement admission and revocation, following the normative scenario F6."
+description: How a breaking release coexists with its predecessor — dates, 30-day grace window, VHub-Verdict notices, cutoff enforcement, and agreement revocation in GreenCity Mobility.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
+import { Steps } from 'fumadocs-ui/components/steps';
 
 # 4. Breaking Changes and Scenario F6
 
-Scenario F6 of the specification follows one namespace from September to November 2026. It is the reference behaviour for migrations and it is replayed by `make demo`, by `TestE2E_F6` and by the fourth Jupyter notebook.
+Sooner or later, every dataspace evolves. Suppose GreenCity decides that sharing raw fleet telemetry (`mob:shareTelemetry` from `1.0.0`) should be retired in favor of standard read-only access **`odrl:read`**.
 
-```bash
-make demo
-```
+Breaking every running partner integration at midnight would be chaos. Instead, Alexandria implements **expand, migrate, contract** (`REQ-SYS-007`), verified across the timeline in normative **Scenario F6** (replayed automatically by `make demo` and `TestE2E_F6`).
+
+<FlowVideo
+  src="/videos/flow-04-breaking-f6.mp4"
+  title="Flow 4 · Breaking Release 2.0.0, Grace Window (Transition) & Cutoff"
+  caption="Sergio publishes breaking 2.0.0 with a 30-day grace window; on Oct 10 mob:shareTelemetry passes with a warning notice, and on Nov 5 (after cutoff) it is rejected."
+/>
 
 ---
 
-## The Two Versions
+## GreenCity's Two Releases (`1.0.0` vs `2.0.0`)
 
-| Version | Class | Admitted policy actions |
+Remember `N4` from [Tutorial 1](./01-first-profile-dsl): you can't retire an active term in one jump—so our `2.0.0` bundle includes an intermediate `1.1.0` `OdrlProfile` marking `shareTelemetry` as `deprecated` (`replaced_by: odrl:read`), plus the `2.0.0` `OdrlProfile` marking it `retired`, bound to `SpaceProfile` `2.0.0`:
+
+| Release | Class | Accepted Policy Actions |
 |:---|:---|:---|
-| `1.0.0` | `initial` | `odrl:use`, `ex:access` |
-| `2.0.0` | `breaking` | `odrl:use`, `odrl:read` |
-
-Three messages are sent again and again: **m1** uses `odrl:use` (valid in both), **m2** uses `ex:access` (valid only in `1.0.0`), **m3** uses `odrl:read` (valid only in `2.0.0`).
+| **`1.0.0`** | `initial` | `odrl:use`, `mob:shareTelemetry` |
+| **`2.0.0`** | `breaking` | `odrl:use`, `odrl:read` |
 
 ---
 
-## Dates
+## Timeline & Lifecycle Dates
 
-`1.0.0` is approved on 2026-09-01 at 10:00. With a propagation window of two days it takes effect on 09-03.
-
-`2.0.0` is approved on 2026-10-01 at 10:00:
-
-- An attempt with `grace_window: P3D` is refused with `DATES_GRACE_TOO_SHORT`: the minimum is seven days.
-- Approved with the default grace of thirty days, it gets `new_content_from = 2026-10-03T10:00:00Z` and `enforced_from = 2026-11-02T10:00:00Z`.
+- **September 1, 10:00 (`1.0.0` `initial`)**: Published and enforced immediately (`P = 2026-09-01T10:00:00Z`).
+- **October 1, 10:00 (`2.0.0` `breaking`)**:
+  - Attempting approval with `grace_window: P3D` is rejected (`422 DATES_GRACE_TOO_SHORT`—minimum is 7 days).
+  - Approving with the 30-day default sets `new_content_from = 2026-10-03T10:00:00Z` (after the 2-day propagation window) and `enforced_from = 2026-11-02T10:00:00Z`.
 
 ```text
  1.0.0  ────────●══════════════════════════════════════╗
-               09-03                                    ║ contract
+               09-01                                    ║ contract
  2.0.0                       ○ · · ●═══════════════════╬══════════►
-                           10-01  10-03   grace       11-02
+                           10-01  10-03   30d grace    11-02
                          published  new content      enforced
 ```
 
 ---
 
-## What the Client Decides
+## What `alexandria-client` Decides Along the Window
 
-Rule `contract-request` is in `enforce` mode; the lease margin is ten seconds.
+Assuming `contract-request` is in `enforce` mode (with a 10-second lease margin):
 
-| Instant | m1 `odrl:use` | m2 `ex:access` | m3 `odrl:read` | Why |
+| Simulated Date | `odrl:use` | `mob:shareTelemetry` (old) | `odrl:read` (new) | Sidecar State & Explanation |
 |:---|:---:|:---:|:---:|:---|
-| 10-02 12:00 | ok | ok | **violation** | Only `1.0.0` is in force. |
-| 10-03 09:59:55 | ok | **warning** | ok | `2.0.0` enters force a lease margin early. |
-| 10-10 12:00 | ok | **warning** | ok | Grace window: both versions accepted. |
-| 11-02 10:00:05 | ok | **warning** | ok | Still within the lease margin after `enforced_from`. |
-| 11-05 12:00 | ok | **violation** | ok | Only `2.0.0` is in force. |
+| **Oct 02, 12:00** | `forward` | `forward` | **`reject`** | `Active` (`1.0.0` only—`2.0.0` is `Scheduled`). |
+| **Oct 03, 09:59:55** | `forward` | **`forward-notice`** | `forward` | `Transition` starts one lease margin before `new_content_from`. |
+| **Oct 10, 12:00** | `forward` | **`forward-notice`** | `forward` | `Transition` grace window: both `1.0.0` and `2.0.0` work. |
+| **Nov 02, 10:00:05** | `forward` | **`forward-notice`** | `forward` | Still inside the post-cutoff lease margin. |
+| **Nov 05, 12:00** | `forward` | **`reject`** (`VERDICT_VIOLATION`) | `forward` | `Active` (`2.0.0` head only—`1.0.0` retired). |
 
-This is *expand, migrate, contract* (`REQ-SYS-007`): the new content is accepted first, the old content keeps working with a notice, and rejection starts only after `enforced_from` plus the lease margin.
-
-A warning is forwarded with a notice that tells the sender exactly what is happening:
+Whenever a request relies on the older `1.0.0` during the grace window, the sidecar still forwards it cleanly to the connector **and attaches a `VHub-Verdict` warning header** so callers know when migration is due:
 
 ```http
 VHub-Verdict: warning;gate=policy_intake;code="VERDICT_NOT_IN_HEAD";version="1.0.0";sunset=@1793613600
 ```
 
-`version` is the older version that accepted the message and `sunset` the instant it stops being accepted.
+---
+
+## Existing Agreements Outlive Retirement
+
+What about an agreement **A1** negotiated on **October 10** under `mob:shareTelemetry`?
+- **Nov 05 (Cutoff)**: Even though new contracts using `mob:shareTelemetry` are now rejected, **A1 keeps working** because it is bound to its captured `1.0.0` snapshot!
+- **Nov 10 (Explicit Revocation)**: Only if `sergio` explicitly revokes `1.0.0` with a written justification does the client emit `AGREEMENT_REVOCATION_SCHEDULED`—and block transfers under A1 once `revoked_from` (request instant + propagation window + lease margin) arrives (`AGREEMENT_VERSION_REVOKED`).
 
 ---
 
-## Agreements Outlive Their Version
+## Replaying GreenCity `2.0.0` Yourself with a File Clock
 
-On 10-10 an agreement **A1** carrying `ex:access` passes with a warning and is captured, bound to `1.0.0`.
+<Steps>
 
-| Instant | Event | Transfer under A1 |
-|:---|:---|:---:|
-| 11-05 12:00 | `1.0.0` is retired, but its package is retained because A1 references it. | admitted |
-| 11-10 00:00 | A steward revokes `1.0.0`; `revoked_from` is 11-12 00:00 (request plus propagation window). The client emits `AGREEMENT_REVOCATION_SCHEDULED` for A1. | admitted |
-| 11-12 00:00:05 | Revocation in effect, within the lease margin. | admitted |
-| 11-12 00:00:10 | Lease margin over. | **rejected**, `AGREEMENT_VERSION_REVOKED` |
+### Start the lab with a file clock
 
-Retirement does not break existing agreements; only revocation does, and it is announced in advance.
-
----
-
-## Reproducing It by Hand
-
-Every process accepts a file clock, so the timeline can be replayed in seconds:
+Every Alexandria binary accepts `-clock-file` (`--clock-file` on `fake-idp`) so you can fast-forward months in milliseconds:
 
 ```bash
-echo 2026-09-01T09:00:00Z > /tmp/clock
+echo 2026-09-01T10:00:00Z > /tmp/clock
 ./bin/fake-idp serve --clock-file /tmp/clock
 ./bin/alexandria-server -config config/server.yaml -clock-file /tmp/clock
 ./bin/alexandria-client -config config/client.yaml -clock-file /tmp/clock
-./bin/fake-idp token --sub sergio --clock-file /tmp/clock
 ```
 
-Write a new instant to the file to move time forward. Tokens must be minted with the same clock, and the client must synchronize before each step for the listing to be current.
+### Author `2.0.0` on Oct 1, then step through Oct 10 and Nov 5
+
+Write `2026-10-01T10:00:00Z` to `/tmp/clock`, mint/refresh your steward identity, propose & approve the `2.0.0` YAML bundle (containing `OdrlProfile 1.1.0` deprecated + `OdrlProfile 2.0.0` retired + `SpaceProfile 2.0.0`), then write:
+1. `2026-10-10T12:00:00Z > /tmp/clock` → press **`r`** (`Sync now`) → Status shows **`Transition`**; **Explain** accepts `mob:shareTelemetry` with `forward-notice`.
+2. `2026-11-05T12:00:00Z > /tmp/clock` → press **`r`** (`Sync now`) → Status returns to **`Active`** (`2.0.0`); **Explain** rejects `mob:shareTelemetry` with `VERDICT_VIOLATION`.
 
 <Callout type="info">
-`conformance/f6/scenario.go` contains the exact sequence of instants, requests and expected results, and is the best starting point for a custom replay.
+Want to inspect the automated Go test? Check `conformance/f6/scenario.go` or run `make demo` at any time.
 </Callout>
 
-Next: [resilience and negative cases](./05-resilience-and-negative-cases).
+</Steps>
+
+---
+
+## Next Tutorial
+
+Ready to see how Alexandria handles bad tokens, stale `ETag`s, invalid dates, and hub outages? Continue to **[Tutorial 5: Resilience and Negative Cases](./05-resilience-and-negative-cases)**.

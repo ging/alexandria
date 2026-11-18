@@ -1,107 +1,159 @@
 ---
-title: "3. Validating DSP Traffic at the Edge"
-description: "Follow alexandria-client as it synchronizes the namespace, explain decisions without side effects, change rule modes and send DSP messages through the proxy."
+title: "3. Edge Validation Sidecar (alexandria-client)"
+description: Connect alexandria-client to the GreenCity Mobility hub, trigger Sync now, inspect /offer rule scoping, and dry-run or proxy DSP 2025-1 contract traffic.
 ---
 
 import { Steps } from 'fumadocs-ui/components/steps';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 import { Callout } from 'fumadocs-ui/components/callout';
 
-# 3. Validating DSP Traffic at the Edge
+# 3. Edge Validation Sidecar (`alexandria-client`)
 
-`alexandria-client` follows the `demo` namespace of [tutorial 2](./02-hub-governance-lifecycle) and proxies a connector — here the `fake-connector`.
+With `mobility` **`1.0.0`** live on the hub, let's bring GreenCity's edge validation sidecar (**`alexandria-client`**) online. The sidecar verifies cryptographic hub signatures once during sync, compiles an in-memory gate bundle, and validates every inbound/outbound DSP request in milliseconds **with zero network calls on the request path**.
 
-```bash
-ADMINAPI=http://127.0.0.1:9090
-INGRESS=http://127.0.0.1:9080
-```
+<FlowVideo
+  src="/videos/flow-03-client-sync-explain.mp4"
+  title="Flow 3 · Client Sync now, Rules (/offer scoping) & DSP Explain"
+  caption="Syncing immediately from Onboarding to Active (1.0.0), inspecting verify.select: /offer, and testing valid vs invalid DSP 2025-1 payloads in Explain."
+/>
 
 <Steps>
 
-### 1. Check synchronization
+### Configure trust and start the client
+
+Copy the **Hub DID** you grabbed in Tutorial 2 into your client config (`trust.namespace: "mobility"`, `did_config.hub_did: "did:key:..."`), then start `alexandria-client` alongside `fake-connector`:
 
 ```bash
-curl $ADMINAPI/status
+./bin/fake-connector -listen 127.0.0.1:8282
+./bin/alexandria-client -config config/client.yaml
 ```
 
-Before the first release the state is `Onboarding`. Once the hub has published `1.0.0` and the client has synchronized, it becomes `Active`, with `last_accepted_listing.sequence` set, the hub DID resolved and `1.0.0` listed with role `scheduled` — it is known, but not yet in force.
+Before its first sync, `/readyz` returns `503` and the Console **Status** page shows **`Onboarding`**.
+
+### Sync immediately (`Sync now` or `POST /sync`)
+
+<Tabs items={['Console UI', 'CLI / curl']}>
+<Tab value="Console UI">
+
+1. Switch to **Client → Status** (`g w` then `g s`).
+2. Click **Sync now** (or simply press **`r`**).
+3. The sidecar fetches the signed `VersionListing` and `1.0.0` package, verifies Ed25519 signatures and SHA-256 digests, and enters **`Active`** right away (since `1.0.0` is `initial`, `enforced_from = published_at`).
+
+</Tab>
+<Tab value="CLI / curl">
 
 ```bash
-curl $ADMINAPI/versions      # dates, reference state, package held or not
-curl $ADMINAPI/readyz -i     # 200 once a listing has been accepted
+export ADMINAPI=http://127.0.0.1:9090
+
+# Trigger an immediate synchronization instead of waiting for the poll interval
+curl -s -X POST "$ADMINAPI/sync" | jq '{state, head}'
+
+# Check readiness and status
+curl -i "$ADMINAPI/readyz"
+curl -s "$ADMINAPI/status" | jq '{state, head, sequence}'
 ```
 
-### 2. Look at the rules
+</Tab>
+</Tabs>
+
+### Understand `Rules` and `verify.select: "/offer"`
+
+Open **Client → Rules** (`g u`) and click **`contract-request`** (or `curl -s $ADMINAPI/rules/contract-request`):
+
+- **`match`**: `POST /negotiations/{providerPid}/request` where `/@type` is `ContractRequestMessage` (or `dspace:ContractRequestMessage`).
+- **`gates`**: `["dsp_message", "policy_intake"]`.
+- **`Policy path` (`verify.select`)**: **`/offer`**. This tells `policy_intake` (ODRL JSON Schema + SHACL) to validate *only* the embedded `offer` sub-object while `dsp_message` validates the full protocol envelope!
+- **`mode`**: `enforce`.
+
+### Dry-run payloads safely with **Explain**
+
+Before letting partner traffic hit the connector, test both valid and invalid `ContractRequestMessage` payloads using **Explain** (`POST /explain`):
+
+<Tabs items={['Console UI', 'CLI / curl']}>
+<Tab value="Console UI">
+
+1. Open **Client → Explain** (`g x`).
+2. Click the **`contract-request`** chip in the rule bar—Explain auto-fills a canonical **DSP 2025-1-err2** `ContractRequestMessage` (`action: "use"`, `dateTime lteq "2023-12-31T06:00Z"`).
+3. Click **Explain** (or press `⌘↵`): verdict is **`forward`**.
+4. Now change `"action"` inside `offer.permission[0]` to `"delete"` (which isn't in `mobility` `1.0.0`) and press `⌘↵`: verdict flips to **`reject`** with **`VERDICT_VIOLATION`** and exact gate findings!
+
+</Tab>
+<Tab value="CLI / curl">
 
 ```bash
-curl -i $ADMINAPI/rules
-```
-
-The seed holds 16 rules for the DSP messages. The `ETag` is the rule-set revision. The rule `contract-request` validates `POST /negotiations/{providerPid}/request` with the gates `dsp_message` and `policy_intake` in `enforce` mode.
-
-### 3. Explain a decision
-
-`:explain` answers what the proxy would do, without forwarding, recording or emitting anything:
-
-```bash
-curl -X POST "$ADMINAPI/rules:explain" -d '{
+# Valid DSP 2025-1 ContractRequestMessage (ok -> forward)
+curl -s -X POST "$ADMINAPI/explain" -H 'Content-Type: application/json' -d '{
   "listener": "dsp-ingress",
   "method": "POST",
-  "path": "/negotiations/urn:uuid:p-1/request",
-  "body": {"@type": "ContractRequestMessage", "providerPid": "urn:uuid:p-1",
-           "consumerPid": "urn:uuid:c-1", "action": "odrl:use"}
-}'
+  "path": "/negotiations/urn:uuid:a343fcbf-99fc-4ce8-8e9b-148c97605aab/request",
+  "body": {
+    "@context": ["https://w3id.org/dspace/2025/1/context.jsonld"],
+    "@type": "ContractRequestMessage",
+    "providerPid": "urn:uuid:a343fcbf-99fc-4ce8-8e9b-148c97605aab",
+    "consumerPid": "urn:uuid:32541fe6-c580-409e-85a8-8a9a32fbe833",
+    "offer": {
+      "@type": "Offer",
+      "@id": "urn:uuid:d526561f-528e-4d5a-ae12-9a9dd9b7a815",
+      "profile": "https://mobility.example/odrl/profile/mobility",
+      "target": "urn:uuid:3dd1add8-4d2d-569e-d634-8394a8836a88",
+      "permission": [{
+        "action": "use",
+        "constraint": [{"leftOperand": "dateTime", "operator": "lteq", "rightOperand": "2023-12-31T06:00Z"}]
+      }]
+    }
+  }
+}' | jq '{action, rule, findings}'
 ```
 
-Because `1.0.0` is an `initial` release, it is already in force (`new_content_from = enforced_from = published_at`), so the answer is:
+</Tab>
+</Tabs>
 
-```json
-{
-  "rule": "contract-request",
-  "state": "Active",
-  "action": "forward"
-}
-```
+### Send real traffic through `dsp-ingress` and capture an Agreement
 
-With `"action": "odrl:read"` it gives `reject` with `VERDICT_VIOLATION`, because the schema of `1.0.0` does not admit that action. (If no version were in force at the local instant, an `enforce` rule would reject with `NO_VERSION_IN_FORCE`.)
-
-### 4. Send a message through the proxy
+With everything verified in Explain, send live requests through the proxy listener (`:9080`) using our custom GreenCity action **`https://mobility.example/ns/shareTelemetry`** vs an unknown action:
 
 ```bash
-curl -i -X POST $INGRESS/negotiations/urn:uuid:p-1/request \
-  -H "Content-Type: application/json" \
-  -d '{"@type":"ContractRequestMessage","providerPid":"urn:uuid:p-1","consumerPid":"urn:uuid:c-1","action":"odrl:use"}'
+export INGRESS=http://127.0.0.1:9080
+
+# 1. Valid GreenCity telemetry request -> 200 OK forwarded to fake-connector
+curl -s -i -X POST "$INGRESS/negotiations/urn:uuid:a343fcbf-99fc-4ce8-8e9b-148c97605aab/request" \
+  -H 'Content-Type: application/json' -d '{
+    "@context": ["https://w3id.org/dspace/2025/1/context.jsonld"],
+    "@type": "ContractRequestMessage",
+    "providerPid": "urn:uuid:a343fcbf-99fc-4ce8-8e9b-148c97605aab",
+    "consumerPid": "urn:uuid:32541fe6-c580-409e-85a8-8a9a32fbe833",
+    "offer": {
+      "@type": "Offer",
+      "@id": "urn:uuid:d526561f-528e-4d5a-ae12-9a9dd9b7a815",
+      "profile": "https://mobility.example/odrl/profile/mobility",
+      "target": "urn:uuid:3dd1add8-4d2d-569e-d634-8394a8836a88",
+      "permission": [{"action": "https://mobility.example/ns/shareTelemetry"}]
+    }
+  }'
+
+# 2. Disallowed action -> 400 Bad Request (VERDICT_VIOLATION), never touches connector
+curl -s -i -X POST "$INGRESS/negotiations/urn:uuid:a343fcbf-99fc-4ce8-8e9b-148c97605aab/request" \
+  -H 'Content-Type: application/json' -d '{
+    "@context": ["https://w3id.org/dspace/2025/1/context.jsonld"],
+    "@type": "ContractRequestMessage",
+    "providerPid": "urn:uuid:a343fcbf-99fc-4ce8-8e9b-148c97605aab",
+    "consumerPid": "urn:uuid:32541fe6-c580-409e-85a8-8a9a32fbe833",
+    "offer": {
+      "@type": "Offer",
+      "@id": "urn:uuid:d526561f-528e-4d5a-ae12-9a9dd9b7a815",
+      "profile": "https://mobility.example/odrl/profile/mobility",
+      "target": "urn:uuid:3dd1add8-4d2d-569e-d634-8394a8836a88",
+      "permission": [{"action": "delete"}]
+    }
+  }'
 ```
 
-- **Forwarded**: the connector's own response comes back, and `curl http://127.0.0.1:8282/_received` shows the body arrived byte for byte.
-- **Rejected**: `400` with a DSP error body and the `VHub-Verdict` header; nothing reaches the connector.
-
-### 5. Change a rule mode
-
-Rule changes need the current revision in `If-Match`. Switch `contract-request` to `shadow`, which forwards everything but still reports:
-
-```bash
-curl -s $ADMINAPI/rules/contract-request | jq '.mode = "shadow"' > rule.json
-curl -i -X PUT $ADMINAPI/rules/contract-request -H 'If-Match: "1"' --data-binary @rule.json
-```
-
-The response carries the new revision as `ETag`. Repeat step 4: the message is forwarded, and a `vhub.verdict` event is appended to the event sink.
-
-```bash
-tail -n 3 var/client/events.jsonl
-```
-
-### 6. Read the metrics
-
-```bash
-curl $ADMINAPI/metrics
-```
-
-`vhub_classifications_total` counts results per rule, gate, version and result.
+When the connector later exchanges a `ContractAgreementMessage`, the client captures the agreement locally—pinned to version **`1.0.0`**—visible under **Client → Agreements** (`g g`) or `$ADMINAPI/agreements`. You can also watch live counters under **Client → Metrics** (`g m`).
 
 </Steps>
 
-<Callout type="info">
-The three modes are a rollout path: `observe` to stay silent, `shadow` to measure what would be rejected, `enforce` to act. A rule can be moved between them at runtime; the change applies to the next message.
-</Callout>
+---
 
-Next: [breaking changes and scenario F6](./04-breaking-changes-and-f6).
+## Next Tutorial
+
+What happens when GreenCity needs a breaking policy upgrade that partners cannot migrate to overnight? Let's roll out **`2.0.0`** cleanly with a grace window in **[Tutorial 4: Breaking Changes & Scenario F6](./04-breaking-changes-and-f6)**.
