@@ -1,5 +1,5 @@
-
 # syntax=docker/dockerfile:1
+# Multi-stage container build for Alexandria server, client, CLI, and fake-connector images.
 
 ARG NODE_IMAGE=node:22-alpine
 ARG GO_IMAGE=golang:1.27-alpine

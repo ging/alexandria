@@ -1,0 +1,211 @@
+# Builds and publishes multi-arch Alexandria container images to GitHub Container Registry (GHCR).
+# Publishes server, client, cli, and fake-connector targets on main pushes, version tags, and manual runs.
+name: Publish Container Images
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "go.mod"
+      - "go.sum"
+      - "cmd/**"
+      - "internal/**"
+      - "gui/**"
+      - "deploy/**"
+      - ".github/workflows/publish-images.yaml"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Optional extra image tag (e.g. dev or 0.1.0-rc.1)"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository }}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      PUSH_IMAGES: ${{ github.event_name != 'pull_request' }}
+      PLATFORMS: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        if: github.event_name != 'pull_request'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # --- Target: server ---
+      - name: Extract metadata (server)
+        id: meta-server
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/server
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ inputs.tag || 'noop' }},enable=${{ github.event_name == 'workflow_dispatch' && inputs.tag != '' }}
+          labels: |
+            org.opencontainers.image.title=alexandria-server
+            org.opencontainers.image.description=Alexandria Vocabulary Hub server with embedded Console UI
+            org.opencontainers.image.licenses=Apache-2.0
+
+      - name: Build and push (server)
+        id: push-server
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: server
+          platforms: ${{ env.PLATFORMS }}
+          push: ${{ env.PUSH_IMAGES }}
+          tags: ${{ steps.meta-server.outputs.tags }}
+          labels: ${{ steps.meta-server.outputs.labels }}
+          cache-from: type=gha,scope=alexandria
+          cache-to: ${{ github.event_name != 'pull_request' && 'type=gha,mode=max,scope=alexandria' || '' }}
+
+      # --- Target: client ---
+      - name: Extract metadata (client)
+        id: meta-client
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/client
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ inputs.tag || 'noop' }},enable=${{ github.event_name == 'workflow_dispatch' && inputs.tag != '' }}
+          labels: |
+            org.opencontainers.image.title=alexandria-client
+            org.opencontainers.image.description=Alexandria DSP Edge Sidecar and Validator with embedded Console UI
+            org.opencontainers.image.licenses=Apache-2.0
+
+      - name: Build and push (client)
+        id: push-client
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: client
+          platforms: ${{ env.PLATFORMS }}
+          push: ${{ env.PUSH_IMAGES }}
+          tags: ${{ steps.meta-client.outputs.tags }}
+          labels: ${{ steps.meta-client.outputs.labels }}
+          cache-from: type=gha,scope=alexandria
+
+      # --- Target: cli ---
+      - name: Extract metadata (cli)
+        id: meta-cli
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/cli
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ inputs.tag || 'noop' }},enable=${{ github.event_name == 'workflow_dispatch' && inputs.tag != '' }}
+          labels: |
+            org.opencontainers.image.title=alexandriac
+            org.opencontainers.image.description=Alexandria offline Profile DSL compiler CLI
+            org.opencontainers.image.licenses=Apache-2.0
+
+      - name: Build and push (cli)
+        id: push-cli
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: cli
+          platforms: ${{ env.PLATFORMS }}
+          push: ${{ env.PUSH_IMAGES }}
+          tags: ${{ steps.meta-cli.outputs.tags }}
+          labels: ${{ steps.meta-cli.outputs.labels }}
+          cache-from: type=gha,scope=alexandria
+
+      # --- Target: fake-connector ---
+      - name: Extract metadata (fake-connector)
+        id: meta-fake-connector
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/fake-connector
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ inputs.tag || 'noop' }},enable=${{ github.event_name == 'workflow_dispatch' && inputs.tag != '' }}
+          labels: |
+            org.opencontainers.image.title=alexandria-fake-connector
+            org.opencontainers.image.description=Simulated DSP Connector for Alexandria demo deployments
+            org.opencontainers.image.licenses=Apache-2.0
+
+      - name: Build and push (fake-connector)
+        id: push-fake-connector
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: fake-connector
+          platforms: ${{ env.PLATFORMS }}
+          push: ${{ env.PUSH_IMAGES }}
+          tags: ${{ steps.meta-fake-connector.outputs.tags }}
+          labels: ${{ steps.meta-fake-connector.outputs.labels }}
+          cache-from: type=gha,scope=alexandria
+
+      - name: Publish summary
+        if: github.event_name != 'pull_request'
+        run: |
+          {
+            echo "### Published GHCR Images"
+            echo ""
+            echo "| Target | Image | Digest |"
+            echo "| --- | --- | --- |"
+            echo "| \`server\` | \`${{ env.IMAGE_PREFIX }}/server\` | \`${{ steps.push-server.outputs.digest }}\` |"
+            echo "| \`client\` | \`${{ env.IMAGE_PREFIX }}/client\` | \`${{ steps.push-client.outputs.digest }}\` |"
+            echo "| \`cli\` | \`${{ env.IMAGE_PREFIX }}/cli\` | \`${{ steps.push-cli.outputs.digest }}\` |"
+            echo "| \`fake-connector\` | \`${{ env.IMAGE_PREFIX }}/fake-connector\` | \`${{ steps.push-fake-connector.outputs.digest }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
