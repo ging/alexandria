@@ -1,84 +1,78 @@
-# Receta de Despliegue con Docker Compose (Caddy + PostgreSQL + Keycloak)
+# Docker Compose Deployment (Caddy + PostgreSQL + Keycloak)
 
-Esta receta despliega Alexandria sobre infraestructura real:
+This directory deploys Alexandria with Docker Compose:
 
-- **Caddy (`caddy:2.9-alpine`):** Reverse proxy terminando TLS delante del Hub y de Keycloak (`*.127.0.0.1.nip.io` con CA local por defecto; adaptable a cualquier dominio real con Let's Encrypt automático).
-- **PostgreSQL (`postgres:17-alpine`):** Persistencia transaccional con tres bases de datos aisladas (`keycloak`, `alexandria_hub` con triggers de inmutabilidad en tablas append-only, y `alexandria_client`).
-- **Keycloak (`quay.io/keycloak/keycloak:26.2`):** Proveedor OAuth 2.0 / OIDC real con el realm `alexandria` auto-importado, emisión de access tokens RFC 9068 (`typ: at+jwt`), audiencia `alexandria-vhub`, mapeo del claim `roles` (`vhub-admin`), PKCE (`S256`) para la consola web y clientes CLI/M2M.
-- **`alexandria-server`:** Vocabulary Hub compilado con la consola web embebida (`/ui/`).
-- **Perfil opcional `demo` (`--profile demo`):** Añade **`alexandria-client`** (respaldado por PostgreSQL y descubriendo automáticamente el `hub_did`) + **`fake-connector`**.
+- `caddy:2.9-alpine`: reverse proxy terminating TLS in front of the Hub and Keycloak (`*.127.0.0.1.nip.io` with a local CA by default, or Let's Encrypt for real domains).
+- `postgres:17-alpine`: shared PostgreSQL instance initialized with three databases (`keycloak`, `alexandria_hub` with immutability triggers on append-only tables, and `alexandria_client`).
+- `quay.io/keycloak/keycloak:26.2`: OAuth 2.0 / OIDC provider with an auto-imported `alexandria` realm, RFC 9068 access tokens (`typ: at+jwt`), audience `alexandria-vhub`, the `roles` claim (`vhub-admin`), PKCE (`S256`) for `/ui/`, and CLI/M2M clients.
+- `alexandria-server`: Vocabulary Hub built with the embedded web console (`/ui/`).
+- Optional `demo` profile (`--profile demo`): adds `alexandria-client` (PostgreSQL state, auto-discovering `hub_did`) and `fake-connector`.
 
----
+## Quick Start (Local `*.127.0.0.1.nip.io`)
 
-## 1. Arranque rápido (local con `*.127.0.0.1.nip.io`)
-
-Desde la raíz del repositorio (con `task` o `make`, o directamente con `docker compose`):
+From the repository root (using `task`, `make`, or `docker compose` directly):
 
 ```bash
-# Opcional: personalizar variables copiando .env.example
+# Optional: customize settings via .env
 cp deploy/docker/.env.example deploy/docker/.env
 
-# Levantar Hub + Caddy + PostgreSQL + Keycloak:
+# Start Hub + Caddy + PostgreSQL + Keycloak
 task docker:up
-# (o con el sidecar alexandria-client + fake-connector incluidos:)
+
+# Or include alexandria-client and fake-connector
 task docker:up:demo
 ```
 
-Equivalente directo con Docker Compose:
+Equivalent `docker compose` commands:
 
 ```bash
 docker compose -f deploy/docker/docker-compose.yaml up -d --build
-# Con el perfil demo:
 docker compose -f deploy/docker/docker-compose.yaml --profile demo up -d --build
 ```
 
-### Confiar en la CA local de Caddy (una sola vez en tu máquina)
+### Trusting Caddy's Local CA
 
-Cuando `CADDY_TLS=internal` (por defecto), Caddy firma los certificados de `hub.127.0.0.1.nip.io` y `auth.127.0.0.1.nip.io` con su CA local. Para que el navegador (necesario en el flujo OIDC de `/ui/`) y `curl` confíen en ella sin avisos:
+When `CADDY_TLS=internal` (the default), Caddy signs certificates for `hub.127.0.0.1.nip.io` and `auth.127.0.0.1.nip.io` with its local CA. Export and trust it once so browsers (for OIDC login in `/ui/`) and `curl` accept the local certificates without warnings:
 
 ```bash
-# Exporta la CA raíz de Caddy a deploy/docker/caddy-root.crt
+# Export Caddy's root CA to deploy/docker/caddy-root.crt
 task docker:ca
 
-# macOS (añadir al llavero del sistema):
+# macOS
 sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain deploy/docker/caddy-root.crt
 
-# Linux (Debian/Ubuntu):
+# Linux (Debian/Ubuntu)
 sudo cp deploy/docker/caddy-root.crt /usr/local/share/ca-certificates/alexandria-caddy.crt && sudo update-ca-certificates
 ```
 
----
+## Endpoints and Credentials
 
-## 2. Endpoints y credenciales preconfiguradas
-
-| Servicio | URL | Credenciales / Notas |
+| Service | URL | Notes |
 |:---|:---|:---|
-| **Hub API & Publicación** | `https://hub.127.0.0.1.nip.io:8443` (`/v1`, `/pub`) | Valida JWT `at+jwt` emitidos por Keycloak |
-| **Consola Web del Hub** | `https://hub.127.0.0.1.nip.io:8443/ui/` | Login OIDC + PKCE con cliente `alexandria-console` |
-| **Keycloak (OIDC Issuer)** | `https://auth.127.0.0.1.nip.io:8443/realms/alexandria` | Realm `alexandria` auto-importado |
-| **Keycloak Admin Console** | `https://auth.127.0.0.1.nip.io:8443/admin/` | `admin` / `admin` (`KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD`) |
-| **Client Admin & Consola** *(perfil `demo`)* | `http://127.0.0.1:9090/ui/` | Estado, reglas dinámicas, `:explain` y `POST /sync` |
-| **Client DSP Ingress** *(perfil `demo`)* | `http://127.0.0.1:9080` | Proxy L7 delante de `fake-connector` |
+| Hub API and publication | `https://hub.127.0.0.1.nip.io:8443` (`/v1`, `/pub`) | Validates Keycloak `at+jwt` tokens |
+| Hub web console | `https://hub.127.0.0.1.nip.io:8443/ui/` | OIDC + PKCE (`alexandria-console`) |
+| Keycloak OIDC issuer | `https://auth.127.0.0.1.nip.io:8443/realms/alexandria` | Auto-imported `alexandria` realm |
+| Keycloak admin console | `https://auth.127.0.0.1.nip.io:8443/admin/` | `admin` / `admin` (`KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD`) |
+| Client admin and console (`demo`) | `http://127.0.0.1:9090/ui/` | Status, dynamic rules, `:explain`, `POST /sync` |
+| Client DSP ingress (`demo`) | `http://127.0.0.1:9080` | L7 proxy in front of `fake-connector` |
 
-### Usuarios del realm `alexandria`
+### Preconfigured Realm Users
 
-| Usuario | Contraseña | Rol en Hub | `sub` fijo en Keycloak |
+| User | Password | Role | Fixed `sub` |
 |:---|:---|:---|:---|
-| `ana` | `ana123` | Administradora (`vhub-admin`) | `11111111-1111-4111-8111-111111111111` |
-| `sergio` | `sergio123` | Steward de namespaces | `22222222-2222-4222-8222-222222222222` |
+| `ana` | `ana123` | `vhub-admin` | `11111111-1111-4111-8111-111111111111` |
+| `sergio` | `sergio123` | `steward` | `22222222-2222-4222-8222-222222222222` |
 
-*(También existe el cliente confidencial `alexandria-m2m` con `secret: alexandria-m2m-secret` y `client_credentials` para pipelines CI/CD).*
+A confidential `alexandria-m2m` client (`secret: alexandria-m2m-secret`) with `client_credentials` enabled is also included for automated pipelines.
 
----
-
-## 3. Prueba rápida desde CLI (`curl`)
+## Smoke Test with `curl`
 
 ```bash
-# 1. Exportar la CA local de Caddy para usarla con curl
+# Export Caddy's local CA for curl
 task docker:ca
 export CURL_CA_BUNDLE="$PWD/deploy/docker/caddy-root.crt"
 
-# 2. Obtener un access token RFC 9068 (at+jwt) real desde Keycloak como administradora (ana)
+# Request an RFC 9068 access token (at+jwt) as ana
 ANA_TOKEN=$(curl -fsSL -X POST \
   "https://auth.127.0.0.1.nip.io:8443/realms/alexandria/protocol/openid-connect/token" \
   -d "client_id=alexandria-cli" \
@@ -86,13 +80,13 @@ ANA_TOKEN=$(curl -fsSL -X POST \
   -d "username=ana" \
   -d "password=ana123" | jq -r .access_token)
 
-# 3. Crear el namespace "mobility" en alexandria-server (persistido en PostgreSQL)
+# Create the "mobility" namespace
 curl -i -X POST "https://hub.127.0.0.1.nip.io:8443/v1/namespaces" \
   -H "Authorization: Bearer $ANA_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"slug":"mobility","displayName":"GreenCity Mobility"}'
 
-# 4. Asignar a sergio como steward de "mobility"
+# Assign sergio as steward of "mobility"
 curl -i -X POST "https://hub.127.0.0.1.nip.io:8443/v1/namespaces/mobility/stewards" \
   -H "Authorization: Bearer $ANA_TOKEN" \
   -H "Content-Type: application/json" \
@@ -103,19 +97,17 @@ curl -i -X POST "https://hub.127.0.0.1.nip.io:8443/v1/namespaces/mobility/stewar
   }'
 ```
 
----
+## Using a Real Domain with Let's Encrypt
 
-## 4. Pasar a dominio real con Let's Encrypt
-
-1. Apunta los registros DNS `A`/`AAAA` de tus subdominios (p. ej. `hub.ejemplo.es` y `auth.ejemplo.es`) al host Docker.
-2. En `deploy/docker/.env`, configura:
+1. Point DNS `A`/`AAAA` records for your subdomains (for example `hub.example.org` and `auth.example.org`) to the Docker host.
+2. Configure `deploy/docker/.env`:
    ```dotenv
-   HUB_DOMAIN=hub.ejemplo.es
-   AUTH_DOMAIN=auth.ejemplo.es
+   HUB_DOMAIN=hub.example.org
+   AUTH_DOMAIN=auth.example.org
    HTTPS_PORT=443
-   CADDY_TLS=ops@ejemplo.es
-   POSTGRES_PASSWORD=<secreto-fuerte>
-   KEYCLOAK_ADMIN_PASSWORD=<secreto-fuerte>
+   CADDY_TLS=ops@example.org
+   POSTGRES_PASSWORD=<strong-secret>
+   KEYCLOAK_ADMIN_PASSWORD=<strong-secret>
    ```
-3. Añade `"https://hub.ejemplo.es/ui/*"` en `redirectUris` del cliente `alexandria-console` (en `deploy/docker/keycloak/alexandria-realm.json` antes del primer arranque, o desde la consola de administración de Keycloak) y cambia las contraseñas iniciales de prueba.
-4. Ejecuta `docker compose -f deploy/docker/docker-compose.yaml up -d --build`. Caddy emitirá y renovará automáticamente los certificados TLS vía Let's Encrypt (TLS-ALPN-01 en `:443`).
+3. Add `"https://hub.example.org/ui/*"` to `redirectUris` for the `alexandria-console` client (in `deploy/docker/keycloak/alexandria-realm.json` before the first boot, or in the Keycloak admin console) and change the initial test passwords.
+4. Run `docker compose -f deploy/docker/docker-compose.yaml up -d --build`. Caddy obtains and renews TLS certificates via Let's Encrypt (TLS-ALPN-01 on `:443`).

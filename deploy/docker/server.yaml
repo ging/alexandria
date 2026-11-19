@@ -1,4 +1,4 @@
-# Configuración de alexandria-server para el despliegue Docker con Caddy, PostgreSQL y Keycloak.
+# Configuration for alexandria-server in the Docker stack (Caddy, PostgreSQL, and Keycloak).
 common_config:
   hosts:
     http:
@@ -18,8 +18,8 @@ common_config:
     is_prod: true
     has_tls_proxy: true
 
-# Validación OAuth 2.0 / OIDC contra Keycloak real (RFC 9068 at+jwt, controles A1–A5).
-# issuer coincide con la URL pública servida por Caddy; internal_issuer descarga OIDC Discovery + JWKS por la red interna de Docker.
+# OAuth 2.0 / OIDC validation against Keycloak (RFC 9068 at+jwt, controls A1-A5).
+# issuer matches the public URL served by Caddy; internal_issuer fetches OIDC discovery and JWKS over the Docker network.
 auth_config:
   enabled: true
   issuer: "https://auth.127.0.0.1.nip.io:8443/realms/alexandria"
@@ -30,7 +30,7 @@ auth_config:
   admin_role: "vhub-admin"
   jwks_refresh: "PT10M"
 
-# Clave Ed25519 del Hub (eddsa-jcs-2022), persistida en el volumen hub_data.
+# Hub Ed25519 signing key (eddsa-jcs-2022), persisted in the hub_data volume.
 did_config:
   type: "key"
   did: ""

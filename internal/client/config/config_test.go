@@ -172,8 +172,10 @@ func TestPostgresDatabaseInNodeLayout(t *testing.T) {
 	if _, cerr := Parse(bad); cerr == nil || cerr.Code != codes.ConfigSchema {
 		t.Fatalf("expected CONFIG_SCHEMA on db_type mismatch, got %v", cerr)
 	}
-	dockerCfg, cerr := Load("../../../deploy/docker/client.yaml")
-	if cerr != nil || !IsPostgresDSN(dockerCfg.Database) {
-		t.Fatalf("deploy/docker/client.yaml: cerr=%v db=%q", cerr, dockerCfg.Database)
+	for _, deployPath := range []string{"../../../deploy/docker/client.yaml", "../../../deploy/k8s/overlays/demo/config/client.yaml"} {
+		deployCfg, cerr := Load(deployPath)
+		if cerr != nil || !IsPostgresDSN(deployCfg.Database) {
+			t.Fatalf("%s: cerr=%v db=%q", deployPath, cerr, deployCfg.Database)
+		}
 	}
 }

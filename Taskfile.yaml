@@ -127,6 +127,34 @@ tasks:
     desc: Follow logs of the Docker stack.
     cmds: ["docker compose -f deploy/docker/docker-compose.yaml --profile demo logs -f"]
 
+  k8s:up:
+    desc: Bootstrap kind + ingress-nginx + nip.io TLS and deploy PostgreSQL, Keycloak and alexandria-server via Kustomize.
+    cmds: ["./deploy/k8s/scripts/up.sh"]
+
+  k8s:up:demo:
+    desc: Bootstrap kind and deploy the full Alexandria stack including alexandria-client and fake-connector.
+    cmds: ["./deploy/k8s/scripts/up.sh --demo"]
+
+  k8s:down:
+    desc: Remove the alexandria namespace from the local kind cluster.
+    cmds: ["./deploy/k8s/scripts/down.sh"]
+
+  k8s:delete:
+    desc: Delete the local kind cluster completely.
+    cmds: ["./deploy/k8s/scripts/down.sh --cluster"]
+
+  k8s:ca:
+    desc: Generate/export the local kind Root CA certificate to deploy/k8s/ca-root.crt.
+    cmds: ["./deploy/k8s/scripts/gen-certs.sh --certs-only"]
+
+  k8s:status:
+    desc: Show pods, services and ingresses in the alexandria Kubernetes namespace.
+    cmds: ["kubectl --context kind-alexandria -n alexandria get pods,svc,ingress,pvc"]
+
+  k8s:logs:
+    desc: Follow logs of Alexandria pods in the local kind cluster.
+    cmds: ["kubectl --context kind-alexandria -n alexandria logs -l app.kubernetes.io/part-of=alexandria --all-containers=true --prefix=true -f --max-log-requests=10"]
+
   all:
     desc: Build all binaries, run unit tests, conformance suite, and traceability check.
     cmds:

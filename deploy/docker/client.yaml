@@ -1,5 +1,5 @@
-# Configuración de alexandria-client para el perfil opcional "--profile demo" en Docker Compose.
-# Persiste continuidad, reglas y acuerdos en PostgreSQL (alexandria_client) y los paquetes verificados en disco.
+# Configuration for alexandria-client in the optional Docker Compose "--profile demo" profile.
+# Stores continuity, rules, and agreements in PostgreSQL (alexandria_client) and verified packages on disk.
 common_config:
   hosts:
     http:
@@ -19,7 +19,7 @@ common_config:
 
 did_config:
   type: "key"
-  # Sobrescrito automáticamente en arranque por start-client.sh con el DID activo del Hub (o vía HUB_DID en .env).
+  # Overridden at startup by start-client.sh with the active Hub DID (or via HUB_DID in .env).
   hub_did: "did:key:z6MkpTHR8VNsBxYAAWHut2Geadd9jSwuBV8xRoAnwWsdvktH"
 
 observability:

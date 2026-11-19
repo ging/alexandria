@@ -1,0 +1,51 @@
+# Configuration for alexandria-client in the optional Kubernetes "demo" overlay (kind).
+# Stores continuity, rules, and agreements in PostgreSQL (alexandria_client) and verified packages in the client-state PVC.
+common_config:
+  hosts:
+    http:
+      protocol: "http"
+      url: "0.0.0.0"
+      port: "9080"
+      internal_port: "9080"
+    grpc: null
+    graphql: null
+  db:
+    db_type: "Postgres"
+    database: "postgres://alexandria:alexandria@postgres:5432/alexandria_client?sslmode=disable"
+  connection:
+    is_local: false
+    is_prod: false
+    has_tls_proxy: false
+
+did_config:
+  type: "key"
+  # Overridden at startup by start-client.sh with the active Hub DID (or via the HUB_DID env var).
+  hub_did: "did:key:z6MkpTHR8VNsBxYAAWHut2Geadd9jSwuBV8xRoAnwWsdvktH"
+
+observability:
+  log_level: "info"
+  log_format: "json"
+  service_name: "alexandria-client"
+  port: "9090"
+  events_sink: "file:/var/lib/alexandria/client/events.jsonl"
+
+client_config:
+  class_id: "Provider"
+  display: null
+  trust:
+    hub: "https://hub.127.0.0.1.nip.io:8443"
+    namespace: "mobility"
+    context: "https://hub.127.0.0.1.nip.io:8443/pub/_vhub/v1/context.jsonld"
+  upstreams:
+    dsp: "http://fake-connector:8282/dsp"
+  listeners:
+    dsp-ingress:
+      bind: "0.0.0.0:9080"
+    dsp-egress:
+      bind: "0.0.0.0:9081"
+    admin:
+      bind: "0.0.0.0:9090"
+  rules:
+    seed: "file:/etc/alexandria/rules.seed.json"
+  default_action: "forward"
+  unknown_agreement: "forward"
