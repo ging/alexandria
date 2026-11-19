@@ -58,11 +58,11 @@ services:
       - alexandria
 
   alexandria-server:
+    image: ${ALEXANDRIA_IMAGE_REGISTRY:-ghcr.io/ging/alexandria}/server:${ALEXANDRIA_TAG:-latest}
     build:
       context: ../..
       dockerfile: Dockerfile
       target: server
-    image: alexandria-server:local
     restart: unless-stopped
     depends_on:
       postgres:
@@ -126,22 +126,22 @@ services:
 
   fake-connector:
     profiles: ["demo"]
+    image: ${ALEXANDRIA_IMAGE_REGISTRY:-ghcr.io/ging/alexandria}/fake-connector:${ALEXANDRIA_TAG:-latest}
     build:
       context: ../..
       dockerfile: Dockerfile
       target: fake-connector
-    image: alexandria-fake-connector:local
     restart: unless-stopped
     networks:
       - alexandria
 
   alexandria-client:
     profiles: ["demo"]
+    image: ${ALEXANDRIA_IMAGE_REGISTRY:-ghcr.io/ging/alexandria}/client:${ALEXANDRIA_TAG:-latest}
     build:
       context: ../..
       dockerfile: Dockerfile
       target: client
-    image: alexandria-client:local
     restart: unless-stopped
     depends_on:
       postgres:

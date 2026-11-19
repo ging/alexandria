@@ -22,7 +22,7 @@ spec:
         runAsGroup: 65532
       containers:
         - name: fake-connector
-          image: alexandria-fake-connector:local
+          image: ghcr.io/ging/alexandria/fake-connector:latest
           imagePullPolicy: IfNotPresent
           args:
             - -listen

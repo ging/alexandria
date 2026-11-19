@@ -40,7 +40,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       containers:
         - name: alexandria-client
-          image: alexandria-client:local
+          image: ghcr.io/ging/alexandria/client:latest
           imagePullPolicy: IfNotPresent
           command:
             - /bin/sh

@@ -2,8 +2,8 @@
 	tutorial tutorial-exec tutorial\:exec \
 	docs-dev docs\:dev docs-build docs\:build \
 	gui-dev gui\:dev gui-build gui\:build \
-	docker-up docker-up-demo docker-down docker-ca docker-logs \
-	k8s-up k8s-up-demo k8s-down k8s-delete k8s-ca k8s-status k8s-logs \
+	docker-up docker-up-demo docker-up-build docker-up-demo-build docker-down docker-ca docker-logs \
+	k8s-up k8s-up-demo k8s-up-build k8s-up-demo-build k8s-down k8s-delete k8s-ca k8s-status k8s-logs \
 	tidy vuln cover check clean
 
 BIN_DIR ?= bin
@@ -77,9 +77,15 @@ gui-build gui\:build:
 	cd gui && pnpm install && pnpm build
 
 docker-up:
-	docker compose -f deploy/docker/docker-compose.yaml up -d --build
+	docker compose -f deploy/docker/docker-compose.yaml up -d
 
 docker-up-demo:
+	docker compose -f deploy/docker/docker-compose.yaml --profile demo up -d
+
+docker-up-build:
+	docker compose -f deploy/docker/docker-compose.yaml up -d --build
+
+docker-up-demo-build:
 	docker compose -f deploy/docker/docker-compose.yaml --profile demo up -d --build
 
 docker-down:
@@ -96,6 +102,12 @@ k8s-up:
 
 k8s-up-demo:
 	./deploy/k8s/scripts/up.sh --demo
+
+k8s-up-build:
+	./deploy/k8s/scripts/up.sh --build
+
+k8s-up-demo-build:
+	./deploy/k8s/scripts/up.sh --demo --build
 
 k8s-down:
 	./deploy/k8s/scripts/down.sh
