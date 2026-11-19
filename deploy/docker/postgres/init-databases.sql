@@ -1,4 +1,4 @@
--- Crea bases de datos aisladas para Keycloak, el Vocabulary Hub (server) y el sidecar (client).
+-- Creates isolated databases for Keycloak, the Vocabulary Hub (server), and the sidecar (client).
 SELECT 'CREATE DATABASE keycloak'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'keycloak')\gexec
 
