@@ -108,11 +108,19 @@ tasks:
     cmds: ["python3 ./tutorial/run.py exec -v"]
 
   docker:up:
-    desc: Build and start the Docker stack (Caddy + PostgreSQL + Keycloak + alexandria-server).
-    cmds: ["docker compose -f deploy/docker/docker-compose.yaml up -d --build"]
+    desc: Start the Docker stack using GHCR images (Caddy + PostgreSQL + Keycloak + alexandria-server).
+    cmds: ["docker compose -f deploy/docker/docker-compose.yaml up -d"]
 
   docker:up:demo:
-    desc: Build and start the full Docker stack including alexandria-client and fake-connector.
+    desc: Start the full Docker stack using GHCR images including alexandria-client and fake-connector.
+    cmds: ["docker compose -f deploy/docker/docker-compose.yaml --profile demo up -d"]
+
+  docker:up:build:
+    desc: Build locally from source and start the Docker stack (Caddy + PostgreSQL + Keycloak + alexandria-server).
+    cmds: ["docker compose -f deploy/docker/docker-compose.yaml up -d --build"]
+
+  docker:up:demo:build:
+    desc: Build locally from source and start the full Docker stack including alexandria-client and fake-connector.
     cmds: ["docker compose -f deploy/docker/docker-compose.yaml --profile demo up -d --build"]
 
   docker:down:
@@ -128,12 +136,20 @@ tasks:
     cmds: ["docker compose -f deploy/docker/docker-compose.yaml --profile demo logs -f"]
 
   k8s:up:
-    desc: Bootstrap kind + ingress-nginx + nip.io TLS and deploy PostgreSQL, Keycloak and alexandria-server via Kustomize.
+    desc: Bootstrap kind + ingress-nginx + nip.io TLS and deploy PostgreSQL, Keycloak and alexandria-server using GHCR images.
     cmds: ["./deploy/k8s/scripts/up.sh"]
 
   k8s:up:demo:
-    desc: Bootstrap kind and deploy the full Alexandria stack including alexandria-client and fake-connector.
+    desc: Bootstrap kind and deploy the full Alexandria stack using GHCR images including alexandria-client and fake-connector.
     cmds: ["./deploy/k8s/scripts/up.sh --demo"]
+
+  k8s:up:build:
+    desc: Bootstrap kind, build local images from source, and deploy the base Alexandria stack.
+    cmds: ["./deploy/k8s/scripts/up.sh --build"]
+
+  k8s:up:demo:build:
+    desc: Bootstrap kind, build local images from source, and deploy the full Alexandria demo stack.
+    cmds: ["./deploy/k8s/scripts/up.sh --demo --build"]
 
   k8s:down:
     desc: Remove the alexandria namespace from the local kind cluster.
