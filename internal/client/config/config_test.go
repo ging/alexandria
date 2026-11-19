@@ -157,3 +157,19 @@ func TestExampleConfigsLoadInTheirMode(t *testing.T) {
 		}
 	}
 }
+
+// TestPostgresDatabaseInNodeLayout verifies PostgreSQL DSN extraction and db_type validation in NodeConfig.
+func TestPostgresDatabaseInNodeLayout(t *testing.T) {
+	dsn := "postgres://alexandria:secret@postgres:5432/alexandria_client?sslmode=disable"
+	raw := []byte("common_config:\n  db:\n    db_type: Postgres\n    database: '" + dsn + "'\ndid_config:\n  hub_did: 'did:key:z6MkpTHR8VNsBxYAAWHut2Geadd9jSwuBV8xRoAnwWsdvktH'\nobservability:\n  port: '9090'\n  events_sink: 'file:///tmp/e'\nclient_config:\n  trust:\n    hub: 'https://hub.example.com'\n    namespace: demo\n  upstreams:\n    dsp: 'http://connector:8282/dsp'\n  listeners:\n    dsp-ingress:\n      bind: '0.0.0.0:9080'\n")
+	p := filepath.Join(t.TempDir(), "client.yaml")
+	_ = os.WriteFile(p, raw, 0o600)
+	c, cerr := Load(p)
+	if cerr != nil || c.Database != dsn {
+		t.Fatalf("got cerr=%v db=%q", cerr, c.Database)
+	}
+	bad := []byte("common_config:\n  db:\n    db_type: Postgres\n    database: 'file:client.db'\ndid_config:\n  hub_did: 'did:web:h'\nobservability:\n  port: '9090'\n  events_sink: 'file:///e'\nclient_config:\n  trust:\n    hub: 'https://h'\n    namespace: demo\n  upstreams:\n    dsp: 'http://c'\n")
+	if _, cerr := Parse(bad); cerr == nil || cerr.Code != codes.ConfigSchema {
+		t.Fatalf("expected CONFIG_SCHEMA on db_type mismatch, got %v", cerr)
+	}
+}

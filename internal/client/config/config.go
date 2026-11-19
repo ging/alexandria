@@ -82,6 +82,7 @@ type Config struct {
 	DIDTTL     timex.Duration `json:"-"`
 	GCInterval timex.Duration `json:"-"`
 	HubCA      string         `json:"-"`
+	Database   string         `json:"-"`
 	Log        LogConfig      `json:"-"`
 }
 
@@ -101,6 +102,10 @@ type NodeConfig struct {
 			GRPC    *Endpoint `json:"grpc,omitempty"`
 			GraphQL *Endpoint `json:"graphql,omitempty"`
 		} `json:"hosts"`
+		DB struct {
+			DBType   string `json:"db_type,omitempty"`
+			Database string `json:"database,omitempty"`
+		} `json:"db,omitempty"`
 		Connection struct {
 			IsLocal     bool `json:"is_local"`
 			IsProd      bool `json:"is_prod"`
@@ -168,7 +173,19 @@ func Load(path string) (*Config, *codes.Error) {
 		}
 		c.HubCA = p
 	}
+	if c.Database != "" && !IsPostgresDSN(c.Database) {
+		p := strings.TrimPrefix(strings.TrimPrefix(c.Database, "file://"), "file:")
+		if p != "" && !filepath.IsAbs(p) {
+			p = filepath.Join(filepath.Dir(path), p)
+		}
+		c.Database = p
+	}
 	return c, nil
+}
+
+// IsPostgresDSN reports whether target is a PostgreSQL connection URI.
+func IsPostgresDSN(target string) bool {
+	return strings.HasPrefix(target, "postgres://") || strings.HasPrefix(target, "postgresql://")
 }
 
 // Parse applies CFG-1 and the defaults of §4.3.1 to a JSON or YAML configuration document.
@@ -177,10 +194,10 @@ func Parse(raw []byte) (*Config, *codes.Error) {
 	if err != nil {
 		return nil, codes.New(codes.ConfigSchema, "%v", err)
 	}
-	var hubCA string
+	var hubCA, dbTarget string
 	var logCfg LogConfig
 	if isNodeLayout(b) {
-		if b, hubCA, logCfg, err = convertNodeConfig(b); err != nil {
+		if b, hubCA, dbTarget, logCfg, err = convertNodeConfig(b); err != nil {
 			return nil, codes.New(codes.ConfigSchema, "%v", err)
 		}
 	}
@@ -192,6 +209,7 @@ func Parse(raw []byte) (*Config, *codes.Error) {
 		return nil, codes.New(codes.ConfigSchema, "%v", err)
 	}
 	c.HubCA = hubCA
+	c.Database = dbTarget
 	c.Log = logCfg
 	c.applyDefaults()
 	if _, err := telemetry.ParseLevel(c.Log.Level); err != nil {
@@ -242,12 +260,26 @@ func isNodeLayout(b []byte) bool {
 }
 
 // convertNodeConfig translates a NodeConfig document into the canonical Appendix A.3 JSON format.
-func convertNodeConfig(b []byte) ([]byte, string, LogConfig, error) {
+func convertNodeConfig(b []byte) ([]byte, string, string, LogConfig, error) {
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
 	var nc NodeConfig
 	if err := dec.Decode(&nc); err != nil {
-		return nil, "", LogConfig{}, err
+		return nil, "", "", LogConfig{}, err
+	}
+	if nc.Common.DB.DBType != "" {
+		switch strings.ToLower(nc.Common.DB.DBType) {
+		case "sqlite":
+			if IsPostgresDSN(nc.Common.DB.Database) {
+				return nil, "", "", LogConfig{}, fmt.Errorf("db_type %q conflicts with PostgreSQL database URI", nc.Common.DB.DBType)
+			}
+		case "postgres", "postgresql":
+			if !IsPostgresDSN(nc.Common.DB.Database) {
+				return nil, "", "", LogConfig{}, fmt.Errorf("db_type %q requires a postgres:// or postgresql:// database URI", nc.Common.DB.DBType)
+			}
+		default:
+			return nil, "", "", LogConfig{}, fmt.Errorf("unsupported db_type %q", nc.Common.DB.DBType)
+		}
 	}
 	trust := nc.Client.Trust
 	if trust.HubDID == "" && nc.DID.HubDID != "" {
@@ -322,7 +354,7 @@ func convertNodeConfig(b []byte) ([]byte, string, LogConfig, error) {
 		logCfg.Environment = "production"
 	}
 	rawOut, err := json.Marshal(out)
-	return rawOut, nc.Common.Connection.TLS.CA, logCfg, err
+	return rawOut, nc.Common.Connection.TLS.CA, nc.Common.DB.Database, logCfg, err
 }
 
 // applyDefaults fills the defaults of §4.3.1.

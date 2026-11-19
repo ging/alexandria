@@ -12,12 +12,15 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/ging/alexandria/internal/client"
 	"github.com/ging/alexandria/internal/client/config"
 	"github.com/ging/alexandria/internal/clock"
+	"github.com/ging/alexandria/internal/core/codes"
+	"github.com/ging/alexandria/internal/core/did"
 	"github.com/ging/alexandria/internal/core/logx"
 	"github.com/ging/alexandria/internal/core/timex"
 	"github.com/ging/alexandria/internal/telemetry"
@@ -27,6 +30,10 @@ import (
 func main() {
 	cfgPath := flag.String("config", "config/client.yaml", "path to the client configuration (YAML or JSON)")
 	stateDir := flag.String("state-dir", "alexandria-client-state", "directory for continuity, packages and agreements")
+	dbTarget := flag.String("db", "", "override client persistence store (PostgreSQL DSN or SQLite file path)")
+	hubURL := flag.String("hub", "", "override trust.hub HTTPS URL")
+	nsSlug := flag.String("namespace", "", "override trust.namespace slug")
+	hubDID := flag.String("hub-did", "", "override trust.hub_did (did:key:... or did:web:...)")
 	clockFile := flag.String("clock-file", "", "read the current instant from this file (PoC and tests only)")
 	insecure := flag.Bool("did.allow_insecure_localhost", false, "allow http:// for a localhost did:web (PoC only, DP-5)")
 	hubCA := flag.String("hub-ca", "", "PEM root certificate of a lab hub (PoC only, DP-14)")
@@ -37,6 +44,27 @@ func main() {
 	if cerr != nil {
 		fmt.Fprintf(os.Stderr, "alexandria-client: %s: %s\n", cerr.Code, cerr.Detail)
 		os.Exit(2)
+	}
+	if *dbTarget != "" {
+		cfg.Database = *dbTarget
+	}
+	if *hubURL != "" {
+		oldHub := strings.TrimSuffix(cfg.Trust.Hub, "/")
+		newHub := strings.TrimSuffix(*hubURL, "/")
+		if cfg.Trust.Context == oldHub+"/pub/_vhub/v1/context.jsonld" {
+			cfg.Trust.Context = newHub + "/pub/_vhub/v1/context.jsonld"
+		}
+		cfg.Trust.Hub = newHub
+	}
+	if *nsSlug != "" {
+		cfg.Trust.Namespace = *nsSlug
+	}
+	if *hubDID != "" {
+		if did.DID(*hubDID).Method() == "" {
+			fmt.Fprintf(os.Stderr, "alexandria-client: %s: invalid -hub-did %q\n", codes.ConfigSchema, *hubDID)
+			os.Exit(2)
+		}
+		cfg.Trust.HubDID = *hubDID
 	}
 	if *logLevel != "" {
 		cfg.Log.Level = *logLevel

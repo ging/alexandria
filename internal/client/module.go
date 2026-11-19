@@ -4,6 +4,7 @@ package client
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -24,6 +25,7 @@ import (
 	"github.com/ging/alexandria/internal/client/adapters/package_fs"
 	"github.com/ging/alexandria/internal/client/adapters/proxy_dsp"
 	"github.com/ging/alexandria/internal/client/adapters/status_http"
+	"github.com/ging/alexandria/internal/client/adapters/store_postgres"
 	"github.com/ging/alexandria/internal/client/adapters/store_sqlite"
 	"github.com/ging/alexandria/internal/client/adapters/sync_timer"
 	"github.com/ging/alexandria/internal/client/app"
@@ -38,6 +40,14 @@ import (
 
 // Name identifies the alexandria-client bounded context in logs and startup reports.
 const Name = "alexandria-client"
+
+// persistence groups the three client storage ports and their underlying connection closer.
+type persistence struct {
+	continuity app.ContinuityStore
+	rules      app.RuleStore
+	agreements app.AgreementRepo
+	closer     io.Closer
+}
 
 // Deps groups the configuration and runtime options of the client module.
 type Deps struct {
@@ -59,7 +69,7 @@ type Module struct {
 	gc       *app.GC
 	status   *app.Status
 	edge     *app.Edge
-	store    *store_sqlite.Store
+	store    io.Closer
 	handlers map[string]http.Handler
 	bg       sync.WaitGroup
 	cancel   context.CancelFunc
@@ -72,17 +82,21 @@ func New(deps Deps) (*Module, error) {
 	if err := os.MkdirAll(deps.StateDir, 0o750); err != nil {
 		return nil, err
 	}
-	store, err := store_sqlite.Open(filepath.Join(deps.StateDir, "client.db"))
+	p, err := openPersistence(cfg.Database, deps.StateDir)
 	if err != nil {
 		return nil, err
+	}
+	closeOnErr := func(e error) (*Module, error) {
+		_ = p.closer.Close()
+		return nil, e
 	}
 	pkgs, err := package_fs.Open(filepath.Join(deps.StateDir, "packages"))
 	if err != nil {
-		return nil, err
+		return closeOnErr(err)
 	}
 	sink, err := events.OpenWithLogger(cfg.Events.Sink, logger)
 	if err != nil {
-		return nil, err
+		return closeOnErr(err)
 	}
 	ns, hubDID := cfg.NamespaceIRI(), did.DID(cfg.Trust.HubDID)
 	resolver := deps.Resolver
@@ -91,35 +105,35 @@ func New(deps Deps) (*Module, error) {
 	}
 	hub, err := http_hub.New(cfg.Trust.Hub, cfg.Trust.Namespace, deps.HubCA)
 	if err != nil {
-		return nil, err
+		return closeOnErr(err)
 	}
 	reg := metrics.New()
 	cell, rulesCell := &app.Cell{}, &app.RulesCell{}
 	trust := app.NewHubTrust(hubDID, resolver, deps.Clock, cfg.DIDTTL, sink, ns)
 	trust.Logger = logx.Component(logger, "trust")
-	agreements := &app.Agreements{Repo: store_sqlite.Agreements{S: store}, Events: sink, Clock: deps.Clock, Logger: logx.Component(logger, "agreements"), Namespace: ns}
+	agreements := &app.Agreements{Repo: p.agreements, Events: sink, Clock: deps.Clock, Logger: logx.Component(logger, "agreements"), Namespace: ns}
 	ev := &evaluator_poc.Evaluator{Events: sink, Clock: deps.Clock, Namespace: ns}
 	audit := &app.Audit{Window: cfg.Audit.Window, Evaluator: ev, Events: sink, Clock: deps.Clock, Namespace: ns}
 	status := &app.Status{Cell: cell, Rules: rulesCell, Trust: trust, Packages: pkgs, Events: sink, Clock: deps.Clock, Logger: logx.Component(logger, "status"), Namespace: ns, HubDID: hubDID}
 	syncer := &app.Sync{
-		Hub: hub, Trust: trust, Continuity: store, Packages: pkgs, Agreements: agreements, Audit: audit, Status: status,
+		Hub: hub, Trust: trust, Continuity: p.continuity, Packages: pkgs, Agreements: agreements, Audit: audit, Status: status,
 		Cell: cell, Clock: deps.Clock, Events: sink, Logger: logx.Component(logger, "sync"), Namespace: ns, HubDID: hubDID, Context: cfg.Trust.Context,
 	}
-	rules := &app.Rules{Store: store_sqlite.Rules{S: store}, Cell: rulesCell, Events: sink, Clock: deps.Clock, Logger: logx.Component(logger, "rules"), Namespace: ns, HasManagement: hasManagement(cfg)}
+	rules := &app.Rules{Store: p.rules, Cell: rulesCell, Events: sink, Clock: deps.Clock, Logger: logx.Component(logger, "rules"), Namespace: ns, HasManagement: hasManagement(cfg)}
 	if cerr := rules.Init(cfg.Rules.Seed); cerr != nil {
-		return nil, cerr
+		return closeOnErr(cerr)
 	}
 	if err := syncer.Restore(); err != nil {
-		return nil, err
+		return closeOnErr(err)
 	}
 	var up app.Upstream
 	if !cfg.Validator() {
 		if up, err = proxy_dsp.NewUpstream(cfg.Upstreams.DSP, cfg.Upstreams.Management); err != nil {
-			return nil, err
+			return closeOnErr(err)
 		}
 	}
 	explainer := app.Explainer{
-		Snap: cell, Rules: rulesCell, Evaluator: ev, Agreements: store_sqlite.Agreements{S: store}, Clock: deps.Clock,
+		Snap: cell, Rules: rulesCell, Evaluator: ev, Agreements: p.agreements, Clock: deps.Clock,
 		Settings: app.Settings{Namespace: ns, DefaultAction: cfg.DefaultAction, UnknownAgreement: cfg.UnknownAgreement},
 	}
 	edge := &app.Edge{Explainer: explainer, Upstream: up, Capture: agreements, Audit: audit, Events: sink, Metrics: reg, Logger: logx.Component(logger, "edge")}
@@ -153,7 +167,29 @@ func New(deps Deps) (*Module, error) {
 	if cfg.Validator() {
 		logger.Info("validator mode: traffic listeners answer proxy checks and never forward; validate_response rules are not evaluated")
 	}
-	return &Module{cfg: cfg, syncer: syncer, gc: gc, status: status, edge: edge, store: store, handlers: handlers}, nil
+	return &Module{cfg: cfg, syncer: syncer, gc: gc, status: status, edge: edge, store: p.closer, handlers: handlers}, nil
+}
+
+// openPersistence selects PostgreSQL when dbTarget is a postgres URI, or SQLite otherwise.
+func openPersistence(dbTarget, stateDir string) (persistence, error) {
+	if config.IsPostgresDSN(dbTarget) {
+		pg, err := store_postgres.Open(dbTarget)
+		if err != nil {
+			return persistence{}, err
+		}
+		return persistence{continuity: pg, rules: store_postgres.Rules{S: pg}, agreements: store_postgres.Agreements{S: pg}, closer: pg}, nil
+	}
+	path := dbTarget
+	if path == "" {
+		path = filepath.Join(stateDir, "client.db")
+	} else if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return persistence{}, err
+	}
+	sq, err := store_sqlite.Open(path)
+	if err != nil {
+		return persistence{}, err
+	}
+	return persistence{continuity: sq, rules: store_sqlite.Rules{S: sq}, agreements: store_sqlite.Agreements{S: sq}, closer: sq}, nil
 }
 
 // hasManagement reports whether mgmt-ingress rules have somewhere to go: an upstream, or in validator mode the listener an external proxy checks against.
