@@ -1,7 +1,8 @@
-.PHONY: all build build-gui fmt lint test conformance e2e demo trace example-proxy example-envoy \
+.PHONY: all build build-gui fmt lint test test-integration conformance e2e demo trace example-proxy example-envoy \
 	tutorial tutorial-exec tutorial\:exec \
 	docs-dev docs\:dev docs-build docs\:build \
 	gui-dev gui\:dev gui-build gui\:build \
+	docker-up docker-up-demo docker-down docker-ca docker-logs \
 	tidy vuln cover check clean
 
 BIN_DIR ?= bin
@@ -30,6 +31,9 @@ lint:
 
 test:
 	go test -race -coverprofile=coverage.out ./...
+
+test-integration:
+	go test -tags="integration,jwx_es256k" -race -v ./internal/server/adapters/postgres ./internal/client/adapters/store_postgres
 
 cover: test
 	go tool cover -html=coverage.out
@@ -70,6 +74,21 @@ gui-dev gui\:dev:
 
 gui-build gui\:build:
 	cd gui && pnpm install && pnpm build
+
+docker-up:
+	docker compose -f deploy/docker/docker-compose.yaml up -d --build
+
+docker-up-demo:
+	docker compose -f deploy/docker/docker-compose.yaml --profile demo up -d --build
+
+docker-down:
+	docker compose -f deploy/docker/docker-compose.yaml --profile demo down
+
+docker-ca:
+	docker compose -f deploy/docker/docker-compose.yaml cp caddy:/certs/root.crt deploy/docker/caddy-root.crt
+
+docker-logs:
+	docker compose -f deploy/docker/docker-compose.yaml --profile demo logs -f
 
 tidy:
 	go mod tidy

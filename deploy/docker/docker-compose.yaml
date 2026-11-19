@@ -1,0 +1,186 @@
+name: alexandria
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-alexandria}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-alexandria}
+      POSTGRES_DB: postgres
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init-databases.sql:/docker-entrypoint-initdb.d/01-init-databases.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-alexandria} -d alexandria_hub && pg_isready -U ${POSTGRES_USER:-alexandria} -d keycloak"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - alexandria
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:${KEYCLOAK_TAG:-26.2}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      - start
+      - --import-realm
+      - --http-enabled=true
+      - --health-enabled=true
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${POSTGRES_USER:-alexandria}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-alexandria}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HOSTNAME: https://${AUTH_DOMAIN:-auth.127.0.0.1.nip.io}:${HTTPS_PORT:-8443}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - ./keycloak/alexandria-realm.json:/opt/keycloak/data/import/alexandria-realm.json:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: 127.0.0.1\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '200 OK' <&3"
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    networks:
+      - alexandria
+
+  alexandria-server:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: server
+    image: alexandria-server:local
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    command:
+      - -config
+      - /etc/alexandria/server.yaml
+      - -listen
+      - 0.0.0.0:8080
+      - -base
+      - https://${HUB_DOMAIN:-hub.127.0.0.1.nip.io}:${HTTPS_PORT:-8443}
+      - -issuer
+      - https://${AUTH_DOMAIN:-auth.127.0.0.1.nip.io}:${HTTPS_PORT:-8443}/realms/alexandria
+      - -db
+      - postgres://${POSTGRES_USER:-alexandria}:${POSTGRES_PASSWORD:-alexandria}@postgres:5432/alexandria_hub?sslmode=disable
+    volumes:
+      - ./server.yaml:/etc/alexandria/server.yaml:ro
+      - hub_data:/var/lib/alexandria/hub
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8080/pub/_vhub/v1/context.jsonld"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    networks:
+      - alexandria
+
+  caddy:
+    image: caddy:2.9-alpine
+    restart: unless-stopped
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      alexandria-server:
+        condition: service_healthy
+    environment:
+      HUB_DOMAIN: ${HUB_DOMAIN:-hub.127.0.0.1.nip.io}
+      AUTH_DOMAIN: ${AUTH_DOMAIN:-auth.127.0.0.1.nip.io}
+      HTTPS_PORT: ${HTTPS_PORT:-8443}
+      CADDY_TLS: ${CADDY_TLS:-internal}
+    ports:
+      - "${HTTPS_PORT:-8443}:${HTTPS_PORT:-8443}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - tls_ca:/certs
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "wget -q -O /dev/null http://127.0.0.1:2019/config/ && if [ \"${CADDY_TLS:-internal}\" = \"internal\" ]; then test -s /data/caddy/pki/authorities/local/root.crt && cp /data/caddy/pki/authorities/local/root.crt /certs/root.crt && chmod 0644 /certs/root.crt; fi"
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      alexandria:
+        aliases:
+          - ${HUB_DOMAIN:-hub.127.0.0.1.nip.io}
+          - ${AUTH_DOMAIN:-auth.127.0.0.1.nip.io}
+
+  fake-connector:
+    profiles: ["demo"]
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: fake-connector
+    image: alexandria-fake-connector:local
+    restart: unless-stopped
+    networks:
+      - alexandria
+
+  alexandria-client:
+    profiles: ["demo"]
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: client
+    image: alexandria-client:local
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      caddy:
+        condition: service_healthy
+      fake-connector:
+        condition: service_started
+    entrypoint: ["/bin/sh", "/etc/alexandria/start-client.sh"]
+    environment:
+      HUB_PUBLIC_URL: https://${HUB_DOMAIN:-hub.127.0.0.1.nip.io}:${HTTPS_PORT:-8443}
+      HUB_DID: ${HUB_DID:-}
+      CLIENT_NAMESPACE: ${CLIENT_NAMESPACE:-mobility}
+      CLIENT_DB_URL: postgres://${POSTGRES_USER:-alexandria}:${POSTGRES_PASSWORD:-alexandria}@postgres:5432/alexandria_client?sslmode=disable
+    ports:
+      - "127.0.0.1:9080:9080"
+      - "127.0.0.1:9081:9081"
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./client.yaml:/etc/alexandria/client.yaml:ro
+      - ./scripts/start-client.sh:/etc/alexandria/start-client.sh:ro
+      - tls_ca:/etc/alexandria/tls:ro
+      - client_state:/var/lib/alexandria/client
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:9090/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    networks:
+      - alexandria
+
+volumes:
+  postgres_data:
+  hub_data:
+  client_state:
+  caddy_data:
+  caddy_config:
+  tls_ca:
+
+networks:
+  alexandria:
+    driver: bridge

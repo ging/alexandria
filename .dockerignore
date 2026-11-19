@@ -1,0 +1,15 @@
+.git
+.gitignore
+.certs
+bin/
+var/
+alexandria-client-state/
+coverage.out
+docs/
+gui/node_modules/
+gui/dist/
+internal/webui/dist/
+postman/
+tutorial/
+*.test
+*.log
