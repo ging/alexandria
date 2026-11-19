@@ -8,10 +8,12 @@ REPO_ROOT="$(cd "${K8S_DIR}/../.." && pwd)"
 
 CLUSTER_NAME="${KIND_CLUSTER_NAME:-alexandria}"
 NAMESPACE="${K8S_NAMESPACE:-alexandria}"
+IMAGE_REGISTRY="${ALEXANDRIA_IMAGE_REGISTRY:-ghcr.io/ging/alexandria}"
+IMAGE_TAG="${ALEXANDRIA_TAG:-latest}"
 INGRESS_NGINX_MANIFEST="${INGRESS_NGINX_MANIFEST:-https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml}"
 
 DEMO=0
-SKIP_BUILD=0
+BUILD_LOCAL=0
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -19,8 +21,12 @@ while [ "$#" -gt 0 ]; do
             DEMO=1
             shift
             ;;
+        --build)
+            BUILD_LOCAL=1
+            shift
+            ;;
         --skip-build)
-            SKIP_BUILD=1
+            BUILD_LOCAL=0
             shift
             ;;
         --cluster)
@@ -28,7 +34,7 @@ while [ "$#" -gt 0 ]; do
             shift 2
             ;;
         *)
-            echo "Usage: $0 [--demo] [--skip-build] [--cluster <name>]" >&2
+            echo "Usage: $0 [--demo] [--build] [--skip-build] [--cluster <name>]" >&2
             exit 1
             ;;
     esac
@@ -110,17 +116,20 @@ fi
 echo "==> Syncing local CA and TLS secrets..."
 "${K8S_DIR}/scripts/gen-certs.sh" --namespace "$NAMESPACE"
 
-# 5. Build local Docker images and load them into the kind cluster.
-if [ "$SKIP_BUILD" -eq 0 ]; then
-    echo "==> Building alexandria-server:local..."
-    docker build -f "${REPO_ROOT}/Dockerfile" --target server -t alexandria-server:local "$REPO_ROOT"
-    kind load docker-image --name "$CLUSTER_NAME" alexandria-server:local
+# 5. Optionally build local Docker images and load them into the kind cluster (otherwise kind pulls from GHCR).
+if [ "$BUILD_LOCAL" -eq 1 ]; then
+    SERVER_IMAGE="${IMAGE_REGISTRY}/server:${IMAGE_TAG}"
+    echo "==> Building ${SERVER_IMAGE}..."
+    docker build -f "${REPO_ROOT}/Dockerfile" --target server -t "$SERVER_IMAGE" "$REPO_ROOT"
+    kind load docker-image --name "$CLUSTER_NAME" "$SERVER_IMAGE"
 
     if [ "$DEMO" -eq 1 ]; then
-        echo "==> Building alexandria-client:local and alexandria-fake-connector:local..."
-        docker build -f "${REPO_ROOT}/Dockerfile" --target client -t alexandria-client:local "$REPO_ROOT"
-        docker build -f "${REPO_ROOT}/Dockerfile" --target fake-connector -t alexandria-fake-connector:local "$REPO_ROOT"
-        kind load docker-image --name "$CLUSTER_NAME" alexandria-client:local alexandria-fake-connector:local
+        CLIENT_IMAGE="${IMAGE_REGISTRY}/client:${IMAGE_TAG}"
+        FAKE_CONNECTOR_IMAGE="${IMAGE_REGISTRY}/fake-connector:${IMAGE_TAG}"
+        echo "==> Building ${CLIENT_IMAGE} and ${FAKE_CONNECTOR_IMAGE}..."
+        docker build -f "${REPO_ROOT}/Dockerfile" --target client -t "$CLIENT_IMAGE" "$REPO_ROOT"
+        docker build -f "${REPO_ROOT}/Dockerfile" --target fake-connector -t "$FAKE_CONNECTOR_IMAGE" "$REPO_ROOT"
+        kind load docker-image --name "$CLUSTER_NAME" "$CLIENT_IMAGE" "$FAKE_CONNECTOR_IMAGE"
     fi
 fi
 

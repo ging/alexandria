@@ -40,7 +40,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       initContainers:
         - name: wait-for-keycloak
-          image: alexandria-server:local
+          image: ghcr.io/ging/alexandria/server:latest
           imagePullPolicy: IfNotPresent
           command:
             - /bin/sh
@@ -52,7 +52,7 @@ spec:
               done
       containers:
         - name: alexandria-server
-          image: alexandria-server:local
+          image: ghcr.io/ging/alexandria/server:latest
           imagePullPolicy: IfNotPresent
           env:
             - name: HUB_DB_URL

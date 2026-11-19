@@ -7,8 +7,8 @@ Components:
 - `ingress-nginx` with a local CA (`alexandria-tls` and `alexandria-ca` secrets), terminating TLS on port `8443` for `*.127.0.0.1.nip.io` without editing `/etc/hosts` or binding privileged ports. CoreDNS gets `rewrite` entries so pods can reach `*.127.0.0.1.nip.io` through the internal ingress service with full TLS verification.
 - `postgres:17-alpine` backed by a PVC (`postgres-data`), initialized with three databases: `keycloak`, `alexandria_hub`, and `alexandria_client`.
 - `quay.io/keycloak/keycloak:26.2` connected to PostgreSQL, auto-importing the `alexandria` realm with RFC 9068 access tokens (`typ: at+jwt`), audience `alexandria-vhub`, the `roles` claim (`vhub-admin`), PKCE (`S256`) for `/ui/`, and CLI/M2M clients.
-- `alexandria-server` with the embedded web console (`/ui/`), Ed25519 signing key and blobs stored in the `hub-data` PVC, and internal OIDC discovery/JWKS against `http://keycloak:8080/realms/alexandria`.
-- `overlays/demo/` (optional): adds `alexandria-client` (PostgreSQL state + `client-state` PVC, auto-discovering `hub_did` over HTTPS) and `fake-connector`, exposed via Ingress (`client.127.0.0.1.nip.io:8443`, `dsp.127.0.0.1.nip.io:8443`) and NodePort (`127.0.0.1:9090`, `127.0.0.1:9080`, `127.0.0.1:9081`).
+- `ghcr.io/ging/alexandria/server:latest` (`alexandria-server`) with the embedded web console (`/ui/`), Ed25519 signing key and blobs stored in the `hub-data` PVC, and internal OIDC discovery/JWKS against `http://keycloak:8080/realms/alexandria`.
+- `overlays/demo/` (optional): adds `ghcr.io/ging/alexandria/client:latest` (`alexandria-client`, PostgreSQL state + `client-state` PVC, auto-discovering `hub_did` over HTTPS) and `ghcr.io/ging/alexandria/fake-connector:latest` (`fake-connector`), exposed via Ingress (`client.127.0.0.1.nip.io:8443`, `dsp.127.0.0.1.nip.io:8443`) and NodePort (`127.0.0.1:9090`, `127.0.0.1:9080`, `127.0.0.1:9081`).
 
 ## Prerequisites
 
@@ -22,11 +22,15 @@ Components:
 From the repository root:
 
 ```bash
-# Start kind + ingress-nginx + PostgreSQL + Keycloak + alexandria-server
+# Start kind + ingress-nginx + PostgreSQL + Keycloak + alexandria-server (pulls GHCR images)
 task k8s:up
 
-# Start the full stack including alexandria-client and fake-connector
+# Start the full stack including alexandria-client and fake-connector (pulls GHCR images)
 task k8s:up:demo
+
+# Build images locally from source and load them into kind instead of pulling from GHCR
+task k8s:up:build
+task k8s:up:demo:build
 ```
 
 You can also invoke the script directly (or use `make k8s-up` / `make k8s-up-demo`):
@@ -35,8 +39,8 @@ You can also invoke the script directly (or use `make k8s-up` / `make k8s-up-dem
 ./deploy/k8s/scripts/up.sh
 ./deploy/k8s/scripts/up.sh --demo
 
-# Re-apply manifests without rebuilding or reloading images
-./deploy/k8s/scripts/up.sh --demo --skip-build
+# Build and load local images from the root Dockerfile into kind
+./deploy/k8s/scripts/up.sh --demo --build
 ```
 
 Running `up.sh` is idempotent:
@@ -45,7 +49,7 @@ Running `up.sh` is idempotent:
 2. Installs `ingress-nginx` for `kind` and waits for the controller pod to become ready.
 3. Creates the `alexandria-ingress-internal` service (`8443 -> 443`) and adds CoreDNS rewrite rules for `*.127.0.0.1.nip.io`.
 4. Generates a local Root CA in `deploy/k8s/.certs/` (gitignored, reused across runs), copies it to `deploy/k8s/ca-root.crt`, and syncs the `alexandria-tls` and `alexandria-ca` secrets.
-5. Builds local container images from the root `Dockerfile` and loads them with `kind load docker-image`.
+5. When `--build` is passed, builds local container images from the root `Dockerfile` and loads them with `kind load docker-image`; otherwise Kubernetes pulls `ghcr.io/ging/alexandria/*:latest` directly from GHCR.
 6. Runs `kubectl apply -k` (`deploy/k8s/base` or `deploy/k8s/overlays/demo`) and waits for rollouts.
 
 ### Trusting the Local CA
@@ -136,4 +140,4 @@ Create a new Kustomize overlay (for example `deploy/k8s/overlays/prod/`) referen
 1. Secrets: replace `base/secret.yaml` with ExternalSecrets, SealedSecrets, or cluster-managed secrets using strong passwords (or point at external PostgreSQL and Keycloak instances).
 2. TLS: replace `gen-certs.sh` with `cert-manager` annotations (such as `cert-manager.io/cluster-issuer: letsencrypt-prod`) on the `Ingress` objects.
 3. Public hostnames on port `443`: patch the hostnames in `ingress.yaml`, `KC_HOSTNAME` in `keycloak.yaml`, `-base`/`-issuer` in `server.yaml`, and `redirectUris` for `alexandria-console` in `alexandria-realm.json`.
-4. Container images: override `*:local` with versioned registry tags using `images:` in the overlay `kustomization.yaml`.
+4. Container images: pin `ghcr.io/ging/alexandria/server`, `ghcr.io/ging/alexandria/client`, and `ghcr.io/ging/alexandria/fake-connector` from `:latest` to immutable release tags (for example `1.0.0`) using `images:` in the overlay `kustomization.yaml`.
