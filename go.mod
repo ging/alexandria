@@ -10,6 +10,7 @@ tool (
 require (
 	github.com/dunglas/httpsfv v1.1.2
 	github.com/go-jose/go-jose/v4 v4.1.9
+	github.com/jackc/pgx/v5 v5.10.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	go.opentelemetry.io/contrib/bridges/otelslog v0.21.0
 	go.opentelemetry.io/otel v1.47.0
@@ -28,6 +29,9 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/mitchellh/mapstructure v1.5.1-0.20231216201459-8508981c8b6c // indirect
 	github.com/prometheus/client_golang v1.24.1 // indirect
 	github.com/spf13/viper v1.12.0 // indirect

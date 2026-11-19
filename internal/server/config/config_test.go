@@ -125,3 +125,24 @@ func TestInvalidObservabilitySettingsRejected(t *testing.T) {
 		t.Fatal("expected invalid log_format to fail")
 	}
 }
+
+// TestPostgresDatabaseConfig verifies PostgreSQL DSN acceptance and db_type validation in both layouts.
+func TestPostgresDatabaseConfig(t *testing.T) {
+	dsn := "postgres://alexandria:secret@postgres:5432/alexandria_hub?sslmode=disable"
+	flat := `{"listen":"0.0.0.0:8080","base":"https://hub.example.com","signing":{"key":"file:/var/hub.key"},"auth":{"issuers":[{"iss":"https://idp","discovery_url":"https://idp/.well-known/openid-configuration"}],"audience":"a"},"storage":{"database":"` + dsn + `","blobs":"file:/var/blobs"}}`
+	c, err := Parse([]byte(flat))
+	if err != nil || c.Storage.Database != dsn {
+		t.Fatalf("flat postgres config: err=%v db=%q", err, c.Storage.Database)
+	}
+	node := `{"common_config":{"hosts":{"http":{"protocol":"https","url":"hub.example.com","internal_port":"8080"}},"db":{"db_type":"Postgres","database":"` + dsn + `","blobs":"file:/var/blobs"},"connection":{"has_tls_proxy":true}},"auth_config":{"issuer":"https://idp","audience":"a"},"did_config":{"signing_key":"file:/var/hub.key"}}`
+	p := t.TempDir() + "/server.json"
+	_ = os.WriteFile(p, []byte(node), 0o600)
+	loaded, err := Load(p)
+	if err != nil || loaded.Storage.Database != dsn {
+		t.Fatalf("node postgres config: err=%v db=%q", err, loaded.Storage.Database)
+	}
+	badMismatch := `{"common_config":{"hosts":{"http":{"protocol":"https","url":"h","port":"8443"}},"db":{"db_type":"Postgres","database":"file:hub.db","blobs":"file:b"},"connection":{}},"auth_config":{"issuer":"https://idp","audience":"a"},"did_config":{"signing_key":"file:k"}}`
+	if _, err := Parse([]byte(badMismatch)); err == nil {
+		t.Fatal("expected db_type Postgres with file: database to fail")
+	}
+}

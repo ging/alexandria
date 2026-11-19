@@ -161,7 +161,7 @@
       "properties": {
         "database": {
           "type": "string",
-          "pattern": "^file:"
+          "pattern": "^(file:|postgres://|postgresql://)"
         },
         "blobs": {
           "type": "string",

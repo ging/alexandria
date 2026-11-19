@@ -35,21 +35,37 @@ import (
 // main parses flags and starts the alexandria-server process.
 func main() {
 	cfgPath := flag.String("config", "config/server.yaml", "path to server configuration (YAML or JSON)")
+	listenAddr := flag.String("listen", "", "override listen bind address (host:port)")
+	baseURL := flag.String("base", "", "override public base URL")
+	issuerURL := flag.String("issuer", "", "override primary OIDC issuer URL")
+	dbTarget := flag.String("db", "", "override storage.database (SQLite path or PostgreSQL DSN)")
 	clockFile := flag.String("clock-file", "", "read the current instant from this file (PoC and tests only)")
 	logLevel := flag.String("log-level", "", "override observability.log_level (debug, info, warn, error)")
 	logFormat := flag.String("log-format", "", "override observability.log_format (auto, json, text)")
 	flag.Parse()
-	if err := run(*cfgPath, *clockFile, *logLevel, *logFormat); err != nil {
+	if err := run(*cfgPath, *listenAddr, *baseURL, *issuerURL, *dbTarget, *clockFile, *logLevel, *logFormat); err != nil {
 		fmt.Fprintln(os.Stderr, "alexandria-server:", err)
 		os.Exit(1)
 	}
 }
 
 // run builds the server module and blocks until a termination signal.
-func run(cfgPath, clockFile, logLevel, logFormat string) error {
+func run(cfgPath, listenAddr, baseURL, issuerURL, dbTarget, clockFile, logLevel, logFormat string) error {
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
 		return err
+	}
+	if listenAddr != "" {
+		cfg.Listen = listenAddr
+	}
+	if baseURL != "" {
+		cfg.Base = baseURL
+	}
+	if issuerURL != "" && len(cfg.Auth.Issuers) > 0 {
+		cfg.Auth.Issuers[0].Iss = issuerURL
+	}
+	if dbTarget != "" {
+		cfg.Storage.Database = dbTarget
 	}
 	if clockFile != "" {
 		cfg.ClockFile = clockFile
