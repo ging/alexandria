@@ -1,0 +1,13 @@
+{
+	auto_https disable_redirects
+}
+
+https://{$HUB_DOMAIN:hub.127.0.0.1.nip.io}:{$HTTPS_PORT:8443} {
+	tls {$CADDY_TLS:internal}
+	reverse_proxy alexandria-server:8080
+}
+
+https://{$AUTH_DOMAIN:auth.127.0.0.1.nip.io}:{$HTTPS_PORT:8443} {
+	tls {$CADDY_TLS:internal}
+	reverse_proxy keycloak:8080
+}

@@ -16,6 +16,10 @@ tasks:
     desc: Run tests with the race detector and a coverage profile.
     cmds: ["go test -race -coverprofile=coverage.out ./..."]
 
+  test:integration:
+    desc: Run live PostgreSQL integration tests (skips gracefully if PostgreSQL is unreachable).
+    cmds: ['go test -tags="integration,jwx_es256k" -race -v ./internal/server/adapters/postgres ./internal/client/adapters/store_postgres']
+
   cover:
     desc: Open the coverage report in the browser.
     deps: [test]
@@ -102,6 +106,26 @@ tasks:
     desc: Execute and verify the Jupyter notebooks in tutorial/ headlessly against the Go binaries.
     deps: [build]
     cmds: ["python3 ./tutorial/run.py exec -v"]
+
+  docker:up:
+    desc: Build and start the Docker stack (Caddy + PostgreSQL + Keycloak + alexandria-server).
+    cmds: ["docker compose -f deploy/docker/docker-compose.yaml up -d --build"]
+
+  docker:up:demo:
+    desc: Build and start the full Docker stack including alexandria-client and fake-connector.
+    cmds: ["docker compose -f deploy/docker/docker-compose.yaml --profile demo up -d --build"]
+
+  docker:down:
+    desc: Stop and remove the Docker stack containers.
+    cmds: ["docker compose -f deploy/docker/docker-compose.yaml --profile demo down"]
+
+  docker:ca:
+    desc: Export Caddy's local root CA certificate to deploy/docker/caddy-root.crt.
+    cmds: ["docker compose -f deploy/docker/docker-compose.yaml cp caddy:/certs/root.crt deploy/docker/caddy-root.crt"]
+
+  docker:logs:
+    desc: Follow logs of the Docker stack.
+    cmds: ["docker compose -f deploy/docker/docker-compose.yaml --profile demo logs -f"]
 
   all:
     desc: Build all binaries, run unit tests, conformance suite, and traceability check.

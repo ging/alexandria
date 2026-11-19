@@ -1,10 +1,11 @@
 // Package server wires the alexandria-server bounded context and manages its lifecycle.
-// It connects SQLite, blobs, the file signer, the DID resolver, JWT/JWKS authentication and the /v1 and /pub handlers (DP-2, DP-4, DP-5, DP-11, REQ-HUB-008).
+// It connects SQLite or PostgreSQL, blobs, the file signer, the DID resolver, JWT/JWKS authentication and the /v1 and /pub handlers (DP-2, DP-4, DP-5, DP-11, REQ-HUB-008).
 package server
 
 import (
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -29,6 +30,7 @@ import (
 	"github.com/ging/alexandria/internal/server/adapters/http_v1"
 	"github.com/ging/alexandria/internal/server/adapters/httpx"
 	"github.com/ging/alexandria/internal/server/adapters/jwt_jwks"
+	"github.com/ging/alexandria/internal/server/adapters/postgres"
 	"github.com/ging/alexandria/internal/server/adapters/scheduler"
 	"github.com/ging/alexandria/internal/server/adapters/signer_file"
 	"github.com/ging/alexandria/internal/server/adapters/sqlite"
@@ -39,6 +41,12 @@ import (
 
 // Name identifies the alexandria-server bounded context in logs and startup reports.
 const Name = "alexandria-server"
+
+// closableStore combines the persistence port with resource cleanup on shutdown.
+type closableStore interface {
+	app.Store
+	io.Closer
+}
 
 // Deps groups the configuration and optional port overrides for the server module.
 type Deps struct {
@@ -56,7 +64,7 @@ type Deps struct {
 type Module struct {
 	hub     *app.Hub
 	handler http.Handler
-	store   *sqlite.Store
+	store   closableStore
 	clock   timex.Clock
 	logger  *slog.Logger
 	did     did.DID
@@ -69,10 +77,13 @@ type Module struct {
 // New assembles the alexandria-server module from its configuration and dependencies.
 func New(deps Deps) (*Module, error) {
 	cfg := deps.Config
-	for _, p := range []string{cfg.Storage.Database, cfg.Signing.Key} {
-		if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
+	if !config.IsPostgresDSN(cfg.Storage.Database) {
+		if err := os.MkdirAll(filepath.Dir(cfg.Storage.Database), 0o750); err != nil {
 			return nil, err
 		}
+	}
+	if err := os.MkdirAll(filepath.Dir(cfg.Signing.Key), 0o750); err != nil {
+		return nil, err
 	}
 	signer := deps.Signer
 	hubDID := did.DID(cfg.DID)
@@ -89,7 +100,7 @@ func New(deps Deps) (*Module, error) {
 	if hubDID == "" || did.OfURL(signer.VerificationMethod()) != hubDID {
 		return nil, errors.New("server.json: signing.verification_method must be a method of did")
 	}
-	store, err := sqlite.Open(cfg.Storage.Database)
+	store, err := openStore(cfg.Storage.Database)
 	if err != nil {
 		return nil, err
 	}
@@ -136,6 +147,14 @@ func New(deps Deps) (*Module, error) {
 		hub: hub, handler: wrapped, store: store, clock: deps.Clock, logger: logger, did: hubDID,
 		listen: cfg.Listen, keyTick: cfg.Defaults.Freshness.TTL / 2,
 	}, nil
+}
+
+// openStore opens a PostgreSQL store when target is a postgres URI, or a SQLite database otherwise.
+func openStore(target string) (closableStore, error) {
+	if config.IsPostgresDSN(target) {
+		return postgres.Open(target)
+	}
+	return sqlite.Open(target)
 }
 
 // verifier builds the jwt_jwks token verifier from server.json.

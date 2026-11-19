@@ -96,6 +96,7 @@ type Endpoint struct {
 	Protocol     string `json:"protocol"`
 	URL          string `json:"url"`
 	Port         string `json:"port,omitempty"`
+	InternalHost string `json:"internal_host,omitempty"`
 	InternalPort string `json:"internal_port,omitempty"`
 }
 
@@ -270,12 +271,16 @@ func convertNodeConfig(b []byte) ([]byte, error) {
 	}
 	out := map[string]any{}
 	httpEp := nc.Common.Hosts.HTTP
+	privHost := httpEp.InternalHost
+	if privHost == "" {
+		privHost = httpEp.URL
+	}
 	privPort := httpEp.InternalPort
 	if privPort == "" {
 		privPort = httpEp.Port
 	}
-	if httpEp.URL != "" && privPort != "" {
-		out["listen"] = net.JoinHostPort(httpEp.URL, privPort)
+	if privHost != "" && privPort != "" {
+		out["listen"] = net.JoinHostPort(privHost, privPort)
 	}
 	if httpEp.Protocol != "" && httpEp.URL != "" {
 		auth := httpEp.URL
@@ -355,6 +360,20 @@ func convertNodeConfig(b []byte) ([]byte, error) {
 	} else if nc.Common.Connection.IsLocal {
 		out["did_resolver"] = map[string]bool{"allow_insecure_localhost": true}
 	}
+	if nc.Common.DB.DBType != "" {
+		switch strings.ToLower(nc.Common.DB.DBType) {
+		case "sqlite":
+			if IsPostgresDSN(nc.Common.DB.Database) {
+				return nil, fmt.Errorf("db_type %q conflicts with PostgreSQL database URI", nc.Common.DB.DBType)
+			}
+		case "postgres", "postgresql":
+			if !IsPostgresDSN(nc.Common.DB.Database) {
+				return nil, fmt.Errorf("db_type %q requires a postgres:// or postgresql:// database URI", nc.Common.DB.DBType)
+			}
+		default:
+			return nil, fmt.Errorf("unsupported db_type %q", nc.Common.DB.DBType)
+		}
+	}
 	if nc.Common.DB.Database != "" || nc.Common.DB.Blobs != "" {
 		out["storage"] = map[string]string{"database": nc.Common.DB.Database, "blobs": nc.Common.DB.Blobs}
 	}
@@ -425,8 +444,16 @@ func (c *Server) applyDefaults() {
 	}
 }
 
-// resolve strips file: and makes a relative path absolute from dir.
+// IsPostgresDSN reports whether target is a PostgreSQL connection URI.
+func IsPostgresDSN(target string) bool {
+	return strings.HasPrefix(target, "postgres://") || strings.HasPrefix(target, "postgresql://")
+}
+
+// resolve strips file: and makes a relative path absolute from dir, leaving PostgreSQL DSNs untouched.
 func resolve(dir, p string) string {
+	if IsPostgresDSN(p) {
+		return p
+	}
 	p = strings.TrimPrefix(strings.TrimPrefix(p, "file://"), "file:")
 	if p != "" && !filepath.IsAbs(p) {
 		return filepath.Join(dir, p)
