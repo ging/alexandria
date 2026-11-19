@@ -145,8 +145,10 @@ func TestPostgresDatabaseConfig(t *testing.T) {
 	if _, err := Parse([]byte(badMismatch)); err == nil {
 		t.Fatal("expected db_type Postgres with file: database to fail")
 	}
-	dockerCfg, err := Load("../../../deploy/docker/server.yaml")
-	if err != nil || dockerCfg.Listen != "0.0.0.0:8080" || !IsPostgresDSN(dockerCfg.Storage.Database) {
-		t.Fatalf("deploy/docker/server.yaml: err=%v cfg=%+v", err, dockerCfg)
+	for _, deployPath := range []string{"../../../deploy/docker/server.yaml", "../../../deploy/k8s/base/config/server.yaml"} {
+		deployCfg, err := Load(deployPath)
+		if err != nil || deployCfg.Listen != "0.0.0.0:8080" || !IsPostgresDSN(deployCfg.Storage.Database) {
+			t.Fatalf("%s: err=%v cfg=%+v", deployPath, err, deployCfg)
+		}
 	}
 }

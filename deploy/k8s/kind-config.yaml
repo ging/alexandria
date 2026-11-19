@@ -1,0 +1,36 @@
+# kind cluster configuration for Alexandria with ingress-nginx and *.127.0.0.1.nip.io.
+# Maps HTTPS to 127.0.0.1:8443 (HTTP to 8080) without privileged ports, plus demo NodePorts.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: alexandria
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      # Ingress NGINX (HTTP and HTTPS)
+      - containerPort: 80
+        hostPort: 8080
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+      - containerPort: 443
+        hostPort: 8443
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+      # Demo overlay: alexandria-client (DSP ingress, DSP egress, and admin/UI)
+      - containerPort: 30080
+        hostPort: 9080
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+      - containerPort: 30081
+        hostPort: 9081
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+      - containerPort: 30090
+        hostPort: 9090
+        listenAddress: "127.0.0.1"
+        protocol: TCP

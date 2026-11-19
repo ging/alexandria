@@ -3,6 +3,7 @@
 	docs-dev docs\:dev docs-build docs\:build \
 	gui-dev gui\:dev gui-build gui\:build \
 	docker-up docker-up-demo docker-down docker-ca docker-logs \
+	k8s-up k8s-up-demo k8s-down k8s-delete k8s-ca k8s-status k8s-logs \
 	tidy vuln cover check clean
 
 BIN_DIR ?= bin
@@ -89,6 +90,27 @@ docker-ca:
 
 docker-logs:
 	docker compose -f deploy/docker/docker-compose.yaml --profile demo logs -f
+
+k8s-up:
+	./deploy/k8s/scripts/up.sh
+
+k8s-up-demo:
+	./deploy/k8s/scripts/up.sh --demo
+
+k8s-down:
+	./deploy/k8s/scripts/down.sh
+
+k8s-delete:
+	./deploy/k8s/scripts/down.sh --cluster
+
+k8s-ca:
+	./deploy/k8s/scripts/gen-certs.sh --certs-only
+
+k8s-status:
+	kubectl --context kind-alexandria -n alexandria get pods,svc,ingress,pvc
+
+k8s-logs:
+	kubectl --context kind-alexandria -n alexandria logs -l app.kubernetes.io/part-of=alexandria --all-containers=true --prefix=true -f --max-log-requests=10
 
 tidy:
 	go mod tidy

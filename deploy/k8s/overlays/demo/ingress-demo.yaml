@@ -1,0 +1,38 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: alexandria-client
+  labels:
+    app.kubernetes.io/name: alexandria-client
+    app.kubernetes.io/part-of: alexandria
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "64k"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - client.127.0.0.1.nip.io
+        - dsp.127.0.0.1.nip.io
+      secretName: alexandria-tls
+  rules:
+    - host: client.127.0.0.1.nip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: alexandria-client
+                port:
+                  name: admin
+    - host: dsp.127.0.0.1.nip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: alexandria-client
+                port:
+                  name: dsp-ingress

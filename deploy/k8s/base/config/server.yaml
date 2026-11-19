@@ -1,0 +1,53 @@
+# Configuration for alexandria-server on Kubernetes (kind + ingress-nginx + PostgreSQL + Keycloak).
+common_config:
+  hosts:
+    http:
+      protocol: "https"
+      url: "hub.127.0.0.1.nip.io"
+      port: "8443"
+      internal_host: "0.0.0.0"
+      internal_port: "8080"
+    grpc: null
+    graphql: null
+  db:
+    db_type: "Postgres"
+    database: "postgres://alexandria:alexandria@postgres:5432/alexandria_hub?sslmode=disable"
+    blobs: "file:/var/lib/alexandria/hub/blobs"
+  connection:
+    is_local: false
+    is_prod: true
+    has_tls_proxy: true
+
+# OAuth 2.0 / OIDC validation against Keycloak (RFC 9068 at+jwt, controls A1-A5).
+# issuer matches the public Ingress URL; internal_issuer fetches OIDC discovery and JWKS over the cluster Service.
+auth_config:
+  enabled: true
+  issuer: "https://auth.127.0.0.1.nip.io:8443/realms/alexandria"
+  internal_issuer: "http://keycloak:8080/realms/alexandria"
+  audience: "alexandria-vhub"
+  algorithms: ["RS256", "ES256", "EdDSA"]
+  roles_claim: "roles"
+  admin_role: "vhub-admin"
+  jwks_refresh: "PT10M"
+
+# Hub Ed25519 signing key (eddsa-jcs-2022), persisted in the hub-data PVC.
+did_config:
+  type: "key"
+  did: ""
+  signing_key: "file:/var/lib/alexandria/hub/hub.key"
+  verification_method: ""
+
+observability:
+  log_level: "info"
+  log_format: "json"
+  service_name: "alexandria-server"
+
+vhub_config:
+  rdf_context: "self-hosted"
+  compiler: "dsl"
+  vendor_dir: "file:/etc/alexandria/vendor"
+  clock_skew: "PT5S"
+  vocab:
+    max_size: 10485760
+    proxy_timeout: "PT30S"
+    allow_insecure_localhost: false
