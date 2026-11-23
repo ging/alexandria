@@ -412,6 +412,94 @@ func TestClosedListWithoutLeftOperandsForbidsConstraints(t *testing.T) {
 	}
 }
 
+// TestInheritedVersionAndOmittedInternalBindingEmitsAllArtefacts verifies Option A single-version bundles emit all profile and space files.
+func TestInheritedVersionAndOmittedInternalBindingEmitsAllArtefacts(t *testing.T) {
+	odrl := colors(t, "  version: 0.1.0\n", "")
+	sp := Source{Name: "demo.space.yaml", Data: []byte(`dsl: alexandria.profiles/v1
+kind: SpaceProfile
+space:
+  id: https://example.com/spaces/demo/profile
+  version: 1.2.0
+  title: { en: Demo }
+  operator: https://example.com/party/demo-authority
+  base_url: https://example.com/spaces/demo
+bindings:
+  - slot: odrl
+    profile: https://example.com/odrl/profile/colors
+    source: internal
+    obligation: mandatory
+    conformance:
+      - { role: shacl, applies_to: policy_intake }
+      - { role: json-schema, applies_to: policy_intake }
+`)}
+	r := Compile(Options{}, odrl, sp)
+	expectErrors(t, r)
+	for _, p := range []string{
+		"profiles/odrl/colors/1.2.0/vocab.ttl",
+		"profiles/odrl/colors/1.2.0/context.jsonld",
+		"profiles/odrl/colors/1.2.0/shapes.ttl",
+		"profiles/odrl/colors/1.2.0/schema.json",
+		"profiles/odrl/colors/1.2.0/prof.ttl",
+		"profiles/odrl/colors/1.2.0/spec.html",
+		"space/prof.ttl",
+		"space/shacl-union.ttl",
+		"space/spec.html",
+	} {
+		artifact(t, r, p)
+	}
+}
+
+// TestStandaloneOdrlProfileWithoutVersionFailsN2 verifies standalone OdrlProfile still requires an explicit profile.version.
+func TestStandaloneOdrlProfileWithoutVersionFailsN2(t *testing.T) {
+	odrl := colors(t, "  version: 0.1.0\n", "")
+	expectErrors(t, Compile(Options{}, odrl), CodeSchema)
+}
+
+// TestVendoredBindingStillRequiresVersion verifies N1 rejects vendored bindings that omit version.
+func TestVendoredBindingStillRequiresVersion(t *testing.T) {
+	vend := "  - slot: dsp\n    profile: https://w3id.org/dspace/2025/1\n    source: vendored\n    obligation: mandatory\n    conformance:\n      - { role: json-schema, applies_to: dsp_message }\n"
+	r := Compile(Options{}, colors(t), space("1.0.0", "^0.1", vend))
+	if got := codes(r, Error); len(got) == 0 || got[0] != CodeSchema {
+		t.Fatalf("got %v, want %s", r.Findings, CodeSchema)
+	}
+}
+
+// TestInternalBindingDoesNotFallbackToPreviousRelease verifies a mismatched binding version fails N3 instead of silently dropping artefacts.
+func TestInternalBindingDoesNotFallbackToPreviousRelease(t *testing.T) {
+	prev := []Source{release(t, "1.0.0"), space("1.0.0", "=1.0.0", "")}
+	nextOdrl := release(t, "1.1.0", deprecate("deprecated")...)
+	r := Compile(Options{Previous: prev}, nextOdrl, space("1.1.0", "=1.0.0", ""))
+	expectErrors(t, r, CodeBindingUnresolved)
+	if len(r.Artifacts) != 0 {
+		t.Fatalf("expected 0 artefacts on unresolved binding, got %d", len(r.Artifacts))
+	}
+	if !strings.Contains(r.Findings.Errors()[0].Message, "available: 1.1.0") {
+		t.Fatalf("expected available version hint in %q", r.Findings.Errors()[0].Message)
+	}
+}
+
+// TestUnboundOdrlProfileInSpaceBundleFailsN3 verifies an unrelated OdrlProfile in a SpaceProfile bundle cannot be silently skipped.
+func TestUnboundOdrlProfileInSpaceBundleFailsN3(t *testing.T) {
+	extra := Source{Name: "other.yaml", Data: []byte("dsl: alexandria.profiles/v1\nkind: OdrlProfile\nprofile:\n  id: https://example.com/odrl/profile/other\n  title: { en: Other }\n  publisher: X\n  license: https://example.com/l\n  base_url: https://example.com/odrl/profile/other\nnamespaces:\n  oth: https://example.com/ns/other#\n")}
+	expectErrors(t, Compile(Options{}, colors(t), extra, space("1.0.0", "^0.1", "")), CodeProfileUnbound)
+}
+
+// TestComputeBumpSuggestsMinorAndMajorWhenVersionNotBumped verifies Bump reports the minimum SemVer bump even before the author updates versions.
+func TestComputeBumpSuggestsMinorAndMajorWhenVersionNotBumped(t *testing.T) {
+	prevOdrl := colors(t, "  version: 0.1.0\n", "")
+	prevSpace := Source{Name: "demo.space.yaml", Data: []byte("dsl: alexandria.profiles/v1\nkind: SpaceProfile\nspace:\n  id: https://example.com/spaces/demo/profile\n  version: 1.0.0\n  title: { en: Demo }\n  operator: https://example.com/party/demo-authority\n  base_url: https://example.com/spaces/demo\nbindings:\n  - slot: odrl\n    profile: https://example.com/odrl/profile/colors\n    source: internal\n    obligation: mandatory\n    conformance:\n      - { role: json-schema, applies_to: policy_intake }\n")}
+	minorOdrl := colors(t, "  version: 0.1.0\n", "", "    definition: { en: The colour red (#FF0000). }\n", "    definition: { en: The colour red (#FF0000). }\n    status: deprecated\n    replaced_by: col:green\n")
+	rMinor := Compile(Options{Previous: []Source{prevOdrl, prevSpace}}, minorOdrl, prevSpace)
+	if rMinor.Bump == nil || rMinor.Bump.Level != "MINOR" || rMinor.Bump.SuggestedVersion != "1.1.0" {
+		t.Fatalf("minor bump got %+v", rMinor.Bump)
+	}
+	majorOdrl := colors(t, "  version: 0.1.0\n", "", "operators: [eq, neq]", "operators: [eq]")
+	rMajor := Compile(Options{Previous: []Source{prevOdrl, prevSpace}}, majorOdrl, prevSpace)
+	if rMajor.Bump == nil || rMajor.Bump.Level != "MAJOR" || rMajor.Bump.SuggestedVersion != "2.0.0" {
+		t.Fatalf("major bump got %+v", rMajor.Bump)
+	}
+}
+
 func TestN5ContextAliasesExpandToTermIRIs(t *testing.T) {
 	r := Compile(Options{}, colors(t))
 	expectErrors(t, r)

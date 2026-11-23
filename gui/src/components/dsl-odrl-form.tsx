@@ -302,9 +302,11 @@ type OdrlSectionId = 'profile' | 'namespaces' | 'adopted' | 'terms'
 // OdrlProfileForm renders the accordion-based visual authoring form for one OdrlProfileDoc.
 export function OdrlProfileForm({
   doc,
+  spaceVersion,
   onChange,
 }: {
   doc: OdrlProfileDoc
+  spaceVersion?: string
   onChange: (next: OdrlProfileDoc) => void
 }) {
   const [openSec, setOpenSec] = useState<Record<OdrlSectionId, boolean>>({
@@ -405,16 +407,18 @@ export function OdrlProfileForm({
 
   const adoptedTotal = adoptedActions.length + adoptedLeftOps.length
 
+  const versionSummary = doc.profile.version?.trim() || (spaceVersion ? `${spaceVersion} (space)` : 'auto')
+
   return (
     <Accordion>
       <AccordionItem
         title="Profile"
-        summary={`${doc.profile.version}${doc.profile.title.en ? ` · ${doc.profile.title.en}` : ''}`}
+        summary={`${versionSummary}${doc.profile.title.en ? ` · ${doc.profile.title.en}` : ''}`}
         open={openSec.profile}
         onToggle={() => toggleSec('profile')}
       >
         <div className="space-y-3">
-          <div className="grid grid-cols-[1fr_112px] gap-2.5">
+          <div className="grid grid-cols-[1fr_132px] gap-2.5">
             <Field label="Title">
               <Input
                 value={doc.profile.title.en ?? ''}
@@ -422,8 +426,14 @@ export function OdrlProfileForm({
                 onChange={(e) => setProfile({ title: { ...doc.profile.title, en: e.target.value } })}
               />
             </Field>
-            <Field label="Version">
-              <Input mono className="text-xs" value={doc.profile.version} placeholder="1.0.0" onChange={(e) => setProfile({ version: e.target.value })} />
+            <Field label="Version (optional)">
+              <Input
+                mono
+                className="text-xs"
+                value={doc.profile.version ?? ''}
+                placeholder={spaceVersion ? `${spaceVersion} (space)` : 'auto'}
+                onChange={(e) => setProfile({ version: e.target.value.trim() || undefined })}
+              />
             </Field>
           </div>
 

@@ -141,6 +141,9 @@ export interface ValidationReport {
   valid: boolean
   class?: string
   findings: Finding[] | null
+  suggested_version?: string
+  required_bump?: string
+  bump_reasons?: string[]
 }
 
 // Candidate is a frozen proposal awaiting approval or rejection.

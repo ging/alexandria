@@ -39,6 +39,7 @@ const (
 	CodeAdoptedUnknown        = "ADOPTED_UNKNOWN"
 	CodeBindingUnresolved     = "BINDING_UNRESOLVED"
 	CodeBindingBaseMismatch   = "BINDING_BASE_MISMATCH"
+	CodeProfileUnbound        = "PROFILE_UNBOUND"
 	CodeArtifactMissing       = "ARTIFACT_MISSING"
 	CodeProfileVersionChanged = "PROFILE_VERSION_CHANGED"
 	CodeVersionBumpTooLow     = "VERSION_BUMP_TOO_LOW"

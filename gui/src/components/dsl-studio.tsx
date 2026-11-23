@@ -5,9 +5,12 @@ import { AlertTriangle, BookOpen, Code2, Columns2, Plus, SlidersHorizontal } fro
 import { cn } from '@/lib/cn'
 import { hasOpenDialog, isEditableTarget, useWindowKeydown } from '@/lib/hotkeys'
 import {
+  bumpSemver,
   defaultOdrlProfile,
+  effectiveOdrlVersion,
   parseDslBundle,
   serializeDslBundle,
+  syncBundleToVersion,
   type DslBundle,
   type OdrlProfileDoc,
   type SpaceProfileDoc,
@@ -127,8 +130,10 @@ export function DslStudio({
     const prevDoc = bundle.odrls[idx]
     const nextOdrls = bundle.odrls.map((d, i) => (i === idx ? nextDoc : d))
     let nextSpace: SpaceProfileDoc | null = bundle.space
-    // Keep internal ODRL bindings in SpaceProfile aligned when the ODRL profile ID or SemVer changes.
+    // Keep internal ODRL bindings in SpaceProfile aligned when the ODRL profile ID or explicit SemVer changes.
     if (nextSpace && prevDoc && (prevDoc.profile.id !== nextDoc.profile.id || prevDoc.profile.version !== nextDoc.profile.version)) {
+      const prevEff = effectiveOdrlVersion(prevDoc, nextSpace.space.version)
+      const nextEff = effectiveOdrlVersion(nextDoc, nextSpace.space.version)
       nextSpace = {
         ...nextSpace,
         bindings: nextSpace.bindings.map((b) => {
@@ -136,12 +141,18 @@ export function DslStudio({
           return {
             ...b,
             profile: nextDoc.profile.id,
-            version: b.version === `=${prevDoc.profile.version}` ? `=${nextDoc.profile.version}` : b.version,
+            version: b.version && b.version === `=${prevEff}` && nextEff ? `=${nextEff}` : b.version,
           }
         }),
       }
     }
     commitBundle({ odrls: nextOdrls, space: nextSpace })
+  }
+
+  const bumpSpaceVersion = (part: 'patch' | 'minor' | 'major') => {
+    if (!bundle.space) return
+    const nextVer = bumpSemver(bundle.space.space.version, part)
+    commitBundle(syncBundleToVersion(bundle, nextVer, part))
   }
 
   const addOdrl = () => {
@@ -180,7 +191,7 @@ export function DslStudio({
                   >
                     {bundle.odrls.map((od, i) => (
                       <option key={i} value={i}>
-                        {od.profile.id.split('/').pop() || `odrl-${i + 1}`} ({od.profile.version})
+                        {od.profile.id.split('/').pop() || `odrl-${i + 1}`} ({effectiveOdrlVersion(od, bundle.space?.space.version) || 'auto'})
                       </option>
                     ))}
                   </Select>
@@ -201,7 +212,11 @@ export function DslStudio({
 
               {docTab === 'odrl' ? (
                 currentOdrl ? (
-                  <OdrlProfileForm doc={currentOdrl} onChange={(nextDoc) => updateOdrl(clampedOdrlIdx, nextDoc)} />
+                  <OdrlProfileForm
+                    doc={currentOdrl}
+                    spaceVersion={bundle.space?.space.version}
+                    onChange={(nextDoc) => updateOdrl(clampedOdrlIdx, nextDoc)}
+                  />
                 ) : (
                   <Empty
                     icon={<BookOpen />}
@@ -222,6 +237,7 @@ export function DslStudio({
                   base={effectiveBase}
                   slug={slug}
                   onChange={(nextSpace) => commitBundle({ ...bundle, space: nextSpace })}
+                  onBumpVersion={bumpSpaceVersion}
                 />
               )}
             </div>

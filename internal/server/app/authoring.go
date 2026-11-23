@@ -30,9 +30,12 @@ func (f Findings) Error() string { return f[0].Error() }
 
 // Report is the body of :validate.
 type Report struct {
-	Valid    bool            `json:"valid"`
-	Class    lifecycle.Class `json:"class,omitempty"`
-	Findings []*codes.Error  `json:"findings"`
+	Valid            bool            `json:"valid"`
+	Class            lifecycle.Class `json:"class,omitempty"`
+	Findings         []*codes.Error  `json:"findings"`
+	SuggestedVersion string          `json:"suggested_version,omitempty"`
+	RequiredBump     string          `json:"required_bump,omitempty"`
+	BumpReasons      []string        `json:"bump_reasons,omitempty"`
 }
 
 // CreateDraft stores a new draft after N1–N3.
@@ -113,6 +116,11 @@ func (a *Authoring) Validate(p *domain.Principal, ns, id string) (Report, error)
 	if r.Valid {
 		if c, err := a.d.Compiler.Compile(d.Doc, ctx); err == nil {
 			r.Class = c.Class
+		}
+	}
+	if bs, ok := a.d.Compiler.(BumpSuggester); ok {
+		if b := bs.SuggestBump(d.Doc, ctx); b != nil {
+			r.SuggestedVersion, r.RequiredBump, r.BumpReasons = b.SuggestedVersion, b.Level, b.Reasons
 		}
 	}
 	return r, nil

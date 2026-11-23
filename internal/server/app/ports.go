@@ -115,10 +115,22 @@ type CompileContext struct {
 	Vocab     func(iri string) ([]byte, error)
 }
 
+// BumpSuggestion reports the minimum next SemVer version required by N4 relative to the previous release.
+type BumpSuggestion struct {
+	Level            string   `json:"level"`
+	SuggestedVersion string   `json:"suggested_version"`
+	Reasons          []string `json:"reasons,omitempty"`
+}
+
 // ProfileCompiler validates drafts (N1–N5) and compiles them into a package (DP-6).
 type ProfileCompiler interface {
 	Validate(doc []byte, level int, ctx CompileContext) []*codes.Error
 	Compile(doc []byte, ctx CompileContext) (domain.Compiled, error)
+}
+
+// BumpSuggester is an optional ProfileCompiler capability that suggests the next SemVer version.
+type BumpSuggester interface {
+	SuggestBump(doc []byte, ctx CompileContext) *BumpSuggestion
 }
 
 // EventLog appends events with strictly increasing ids; ns "" selects global events.

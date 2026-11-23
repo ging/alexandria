@@ -115,3 +115,22 @@ func TestCompilerAppliesServerLifecycleDefaults(t *testing.T) {
 		t.Fatalf("got grace_window %v, want %v", c.Params.GraceWindow, defs.GraceWindow)
 	}
 }
+
+// TestValidateReportsSuggestedBumpOnStaleDraft verifies Authoring.Validate exposes suggested_version and required_bump.
+func TestValidateReportsSuggestedBumpOnStaleDraft(t *testing.T) {
+	s := testkit.NewServerWith(t, "2026-09-01T10:00:00Z", compiler_dsl.Compiler{})
+	v1 := draft(t, "v1.0.0.yaml")
+	s.Publish(t, "2026-09-01T10:00:00Z", v1, app.ApproveOptions{})
+	edited := bytes.Replace(v1, []byte("definition: { en: To access the asset. }"), []byte("definition: { en: To access the asset. }\n  - id: readExtra\n    kind: action\n    included_in: odrl:use\n    label: { en: Read Extra }\n    definition: { en: Extra action. }"), 1)
+	d, err := s.Hub.Authoring.CreateDraft(testkit.Sergio, testkit.NS, edited)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep, err := s.Hub.Authoring.Validate(testkit.Sergio, testkit.NS, d.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Valid || rep.SuggestedVersion != "1.1.0" || rep.RequiredBump != "MINOR" {
+		t.Fatalf("unexpected report: %+v", rep)
+	}
+}
