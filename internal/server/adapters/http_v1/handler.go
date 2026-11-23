@@ -335,7 +335,15 @@ func (h Handler) draftAction(w http.ResponseWriter, r *http.Request, p *domain.P
 	switch act {
 	case "validate":
 		rep, err := h.Hub.Authoring.Validate(p, ns, id)
-		h.out(w, http.StatusOK, h.doc(map[string]any{"valid": rep.Valid, "class": rep.Class, "findings": rep.Findings}), err)
+		body := map[string]any{"valid": rep.Valid, "class": rep.Class, "findings": rep.Findings}
+		if rep.SuggestedVersion != "" {
+			body["suggested_version"] = rep.SuggestedVersion
+			body["required_bump"] = rep.RequiredBump
+			if len(rep.BumpReasons) > 0 {
+				body["bump_reasons"] = rep.BumpReasons
+			}
+		}
+		h.out(w, http.StatusOK, h.doc(body), err)
 	case "propose":
 		c, err := h.Hub.Authoring.Propose(p, ns, id)
 		h.out(w, http.StatusCreated, h.doc(h.candidate(c)), err)

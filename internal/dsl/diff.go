@@ -11,6 +11,13 @@ import (
 	"github.com/ging/alexandria/internal/core/semver"
 )
 
+// BumpInfo summarizes the minimum SemVer bump required relative to the previous release.
+type BumpInfo struct {
+	Level            string   `json:"level"`
+	SuggestedVersion string   `json:"suggested_version,omitempty"`
+	Reasons          []string `json:"reasons,omitempty"`
+}
+
 // Bump levels, ordered.
 const (
 	bumpNone = iota
@@ -21,6 +28,18 @@ const (
 
 // bumpName renders a bump level.
 var bumpName = map[int]string{bumpNone: "none", bumpPatch: "PATCH", bumpMinor: "MINOR", bumpMajor: "MAJOR"}
+
+// nextSemver increments v by the given bump level (treating bumpNone as PATCH).
+func nextSemver(v semver.Version, level int) string {
+	switch level {
+	case bumpMajor:
+		return fmt.Sprintf("%d.0.0", v.Major+1)
+	case bumpMinor:
+		return fmt.Sprintf("%d.%d.0", v.Major, v.Minor+1)
+	default:
+		return fmt.Sprintf("%d.%d.%d", v.Major, v.Minor, v.Patch+1)
+	}
+}
 
 // change accumulates the required bump and its reasons.
 type change struct {
@@ -65,9 +84,18 @@ func (c *change) report(d *Document, ptr, prev, next string, fs *Findings) {
 
 // diffProfiles is N4 between two releases of the same OdrlProfile.
 func diffProfiles(prev, next *Index, fs *Findings) {
+	c := profileChange(prev, next, fs)
+	c.report(next.Doc, "/profile/version", prev.P.Profile.Version, next.P.Profile.Version, fs)
+}
+
+// profileChange computes the required SemVer bump between two releases of an OdrlProfile; fs may be nil for pure bump analysis.
+func profileChange(prev, next *Index, fs *Findings) *change {
 	d, c := next.Doc, &change{}
 	if prev.TermNS != next.TermNS || prev.Prefix != next.Prefix {
-		fs.add(d, "N4", Error, CodeNamespaceChanged, "/namespaces", "the term namespace is stable and cannot change (%s → %s)", prev.TermNS, next.TermNS)
+		if fs != nil {
+			fs.add(d, "N4", Error, CodeNamespaceChanged, "/namespaces", "the term namespace is stable and cannot change (%s → %s)", prev.TermNS, next.TermNS)
+		}
+		c.need(bumpMajor, "term namespace changed")
 	}
 	pm, nm := prev.P.Profile, next.P.Profile
 	if !reflect.DeepEqual(pm.Title, nm.Title) || !reflect.DeepEqual(pm.Description, nm.Description) || pm.Publisher != nm.Publisher {
@@ -87,7 +115,10 @@ func diffProfiles(prev, next *Index, fs *Findings) {
 		ne, ok := next.byIRI[pe.IRI]
 		switch {
 		case !ok && pe.Created != nil:
-			fs.add(d, "N4", Error, CodeTermRemoved, "/terms", "term %s was removed; terms are deprecated and retired, never removed", pe.CURIE)
+			if fs != nil {
+				fs.add(d, "N4", Error, CodeTermRemoved, "/terms", "term %s was removed; terms are deprecated and retired, never removed", pe.CURIE)
+			}
+			c.need(bumpMajor, "term %s removed", pe.CURIE)
 		case !ok:
 			c.need(bumpMajor, "adoption of %s removed", pe.CURIE)
 		default:
@@ -99,7 +130,7 @@ func diffProfiles(prev, next *Index, fs *Findings) {
 			c.need(bumpMinor, "%s added", ne.CURIE)
 		}
 	}
-	c.report(d, "/profile/version", pm.Version, nm.Version, fs)
+	return c
 }
 
 // diffEntry compares one term across releases.
@@ -114,7 +145,9 @@ func diffEntry(pe, ne *Entry, c *change, fs *Findings, d *Document) {
 	case from == "deprecated" && to == "retired":
 		c.need(bumpMajor, "%s retired", ne.CURIE)
 	case to == "retired":
-		fs.add(d, "N4", Error, CodeRetiredNoDeprecation, ne.Ptr+"/status", "%s must be deprecated in a previous release before it is retired", ne.CURIE)
+		if fs != nil {
+			fs.add(d, "N4", Error, CodeRetiredNoDeprecation, ne.Ptr+"/status", "%s must be deprecated in a previous release before it is retired", ne.CURIE)
+		}
 		c.need(bumpMajor, "%s retired", ne.CURIE)
 	default:
 		c.need(bumpMinor, "status of %s changed", ne.CURIE)
@@ -198,6 +231,12 @@ var obligationRank = map[string]int{"optional": 0, "recommended": 1, "mandatory"
 
 // diffSpaces is N4 between two releases of a SpaceProfile with their resolved bindings.
 func diffSpaces(prev, next *Document, prevRes, nextRes []*Resolved, fs *Findings) {
+	c := spaceChange(prev, next, prevRes, nextRes, true)
+	c.report(next, "/space/version", prev.Space.Space.Version, next.Space.Space.Version, fs)
+}
+
+// spaceChange computes the required SemVer bump between two SpaceProfile releases.
+func spaceChange(prev, next *Document, prevRes, nextRes []*Resolved, checkInternalVer bool) *change {
 	c := &change{}
 	ps, ns := prev.Space, next.Space
 	if !reflect.DeepEqual(ps.Space.Title, ns.Space.Title) || !reflect.DeepEqual(ps.Space.Description, ns.Space.Description) {
@@ -207,6 +246,10 @@ func diffSpaces(prev, next *Document, prevRes, nextRes []*Resolved, fs *Findings
 		c.need(bumpMinor, "operator, base_url or lifecycle changed")
 	}
 	pb, nb := bySlot(prevRes), bySlot(nextRes)
+	declaredNext := map[string]bool{}
+	for _, b := range ns.Bindings {
+		declaredNext[b.Slot] = true
+	}
 	for _, slot := range sortedKeys(pb, nb) {
 		p, n := pb[slot], nb[slot]
 		switch {
@@ -214,19 +257,22 @@ func diffSpaces(prev, next *Document, prevRes, nextRes []*Resolved, fs *Findings
 			c.need(bumpMajor, "mandatory binding %s added", slot)
 		case p == nil:
 			c.need(bumpMinor, "binding %s added", slot)
+		case n == nil && declaredNext[slot]:
+			// Slot is still declared in next but failed N3 resolution; avoid a false "removed" finding.
+			continue
 		case n == nil && p.Binding.Obligation == "mandatory":
 			c.need(bumpMajor, "mandatory binding %s removed", slot)
 		case n == nil:
 			c.need(bumpMinor, "binding %s removed", slot)
 		default:
-			diffBinding(slot, p, n, c)
+			diffBinding(slot, p, n, c, checkInternalVer)
 		}
 	}
-	c.report(next, "/space/version", ps.Space.Version, ns.Space.Version, fs)
+	return c
 }
 
 // diffBinding compares the binding of one slot across space releases.
-func diffBinding(slot string, p, n *Resolved, c *change) {
+func diffBinding(slot string, p, n *Resolved, c *change, checkInternalVer bool) {
 	pb, nb := p.Binding, n.Binding
 	if pb.Profile != nb.Profile || pb.Source != nb.Source {
 		c.need(bumpMajor, "profile of slot %s changed", slot)
@@ -250,12 +296,87 @@ func diffBinding(slot string, p, n *Resolved, c *change) {
 	if p.Version != n.Version {
 		if pb.Source == "vendored" {
 			c.need(bumpMajor, "vendored %s moved to %s", slot, n.Version)
-		} else if b := actualBump(p.Version, n.Version); b > 0 {
-			c.need(b, "profile of %s moved %s → %s", slot, p.Version, n.Version)
-		} else {
-			c.need(bumpMajor, "profile of %s went back to %s", slot, n.Version)
+		} else if checkInternalVer {
+			if b := actualBump(p.Version, n.Version); b > 0 {
+				c.need(b, "profile of %s moved %s → %s", slot, p.Version, n.Version)
+			} else {
+				c.need(bumpMajor, "profile of %s went back to %s", slot, n.Version)
+			}
 		}
 	}
+}
+
+// computeBump calculates the minimum next space version and reasons relative to the previous release.
+func computeBump(r *Result, prevProfiles []*Index, prevSpace *Document, opt Options) *BumpInfo {
+	if r.Space == nil || prevSpace == nil || prevSpace.Space == nil {
+		return nil
+	}
+	prevV, err := semver.Parse(prevSpace.Space.Space.Version)
+	if err != nil {
+		return nil
+	}
+	var discard Findings
+	prevRes := validateSpace(prevSpace, prevProfiles, opt, &discard)
+	c := spaceChange(prevSpace, r.Space, prevRes, r.Bindings, false)
+	for _, ix := range latestByID(r.Profiles) {
+		if prev := latestOfID(prevProfiles, ix.P.Profile.ID); prev != nil {
+			pc := profileChange(prev, ix, nil)
+			if pc.level > c.level {
+				c.level = pc.level
+			}
+			c.reasons = append(c.reasons, pc.reasons...)
+		}
+	}
+	eff := c.level
+	if eff == bumpNone {
+		eff = bumpPatch
+	}
+	return &BumpInfo{Level: bumpName[eff], SuggestedVersion: nextSemver(prevV, eff), Reasons: dedupe(c.reasons)}
+}
+
+// latestByID returns the highest-version index per profile ID in order of ID.
+func latestByID(ixs []*Index) []*Index {
+	best := map[string]*Index{}
+	bestV := map[string]semver.Version{}
+	for _, ix := range ixs {
+		id := ix.P.Profile.ID
+		v, err := semver.Parse(ix.P.Profile.Version)
+		if prev, ok := best[id]; !ok || (err == nil && semver.Less(bestV[id], v)) || prev == nil {
+			best[id] = ix
+			if err == nil {
+				bestV[id] = v
+			}
+		}
+	}
+	ids := make([]string, 0, len(best))
+	for id := range best {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	out := make([]*Index, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, best[id])
+	}
+	return out
+}
+
+// latestOfID returns the highest-version release of profileID in ixs, or nil.
+func latestOfID(ixs []*Index, profileID string) *Index {
+	var best *Index
+	var bestV semver.Version
+	for _, ix := range ixs {
+		if ix.P.Profile.ID != profileID {
+			continue
+		}
+		v, err := semver.Parse(ix.P.Profile.Version)
+		if best == nil || (err == nil && semver.Less(bestV, v)) {
+			best = ix
+			if err == nil {
+				bestV = v
+			}
+		}
+	}
+	return best
 }
 
 // bySlot indexes resolved bindings by slot.

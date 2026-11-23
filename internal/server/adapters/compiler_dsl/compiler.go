@@ -32,7 +32,19 @@ type Compiler struct {
 	Defaults lifecycle.Params
 }
 
-var _ app.ProfileCompiler = Compiler{}
+var (
+	_ app.ProfileCompiler = Compiler{}
+	_ app.BumpSuggester   = Compiler{}
+)
+
+// SuggestBump returns the minimum next SemVer version required relative to the previous release, or nil when none applies.
+func (c Compiler) SuggestBump(doc []byte, ctx app.CompileContext) *app.BumpSuggestion {
+	r := dsl.Compile(c.options(ctx), dsl.Source{Name: "draft.yaml", Data: doc})
+	if r.Bump == nil || r.Bump.SuggestedVersion == "" {
+		return nil
+	}
+	return &app.BumpSuggestion{Level: r.Bump.Level, SuggestedVersion: r.Bump.SuggestedVersion, Reasons: r.Bump.Reasons}
+}
 
 // options builds the language options for a hub context.
 func (c Compiler) options(ctx app.CompileContext) dsl.Options {

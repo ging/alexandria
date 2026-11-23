@@ -137,7 +137,11 @@ func resolve(d *Document, ptr string, b Binding, profiles []*Index, vendor Vendo
 		}
 		r.Profile = pickProfile(b, profiles)
 		if r.Profile == nil {
-			fs.add(d, "N3", Error, CodeBindingUnresolved, ptr, "no release of %s satisfies %s in the bundle", b.Profile, b.Version)
+			if avail := availableVersions(b.Profile, profiles); len(avail) > 0 {
+				fs.add(d, "N3", Error, CodeBindingUnresolved, ptr, "no release of %s satisfies %s in the bundle (available: %s)", b.Profile, b.Version, strings.Join(avail, ", "))
+			} else {
+				fs.add(d, "N3", Error, CodeBindingUnresolved, ptr, "no release of %s satisfies %s in the bundle", b.Profile, b.Version)
+			}
 			return nil
 		}
 		r.Version = r.Profile.P.Profile.Version
@@ -177,7 +181,19 @@ func sameChain(via, chain []string) bool {
 	return true
 }
 
-// pickProfile returns the greatest profile release that satisfies the binding range (§11.4).
+// availableVersions lists the sorted versions of a profile ID present in the bundle.
+func availableVersions(profileID string, profiles []*Index) []string {
+	var out []string
+	for _, ix := range profiles {
+		if ix.P.Profile.ID == profileID && ix.P.Profile.Version != "" {
+			out = append(out, ix.P.Profile.Version)
+		}
+	}
+	sort.Strings(out)
+	return dedupe(out)
+}
+
+// pickProfile returns the greatest profile release that satisfies the binding range (§11.4); an empty range matches any bundle release.
 func pickProfile(b Binding, profiles []*Index) *Index {
 	var best *Index
 	var bestV semver.Version
@@ -186,7 +202,7 @@ func pickProfile(b Binding, profiles []*Index) *Index {
 			continue
 		}
 		v, err := semver.Parse(ix.P.Profile.Version)
-		if err != nil || !Satisfies(b.Version, v) {
+		if err != nil || (b.Version != "" && !Satisfies(b.Version, v)) {
 			continue
 		}
 		if best == nil || semver.Less(bestV, v) {

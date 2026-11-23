@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, CircleSlash, ExternalLink, Eye, FileCode2, FilePlus2, FileText, PackageCheck, PanelLeftClose, PanelLeftOpen, Save, Send, ShieldCheck, XCircle } from 'lucide-react'
+import { ArrowUpCircle, CheckCircle2, CircleSlash, ExternalLink, Eye, FileCode2, FilePlus2, FileText, PackageCheck, PanelLeftClose, PanelLeftOpen, Save, Send, ShieldCheck, XCircle } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { formatInstant, iriTail, prettyJSON, relativeTo, shortDigest } from '@/lib/format'
 import { useAction, useNs } from '@/lib/hooks'
@@ -13,7 +13,7 @@ import { runtime } from '@/lib/runtime'
 import { CodeEditor, guessLanguage } from '@/components/code-editor'
 import { DslStudio } from '@/components/dsl-studio'
 import { ClassBadge, StateBadge } from '@/components/lifecycle'
-import { defaultOdrlProfile, defaultSpaceProfile, serializeDslBundle } from '@/lib/dsl-bundle'
+import { applyBundleVersion, defaultOdrlProfile, defaultSpaceProfile, serializeDslBundle } from '@/lib/dsl-bundle'
 import { ErrorState } from '@/components/problem'
 import { Button, IconButton } from '@/components/ui/button'
 import { Field, Input, Textarea } from '@/components/ui/form'
@@ -341,10 +341,24 @@ function DraftEditor({
       )}
       {report ? (
         <div className="max-h-[35%] shrink-0 overflow-auto border-t bg-side px-3 py-2">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {report.valid ? <CheckCircle2 className="size-4 text-success" /> : <XCircle className="size-4 text-danger" />}
             <span className="font-medium">{report.valid ? 'Draft is valid' : `${report.findings?.length ?? 0} finding(s)`}</span>
             {report.class ? <ClassBadge value={report.class} /> : null}
+            {!isJsonDraft && !report.valid && report.suggested_version ? (
+              <Button
+                size="sm"
+                variant="primary"
+                icon={<ArrowUpCircle className="size-3.5" />}
+                title={report.bump_reasons?.length ? `Reasons: ${report.bump_reasons.join('; ')}` : undefined}
+                onClick={() => {
+                  setText(applyBundleVersion(text ?? '', report.suggested_version!, report.required_bump))
+                  setReport(null)
+                }}
+              >
+                Apply {report.suggested_version} ({report.required_bump || 'bump'})
+              </Button>
+            ) : null}
             <button className="ml-auto text-xs text-subtle hover:text-fg" onClick={() => setReport(null)}>Dismiss</button>
           </div>
           {report.findings?.length ? (

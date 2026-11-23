@@ -337,7 +337,6 @@
           "additionalProperties": false,
           "required": [
             "id",
-            "version",
             "title",
             "publisher",
             "license",
@@ -571,7 +570,6 @@
         "slot",
         "profile",
         "source",
-        "version",
         "obligation"
       ],
       "properties": {
@@ -651,6 +649,9 @@
             }
           },
           "then": {
+            "required": [
+              "version"
+            ],
             "properties": {
               "version": {
                 "pattern": "^=\\S+$"

@@ -51,7 +51,7 @@ export interface OdrlProfileDoc {
   kind: 'OdrlProfile'
   profile: {
     id: string
-    version: string
+    version?: string
     title: LangMap
     description?: LangMap
     publisher: string
@@ -78,7 +78,7 @@ export interface DslBinding {
   slot: string
   profile: string
   source: 'internal' | 'vendored'
-  version: string
+  version?: string
   obligation: 'mandatory' | 'recommended' | 'optional'
   via?: string[]
   conformance: DslConformance[]
@@ -221,7 +221,51 @@ export function bumpSemver(version: string, part: 'major' | 'minor' | 'patch'): 
   return `${maj}.${min}.${pat + 1}`
 }
 
-// defaultOdrlProfile constructs a valid starter OdrlProfile for a namespace.
+// effectiveOdrlVersion resolves an OdrlProfile's version, falling back to spaceVersion when omitted.
+export function effectiveOdrlVersion(doc: OdrlProfileDoc, spaceVersion?: string): string {
+  return doc.profile.version?.trim() || spaceVersion?.trim() || ''
+}
+
+// applyBundleVersion updates space.version and keeps any explicit ODRL profile and internal binding versions aligned.
+export function applyBundleVersion(yamlText: string, nextVersion: string, requiredBump?: string): string {
+  const parsed = parseDslBundle(yamlText)
+  if (!parsed.bundle || !parsed.bundle.space) return yamlText
+  const nextBundle = syncBundleToVersion(parsed.bundle, nextVersion, requiredBump)
+  return serializeDslBundle(nextBundle)
+}
+
+// syncBundleToVersion updates space.version and aligns any explicit internal profile or binding versions.
+export function syncBundleToVersion(bundle: DslBundle, nextVersion: string, requiredBump?: string): DslBundle {
+  if (!bundle.space) return bundle
+  const prevSpaceVer = bundle.space.space.version.trim()
+  const bumpPart =
+    requiredBump?.toLowerCase() === 'major' ? 'major' : requiredBump?.toLowerCase() === 'minor' ? 'minor' : 'patch'
+  const odrls = bundle.odrls.map((od) => {
+    const cur = od.profile.version?.trim()
+    if (!cur) return od
+    const updated = cur === prevSpaceVer ? nextVersion : bumpSemver(cur, bumpPart)
+    return { ...od, profile: { ...od.profile, version: updated } }
+  })
+  const versionByID = new Map<string, string>()
+  for (const od of odrls) {
+    versionByID.set(od.profile.id, effectiveOdrlVersion(od, nextVersion))
+  }
+  const bindings = bundle.space.bindings.map((b) => {
+    if (b.source !== 'internal' || !b.version?.trim()) return b
+    const targetVer = versionByID.get(b.profile) || nextVersion
+    return { ...b, version: `=${targetVer}` }
+  })
+  return {
+    odrls,
+    space: {
+      ...bundle.space,
+      space: { ...bundle.space.space, version: nextVersion },
+      bindings,
+    },
+  }
+}
+
+// defaultOdrlProfile constructs a valid starter OdrlProfile for a namespace; version inherits space.version.
 export function defaultOdrlProfile(base: string, slug: string, index = 1): OdrlProfileDoc {
   const suffix = index > 1 ? `-${index}` : ''
   const prefix = index > 1 ? `ex${index}` : 'ex'
@@ -230,7 +274,6 @@ export function defaultOdrlProfile(base: string, slug: string, index = 1): OdrlP
     kind: 'OdrlProfile',
     profile: {
       id: `${base}/odrl/profile/${slug}${suffix}`,
-      version: '1.0.0',
       title: { en: `${slug} ODRL profile${suffix ? ` (${index})` : ''}` },
       publisher: 'Data Space Authority',
       license: 'https://creativecommons.org/licenses/by/4.0/',
@@ -270,7 +313,6 @@ export function defaultSpaceProfile(base: string, slug: string, odrlId: string):
         slot: 'odrl',
         profile: odrlId,
         source: 'internal',
-        version: '=1.0.0',
         obligation: 'mandatory',
         conformance: [
           { role: 'json-schema', applies_to: 'policy_intake' },
@@ -383,7 +425,7 @@ function normalizeOdrl(raw: Record<string, unknown>): OdrlProfileDoc {
     kind: 'OdrlProfile',
     profile: {
       id: typeof p.id === 'string' ? p.id : '',
-      version: typeof p.version === 'string' ? p.version : '1.0.0',
+      version: typeof p.version === 'string' && p.version.trim() ? p.version : undefined,
       title: asLangMap(p.title),
       description: asOptionalLangMap(p.description),
       publisher: typeof p.publisher === 'string' ? p.publisher : '',
@@ -406,22 +448,26 @@ function normalizeSpace(raw: Record<string, unknown>): SpaceProfileDoc {
   const bindingsRaw = Array.isArray(raw.bindings) ? raw.bindings : []
   const bindings: DslBinding[] = bindingsRaw
     .filter((b): b is Record<string, unknown> => !!b && typeof b === 'object')
-    .map((b) => ({
-      slot: typeof b.slot === 'string' ? b.slot : 'odrl',
-      profile: typeof b.profile === 'string' ? b.profile : '',
-      source: b.source === 'vendored' ? 'vendored' : 'internal',
-      version: typeof b.version === 'string' ? b.version : '=1.0.0',
-      obligation: b.obligation === 'recommended' || b.obligation === 'optional' ? b.obligation : 'mandatory',
-      via: Array.isArray(b.via) && b.via.length ? b.via.map(String) : undefined,
-      conformance: Array.isArray(b.conformance)
-        ? b.conformance
-            .filter((c): c is Record<string, unknown> => !!c && typeof c === 'object')
-            .map((c) => ({
-              role: typeof c.role === 'string' ? c.role : 'json-schema',
-              applies_to: typeof c.applies_to === 'string' ? c.applies_to : 'policy_intake',
-            }))
-        : [],
-    }))
+    .map((b) => {
+      const source: DslBinding['source'] = b.source === 'vendored' ? 'vendored' : 'internal'
+      const rawVer = typeof b.version === 'string' && b.version.trim() ? b.version : undefined
+      return {
+        slot: typeof b.slot === 'string' ? b.slot : 'odrl',
+        profile: typeof b.profile === 'string' ? b.profile : '',
+        source,
+        version: source === 'vendored' ? (rawVer ?? '=1.0.0') : rawVer,
+        obligation: b.obligation === 'recommended' || b.obligation === 'optional' ? b.obligation : 'mandatory',
+        via: Array.isArray(b.via) && b.via.length ? b.via.map(String) : undefined,
+        conformance: Array.isArray(b.conformance)
+          ? b.conformance
+              .filter((c): c is Record<string, unknown> => !!c && typeof c === 'object')
+              .map((c) => ({
+                role: typeof c.role === 'string' ? c.role : 'json-schema',
+                applies_to: typeof c.applies_to === 'string' ? c.applies_to : 'policy_intake',
+              }))
+          : [],
+      }
+    })
   const lc = raw.lifecycle && typeof raw.lifecycle === 'object' && !Array.isArray(raw.lifecycle) ? (raw.lifecycle as DslLifecycle) : undefined
   return {
     dsl: 'alexandria.profiles/v1',
@@ -495,9 +541,9 @@ function cleanSignature(s: DslSignature | undefined): Record<string, unknown> | 
 function serializeOdrl(doc: OdrlProfileDoc): Record<string, unknown> {
   const profile: Record<string, unknown> = {
     id: doc.profile.id,
-    version: doc.profile.version,
-    title: cleanLangMap(doc.profile.title) ?? { en: '' },
   }
+  if (doc.profile.version?.trim()) profile.version = doc.profile.version.trim()
+  profile.title = cleanLangMap(doc.profile.title) ?? { en: '' }
   const desc = cleanLangMap(doc.profile.description)
   if (desc && desc.en?.trim()) profile.description = desc
   profile.publisher = doc.profile.publisher
@@ -573,9 +619,10 @@ function serializeSpace(doc: SpaceProfileDoc): Record<string, unknown> {
       slot: b.slot,
       profile: b.profile,
       source: b.source,
-      version: b.version,
-      obligation: b.obligation,
     }
+    if (b.version?.trim()) item.version = b.version.trim()
+    else if (b.source === 'vendored') item.version = '=1.0.0'
+    item.obligation = b.obligation
     if (b.via?.length) item.via = b.via
     if (b.conformance.length) item.conformance = b.conformance.map((c) => ({ role: c.role, applies_to: c.applies_to }))
     return item

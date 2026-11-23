@@ -6,6 +6,7 @@ import {
   CLIENT_GATES,
   CONFORMANCE_ROLES,
   defaultSpaceProfile,
+  effectiveOdrlVersion,
   GATES,
   SLOTS,
   type DslBinding,
@@ -48,12 +49,14 @@ export function SpaceProfileForm({
   base,
   slug,
   onChange,
+  onBumpVersion,
 }: {
   space: SpaceProfileDoc | null
   odrls: OdrlProfileDoc[]
   base: string
   slug: string
   onChange: (next: SpaceProfileDoc) => void
+  onBumpVersion?: (part: 'patch' | 'minor' | 'major') => void
 }) {
   const [openSec, setOpenSec] = useState<Record<SpaceSectionId, boolean>>({
     space: true,
@@ -115,7 +118,6 @@ export function SpaceProfileForm({
         slot: 'odrl',
         profile: target?.profile.id || `${base}/odrl/profile/${slug}`,
         source: 'internal',
-        version: `=${target?.profile.version || '1.0.0'}`,
         obligation: 'mandatory',
         conformance: [
           { role: 'json-schema', applies_to: 'policy_intake' },
@@ -192,6 +194,17 @@ export function SpaceProfileForm({
             </Field>
           </div>
 
+          {onBumpVersion ? (
+            <div className="flex items-center gap-1.5 text-xs text-subtle">
+              <span>Quick bump:</span>
+              {(['patch', 'minor', 'major'] as const).map((part) => (
+                <Button key={part} size="sm" variant="ghost" className="h-6 px-2 text-2xs" onClick={() => onBumpVersion(part)}>
+                  +{part}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+
           <Field label="Space IRI">
             <Input mono className="text-xs" value={space.space.id} placeholder="https://hub.example.com/spaces/default" onChange={(e) => setMeta({ id: e.target.value })} />
           </Field>
@@ -235,8 +248,17 @@ export function SpaceProfileForm({
         <div className="divide-y rounded-md border bg-raised">
           {space.bindings.map((b, idx) => {
             const open = openBinding === idx
-            const missingEq = b.source === 'vendored' && b.version.length > 0 && !b.version.startsWith('=')
-            const unlinkedOdrl = b.source === 'internal' && odrls.length > 0 && !odrls.some((o) => o.profile.id === b.profile)
+            const verStr = b.version ?? ''
+            const missingEq = b.source === 'vendored' && (!verStr || !verStr.startsWith('='))
+            const linkedOdrl = b.source === 'internal' ? odrls.find((o) => o.profile.id === b.profile) : undefined
+            const unlinkedOdrl = b.source === 'internal' && odrls.length > 0 && !linkedOdrl
+            const effectiveLinkedVer = linkedOdrl ? effectiveOdrlVersion(linkedOdrl, space.space.version) : ''
+            const exactMismatch =
+              b.source === 'internal' &&
+              Boolean(verStr) &&
+              verStr.startsWith('=') &&
+              Boolean(effectiveLinkedVer) &&
+              verStr.slice(1) !== effectiveLinkedVer
             return (
               <div key={idx}>
                 <div
@@ -253,7 +275,9 @@ export function SpaceProfileForm({
                 >
                   {open ? <ChevronDown className="size-3.5 shrink-0 text-subtle" /> : <ChevronRight className="size-3.5 shrink-0 text-subtle" />}
                   <Badge tone={slotTone(b.slot)}>{b.slot}</Badge>
-                  <span className="font-mono text-xs text-muted">{b.version}</span>
+                  <span className={exactMismatch ? 'font-mono text-xs text-danger' : 'font-mono text-xs text-muted'}>
+                    {verStr || 'auto'}
+                  </span>
                   <span className="min-w-0 flex-1 truncate font-mono text-xs text-subtle">{b.profile}</span>
                   <Badge tone={b.obligation === 'mandatory' ? 'neutral' : 'info'}>{b.obligation}</Badge>
                   {space.bindings.length > 1 ? (
@@ -276,7 +300,7 @@ export function SpaceProfileForm({
                             updateBinding(idx, {
                               slot: nextSlot,
                               ...(nextSlot !== 'odrl' && b.source === 'internal'
-                                ? { source: 'vendored', version: b.version.startsWith('=') ? b.version : `=${b.version}` }
+                                ? { source: 'vendored', version: verStr.startsWith('=') ? verStr : `=${verStr || '1.0.0'}` }
                                 : {}),
                             })
                           }}
@@ -295,7 +319,7 @@ export function SpaceProfileForm({
                             const src = e.target.value as DslBinding['source']
                             updateBinding(idx, {
                               source: src,
-                              ...(src === 'vendored' && !b.version.startsWith('=') ? { version: `=${b.version || '1.0.0'}` } : {}),
+                              ...(src === 'vendored' && !verStr.startsWith('=') ? { version: `=${verStr || '1.0.0'}` } : {}),
                             })
                           }}
                         >
@@ -313,8 +337,34 @@ export function SpaceProfileForm({
                           <option value="optional">optional</option>
                         </Select>
                       </Field>
-                      <Field label="Version" error={missingEq ? 'Use =version' : undefined}>
-                        <Input mono className="text-xs" value={b.version} placeholder="=1.0.0" onChange={(e) => updateBinding(idx, { version: e.target.value })} />
+                      <Field
+                        label={b.source === 'internal' ? 'Version (optional)' : 'Version'}
+                        error={
+                          missingEq
+                            ? 'Use =version'
+                            : exactMismatch
+                              ? `Bundle profile is ${effectiveLinkedVer}`
+                              : undefined
+                        }
+                        hint={
+                          exactMismatch ? (
+                            <button type="button" onClick={() => updateBinding(idx, { version: undefined })} className="text-accent hover:underline">
+                              Use auto (match bundle)
+                            </button>
+                          ) : undefined
+                        }
+                      >
+                        <Input
+                          mono
+                          className="text-xs"
+                          value={verStr}
+                          placeholder={b.source === 'internal' ? 'auto (bundle)' : '=1.0.0'}
+                          onChange={(e) =>
+                            updateBinding(idx, {
+                              version: b.source === 'internal' ? e.target.value.trim() || undefined : e.target.value,
+                            })
+                          }
+                        />
                       </Field>
                     </div>
 
@@ -324,7 +374,7 @@ export function SpaceProfileForm({
                         unlinkedOdrl ? (
                           <button
                             type="button"
-                            onClick={() => updateBinding(idx, { profile: odrls[0].profile.id, version: `=${odrls[0].profile.version}` })}
+                            onClick={() => updateBinding(idx, { profile: odrls[0].profile.id, version: undefined })}
                             className="text-accent hover:underline"
                           >
                             Link to {odrls[0].profile.id}
